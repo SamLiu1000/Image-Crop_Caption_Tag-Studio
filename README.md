@@ -25,7 +25,7 @@ Zoom and move images freely to select the exact area you want.
 * Import images from any folder
 * Export `.txt` files to any location
 
-https://github.com/user-attachments/assets/a1e630b9-acb2-4dc2-94f3-e44a37fb756f
+https://github.com/user-attachments/assets/13776a8e-df9a-4443-a59c-df02db782ea6
 
 ---
 
@@ -41,7 +41,7 @@ Works seamlessly with local LLM tools like **LM Studio**, and supports OpenAI-co
 * Make sure **“Enable CORS”** is turned on
 * If captioning stops midway on some images, try increasing the **context length**
 
-https://github.com/user-attachments/assets/8d61bfbc-2903-497d-bcf6-82d4fb2a371f
+https://github.com/user-attachments/assets/63da1bc7-1969-4758-97b4-8126b9cc0214
 
 ---
 
@@ -54,7 +54,7 @@ A fast and flexible way to manage tags.
 * Use tag groups to apply multiple tags at once
 * Built-in quick search for tags
 
-https://github.com/user-attachments/assets/82bfd8f3-20cd-4352-8349-fc17dcacf803
+https://github.com/user-attachments/assets/743fa223-3e51-40f2-b871-bc32454f9643
 
 ---
 <img width="3838" height="1894" alt="449e2bf3-0a6b-4407-8a67-c8224b5a52a0" src="https://github.com/user-attachments/assets/7da89260-46f0-4b6d-a5c5-bfb658945d65" />
