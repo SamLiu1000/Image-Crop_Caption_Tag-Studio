@@ -49,7 +49,6 @@ A fast and flexible way to manage tags.
 * Add tags to images with a single click
 * Use tag groups to apply multiple tags at once
 * Built-in quick search for tags
-* 
 ---
 <img width="3838" height="1894" alt="449e2bf3-0a6b-4407-8a67-c8224b5a52a0" src="https://github.com/user-attachments/assets/7da89260-46f0-4b6d-a5c5-bfb658945d65" />
 
