@@ -1,0 +1,2440 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tag tool</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Noto+Serif+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d0f14;--surface:#151820;--border:#252a35;--text:#c8cdd8;
+  --muted:#5a6070;--white:#eef0f5;
+  --c1:#4e9eff;--c2:#ff7eb3;--c3:#f0a500;--c4:#7ecfb3;--c5:#b088f9;--c6:#ff9f68;
+  --tag-bg:#1a1e28;--tag-hover:#202535;
+  --left-w:calc((100vw - 24px) / 2);
+  --left-min-w:320px;
+  --left-max-w:1400px;
+  --tag-sidebar-w:calc((100vw - 24px) / 4);
+  --tag-sidebar-min-w:160px;
+  --tag-sidebar-max-w:720px;
+  --gallery-w:calc((100vw - 24px) / 4);
+  --gallery-min-w:260px;
+  --img-col-w:50%;
+  --img-col-min-w:120px;
+  --img-col-max-w:760px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospace;height:100vh;overflow:hidden;display:flex}
+.main-container{display:flex;flex:1;overflow:hidden}
+
+/* ════════════════════════════════════════════════
+   LEFT PANEL — 780px fixed
+════════════════════════════════════════════════ */
+.left-panel{
+  width:var(--left-w);min-width:var(--left-min-w);max-width:var(--left-max-w);
+  background:#0f1118;border-right:1px solid var(--border);
+  display:flex;flex-direction:column;height:100vh;overflow:hidden;flex-shrink:0
+}
+
+/* Main panel resizer */
+.panel-resizer{
+  width:8px;background:transparent;cursor:ew-resize;z-index:30;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;position:relative
+}
+.panel-resizer::after{
+  content:'';width:2px;height:60px;border-radius:2px;
+  background:var(--muted);transition:all .15s
+}
+.panel-resizer:hover::after,.panel-resizer.dragging::after{background:var(--c4);height:80px}
+
+/* Panel Header */
+.panel-header{
+  padding:10px 12px 9px;border-bottom:1px solid var(--border);
+  flex-shrink:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap
+}
+.panel-title{font-size:10px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;gap:5px;white-space:nowrap}
+.panel-title::before{content:'◈';color:var(--c4);font-size:11px}
+.import-btn{
+  padding:6px 12px;background:var(--surface);border:1px solid var(--border);
+  border-radius:5px;color:var(--c4);font-family:'IBM Plex Mono',monospace;font-size:10px;
+  letter-spacing:.07em;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px;white-space:nowrap
+}
+.import-btn:hover{background:#1a2030;border-color:var(--c4)}
+.batch-btn{
+  padding:6px 11px;background:var(--surface);border:1px solid var(--border);
+  border-radius:5px;color:var(--c3);font-family:'IBM Plex Mono',monospace;font-size:10px;
+  letter-spacing:.07em;cursor:pointer;transition:all .15s;display:none;align-items:center;gap:6px;white-space:nowrap
+}
+.batch-btn:hover{background:#1e1a0a;border-color:var(--c3)}
+.batch-btn:disabled{opacity:.4;cursor:default;pointer-events:none}
+.panel-stats{font-size:10px;color:var(--muted);display:flex;align-items:center;gap:4px;margin-left:auto;white-space:nowrap}
+.stat-val{color:var(--text)}
+
+/* ── Body: image + tag side by side ── */
+.panel-body{
+  flex:1;display:flex;overflow:hidden;min-height:0
+}
+
+/* Image column */
+.img-col{
+  width:var(--img-col-w);min-width:var(--img-col-min-w);max-width:var(--img-col-max-w);
+  background:#080a10;border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;position:relative
+}
+.col-resizer{
+  position:absolute;right:-4px;top:0;bottom:0;width:8px;
+  cursor:ew-resize;z-index:20;display:flex;align-items:center;justify-content:center
+}
+.col-resizer::after{
+  content:'';width:2px;height:40px;border-radius:2px;
+  background:var(--muted);transition:all .15s
+}
+.col-resizer:hover::after,.col-resizer.dragging::after{background:var(--c4);height:60px}
+
+/* Page nav bar */
+.page-nav{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:6px 10px;border-bottom:1px solid var(--border);flex-shrink:0;background:#0c0f16
+}
+.page-nav.hidden{display:none}
+.page-counter{font-size:11px;color:var(--muted);letter-spacing:.07em}
+.page-counter em{color:var(--white);font-style:normal;font-weight:600}
+.page-filename{font-size:9px;color:var(--c4);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
+.nav-arrows{display:flex;gap:5px}
+.arrow-btn{
+  width:26px;height:26px;background:var(--surface);border:1px solid var(--border);
+  border-radius:4px;color:var(--text);font-size:13px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0
+}
+.arrow-btn:hover{background:#1a2030;border-color:var(--c4);color:var(--c4)}
+.arrow-btn:active{transform:scale(.92)}
+.arrow-btn:disabled{opacity:.3;cursor:default;pointer-events:none}
+
+/* Big image */
+.big-image-wrap{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  overflow:hidden;background:#080a10;position:relative;min-height:60px
+}
+.big-image-wrap.empty-wrap{flex-direction:column;gap:10px}
+.big-img{max-width:100%;max-height:100%;object-fit:contain;display:block;transition:opacity .2s}
+.big-img-placeholder{font-size:40px;opacity:.2}
+.big-img-hint{font-size:10px;color:var(--muted);letter-spacing:.08em}
+
+/* Tag editing column */
+.tag-col{
+  flex:1;display:flex;flex-direction:column;overflow:hidden;background:#0c0f16
+}
+.tag-col-header{
+  padding:7px 10px 6px;font-size:10px;letter-spacing:.1em;color:var(--muted);
+  text-transform:uppercase;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0
+}
+.tag-col-filename{color:var(--c4);font-size:10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Manual input */
+.tag-input-row{display:flex;gap:5px;padding:6px 8px;border-bottom:1px solid var(--border);flex-shrink:0;background:#0a0d14}
+.tag-manual-input{
+  flex:1;background:#111520;border:1px solid var(--border);border-radius:4px;
+  color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:10px;
+  padding:4px 7px;outline:none;transition:border-color .15s;min-width:0
+}
+.tag-manual-input:focus{border-color:var(--c4)}
+.tag-manual-input::placeholder{color:var(--muted)}
+.tag-add-btn{
+  flex-shrink:0;padding:4px 8px;background:var(--surface);border:1px solid var(--c4);
+  border-radius:4px;color:var(--c4);font-family:'IBM Plex Mono',monospace;font-size:10px;
+  cursor:pointer;transition:all .15s;white-space:nowrap
+}
+.tag-add-btn:hover{background:#1a2e28;color:var(--white)}
+
+/* Search / replace */
+.tag-search-row{
+  display:flex;gap:4px;padding:5px 8px;border-bottom:1px solid var(--border);
+  flex-shrink:0;background:#0a0d14;align-items:center
+}
+.tag-search-input,.tag-replace-input{
+  flex:1;background:#111520;border:1px solid var(--border);border-radius:4px;
+  color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:10px;
+  padding:3px 6px;outline:none;transition:border-color .15s;min-width:0
+}
+.tag-search-input:focus{border-color:var(--c1)}
+.tag-replace-input:focus{border-color:var(--c3)}
+.tag-search-input::placeholder,.tag-replace-input::placeholder{color:var(--muted)}
+.tag-replace-btn{
+  flex-shrink:0;padding:3px 7px;background:var(--surface);border:1px solid var(--c3);
+  border-radius:4px;color:var(--c3);font-family:'IBM Plex Mono',monospace;font-size:9px;
+  cursor:pointer;transition:all .15s;white-space:nowrap
+}
+.tag-replace-btn:hover{background:#1e1a0a;color:var(--white)}
+.tag-replace-all-btn{
+  flex-shrink:0;padding:3px 7px;background:var(--surface);border:1px solid var(--c2);
+  border-radius:4px;color:var(--c2);font-family:'IBM Plex Mono',monospace;font-size:9px;
+  cursor:pointer;transition:all .15s;white-space:nowrap
+}
+.tag-replace-all-btn:hover{background:#1e0a18;color:var(--white)}
+.tag-delete-all-btn{
+  flex-shrink:0;padding:3px 7px;background:var(--surface);border:1px solid #ff6b6b;
+  border-radius:4px;color:#ff6b6b;font-family:'IBM Plex Mono',monospace;font-size:9px;
+  cursor:pointer;transition:all .15s;white-space:nowrap
+}
+.tag-delete-all-btn:hover{background:#1e0a0a;color:#ff6b6b}
+.search-sep{font-size:9px;color:var(--muted);flex-shrink:0}
+
+/* Current tags list */
+.current-tags{padding:6px 8px;overflow-y:auto;flex:1;min-height:36px}
+.current-tags::-webkit-scrollbar{width:3px}
+.current-tags::-webkit-scrollbar-thumb{background:var(--border)}
+.ctag{
+  display:inline-flex;align-items:center;gap:3px;background:#1a2030;
+  border:1px solid #2a3545;border-radius:3px;padding:2px 5px 2px 5px;
+  margin:2px 2px 2px 0;font-size:9px;color:var(--text)
+}
+.ctag.highlight{background:#1a2e1a;border-color:#3d8c3d;color:#5cb85c}
+.ctag-del{cursor:pointer;color:var(--muted);font-size:11px;font-weight:700;transition:color .1s;line-height:1}
+.ctag-del:hover{color:#ff6b6b}
+.no-tags{font-size:10px;color:var(--muted);font-style:italic;padding:2px 0}
+
+/* Kbd hint */
+.kbd-hint{font-size:9px;color:var(--muted);padding:4px 10px 5px;border-top:1px solid var(--border);text-align:center;flex-shrink:0;letter-spacing:.06em}
+.kbd{display:inline-block;background:var(--surface);border:1px solid var(--border);border-radius:3px;padding:0 4px;font-size:9px;color:var(--text);font-family:'IBM Plex Mono',monospace}
+
+/* ════════════════════════════════════════════════
+   RIGHT PANEL — Gallery
+════════════════════════════════════════════════ */
+.right-panel{
+  flex:1;min-width:var(--gallery-min-w);
+  width:auto;max-width:none;
+  display:flex;flex-direction:column;overflow:hidden;background:var(--bg)
+}
+
+/* Gallery header */
+.gallery-header{
+  padding:9px 16px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;flex-shrink:0;background:#0d1018
+}
+.gallery-title{font-size:11px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;gap:6px}
+.gallery-title::before{content:'▤';color:var(--c1);font-size:13px}
+.gallery-stats{font-size:10px;color:var(--muted);margin-left:auto;display:flex;align-items:center;gap:12px}
+.gstat{display:flex;align-items:center;gap:4px}
+.gstat-val{color:var(--text)}
+.rows-select{
+  background:var(--surface);border:1px solid var(--border);border-radius:4px;
+  color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:10px;
+  padding:3px 6px;outline:none;cursor:pointer
+}
+.rows-select:focus{border-color:var(--c1)}
+
+/* Tag Groups Bar (Gallery - removed) */
+.tag-groups-bar{
+  padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0;
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#0b0e15
+}
+
+/* Tag Groups Bar (Sidebar) */
+.tag-groups-bar-sidebar{
+  padding:10px 12px;border-bottom:1px solid var(--border);flex-shrink:0;
+  display:flex;flex-direction:column;gap:6px;background:#0b0e15
+}
+.tag-groups-bar-sidebar .tg-header-row{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  cursor:pointer;user-select:none;padding:2px 0
+}
+.tag-groups-bar-sidebar .tg-header-row:hover .tag-groups-label{color:var(--white)}
+.tag-groups-bar-sidebar .tg-toggle{
+  font-size:9px;color:var(--muted);transition:transform .2s
+}
+.tag-groups-bar-sidebar.collapsed .tg-toggle{transform:rotate(-90deg)}
+.tag-groups-bar-sidebar .tg-actions-row{
+  display:flex;align-items:center;gap:6px;padding:4px 0
+}
+.tag-groups-bar-sidebar.collapsed .tg-actions-row{display:none}
+.tag-groups-bar-sidebar .tg-chips-wrap{
+  display:flex;flex-wrap:wrap;gap:6px;min-width:0;
+  transition:all .2s ease
+}
+.tag-groups-bar-sidebar.collapsed .tg-chips-wrap{display:none}
+.tag-groups-bar-sidebar .tg-add-btn{
+  display:inline-flex;align-items:center;gap:4px;padding:3px 8px;
+  background:transparent;border:1px solid var(--c5);border-radius:4px;
+  color:var(--c5);font-family:'IBM Plex Mono',monospace;font-size:9px;
+  cursor:pointer;transition:all .15s;letter-spacing:.05em;white-space:nowrap
+}
+.tag-groups-bar-sidebar .tg-add-btn:hover{background:rgba(176,136,249,.1)}
+.tag-groups-bar-sidebar .tg-chip{
+  display:inline-flex;align-items:center;gap:0;background:#1e1830;
+  border:1px solid #3d2e6a;border-radius:5px;overflow:hidden;cursor:pointer;
+  transition:all .15s;user-select:none;font-size:9px
+}
+.tag-groups-bar-sidebar .tg-chip:hover{border-color:var(--c5);box-shadow:0 2px 8px rgba(176,136,249,.2)}
+.tag-groups-bar-sidebar .tg-chip-body{display:flex;align-items:center;gap:4px;padding:3px 7px 3px 7px}
+.tag-groups-bar-sidebar .tg-chip-name{font-weight:600;color:var(--c5);white-space:nowrap}
+.tag-groups-bar-sidebar .tg-chip-count{color:var(--muted);font-size:8px}
+.tag-groups-bar-sidebar .tg-chip-actions{display:flex;border-left:1px solid #3d2e6a;flex-shrink:0}
+.tag-groups-bar-sidebar .tg-chip-edit,.tag-groups-bar-sidebar .tg-chip-del{
+  padding:2px 5px;background:transparent;border:none;color:var(--muted);
+  font-size:9px;cursor:pointer;transition:color .12s;line-height:1.8
+}
+.tag-groups-bar-sidebar .tg-chip-edit:hover{color:var(--c3)}
+.tag-groups-bar-sidebar .tg-chip-del:hover{color:#ff6b6b}
+.tag-groups-bar-sidebar .tg-chip.applying{border-color:#5cb85c;background:#0f1e14;animation:tg-flash .5s ease}
+
+.tag-groups-label{font-size:9px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;gap:5px;white-space:nowrap;flex-shrink:0}
+.tag-groups-label::before{content:'⊞';color:var(--c5);font-size:11px}
+.tg-chips-wrap{display:flex;align-items:center;gap:6px;flex:1;flex-wrap:wrap;min-width:0}
+.tg-chip{
+  display:inline-flex;align-items:center;gap:0;background:#1e1830;
+  border:1px solid #3d2e6a;border-radius:5px;overflow:hidden;cursor:pointer;
+  transition:all .15s;user-select:none
+}
+.tg-chip:hover{border-color:var(--c5);box-shadow:0 2px 8px rgba(176,136,249,.2)}
+.tg-chip-body{display:flex;align-items:center;gap:5px;padding:3px 8px 3px 8px}
+.tg-chip-name{font-size:10px;font-weight:600;color:var(--c5);letter-spacing:.03em;white-space:nowrap}
+.tg-chip-count{font-size:9px;color:var(--muted)}
+.tg-chip-actions{display:flex;border-left:1px solid #3d2e6a;flex-shrink:0}
+.tg-chip-edit,.tg-chip-del{
+  padding:2px 6px;background:transparent;border:none;color:var(--muted);
+  font-size:10px;cursor:pointer;transition:color .12s;line-height:1.8
+}
+.tg-chip-edit:hover{color:var(--c3)}
+.tg-chip-del:hover{color:#ff6b6b}
+.tg-chip.applying{border-color:#5cb85c;background:#0f1e14;animation:tg-flash .5s ease}
+@keyframes tg-flash{0%{box-shadow:0 0 0 0 rgba(92,184,92,.5)}100%{box-shadow:0 0 0 8px rgba(92,184,92,0)}}
+.tg-add-btn{
+  flex-shrink:0;display:flex;align-items:center;gap:4px;padding:3px 10px;
+  background:transparent;border:1px solid var(--c5);border-radius:4px;
+  color:var(--c5);font-family:'IBM Plex Mono',monospace;font-size:10px;
+  cursor:pointer;transition:all .15s;letter-spacing:.05em;white-space:nowrap
+}
+.tg-add-btn:hover{background:rgba(176,136,249,.1)}
+
+/* Gallery Grid */
+.gallery-grid{
+  flex:1;overflow-y:auto;padding:6px 0;
+  min-width:0;max-width:100%;
+}
+.gallery-grid::-webkit-scrollbar{width:5px}
+.gallery-grid::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+.gallery-row{
+  display:flex;align-items:center;gap:10px;
+  padding:6px 12px;border-bottom:1px solid rgba(37,42,53,.6);
+  cursor:pointer;transition:background .1s;height:92px
+}
+.gallery-row:hover{background:#111520}
+.gallery-row.active{background:#0f1e2e;border-left:2px solid var(--c4)}
+.gallery-row:not(.active){border-left:2px solid transparent}
+.gallery-thumb{
+  width:78px;height:78px;object-fit:cover;border-radius:4px;flex-shrink:0;
+  background:#1a1e28;border:1px solid var(--border);display:block
+}
+.gallery-thumb-placeholder{
+  width:78px;height:78px;background:#1a1e28;border:1px solid var(--border);
+  border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  font-size:28px;opacity:.4
+}
+.gallery-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;justify-content:center;align-self:stretch;overflow:hidden}
+.gallery-name{
+  font-size:10px;color:var(--white);font-weight:600;letter-spacing:.03em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+}
+.gallery-tags{
+  font-size:8px;color:var(--muted);letter-spacing:.02em;
+  line-height:1.25;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;word-break:break-word
+}
+.gallery-tags em{color:var(--c4);font-style:normal}
+.gallery-tags-more{color:var(--muted);opacity:.85;white-space:nowrap}
+.gallery-tag-count{
+  flex-shrink:0;font-size:8px;color:var(--muted);background:var(--surface);
+  border:1px solid var(--border);border-radius:3px;padding:1px 4px;white-space:nowrap;align-self:center
+}
+.gallery-empty{
+  padding:40px 20px;text-align:center;color:var(--muted);font-size:11px;line-height:2
+}
+.gallery-empty .icon{font-size:32px;display:block;margin-bottom:10px;opacity:.3}
+
+/* Gallery pagination */
+.gallery-pagination{
+  padding:8px 14px;border-top:1px solid var(--border);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;gap:10px;background:#0d1018
+}
+.page-btn{
+  width:26px;height:26px;background:var(--surface);border:1px solid var(--border);
+  border-radius:4px;color:var(--text);font-size:13px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:all .15s
+}
+.page-btn:hover{border-color:var(--c4);color:var(--c4)}
+.page-btn:disabled{opacity:.3;cursor:default;pointer-events:none}
+.page-info{font-size:10px;color:var(--muted);letter-spacing:.08em}
+.page-info em{color:var(--white);font-style:normal}
+
+/* ════════════════════════════════════════════════
+   TAG SIDEBAR — Right side panel
+════════════════════════════════════════════════ */
+.tag-sidebar{
+  width:var(--tag-sidebar-w);min-width:var(--tag-sidebar-min-w);max-width:var(--tag-sidebar-max-w);
+  background:#0d1018;border-right:1px solid var(--border);
+  display:flex;flex-direction:column;height:100vh;overflow:hidden;
+  flex-shrink:0
+}
+
+.tag-sidebar-lang-bar{
+  padding:8px 12px;border-bottom:1px solid var(--border);
+  flex-shrink:0;display:flex;justify-content:flex-end;background:#0b0e15
+}
+.tag-sidebar-header{
+  padding:10px 12px;border-bottom:1px solid var(--border);
+  flex-shrink:0;display:flex;align-items:center;gap:8px;background:#0b0e15
+}
+.tag-sidebar-title{font-size:10px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;gap:5px;white-space:nowrap}
+.tag-sidebar-title::before{content:'⊞';color:var(--c5);font-size:11px}
+.tag-sidebar-search-wrap{
+  flex:1;display:flex;align-items:center;min-width:0
+}
+.tag-sidebar-search{
+  width:100%;background:#111520;border:1px solid var(--border);border-radius:4px;
+  color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:10px;
+  padding:4px 8px;outline:none;transition:border-color .15s
+}
+.tag-sidebar-search:focus{border-color:var(--c4)}
+.tag-sidebar-search::placeholder{color:var(--muted)}
+.tag-sidebar-actions{display:flex;gap:6px;flex-shrink:0}
+.ts-action-btn{
+  padding:4px 8px;background:var(--surface);border:1px solid var(--border);
+  border-radius:4px;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:9px;
+  cursor:pointer;transition:all .15s;white-space:nowrap
+}
+.ts-action-btn:hover{border-color:var(--c5);color:var(--c5)}
+
+.tag-sidebar-body{flex:1;overflow-y:auto;padding:8px 10px}
+.tag-sidebar-body::-webkit-scrollbar{width:4px}
+.tag-sidebar-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+/* Tag Groups Section */
+.ts-section{margin-bottom:16px}
+.ts-section-header{
+  display:flex;align-items:center;gap:6px;padding:6px 8px;
+  background:var(--surface);border:1px solid var(--border);border-radius:5px;
+  margin-bottom:8px;cursor:pointer;transition:all .15s
+}
+.ts-section-header:hover{border-color:var(--c5)}
+.ts-section-header.collapsed{opacity:.7}
+.ts-section-title{font-size:10px;font-weight:600;color:var(--c5);flex:1}
+.ts-section-count{font-size:9px;color:var(--muted)}
+.ts-section-toggle{font-size:10px;color:var(--muted);transition:transform .2s}
+.ts-section-header.collapsed .ts-section-toggle{transform:rotate(-90deg)}
+
+.ts-section-content{display:block;transition:all .2s}
+.ts-section-content.collapsed{display:none}
+
+/* Tag Group Chips */
+.ts-tg-chip{
+  display:inline-flex;align-items:center;gap:4px;padding:4px 8px;
+  background:#1e1830;border:1px solid #3d2e6a;border-radius:4px;
+  margin:3px 3px 3px 0;cursor:pointer;transition:all .15s;font-size:9px;
+  color:var(--white);user-select:none
+}
+.ts-tg-chip:hover{border-color:var(--c5);background:#2a2240}
+.ts-tg-chip:active{transform:scale(.95)}
+.ts-tg-chip-name{font-weight:600}
+.ts-tg-chip-count{color:var(--muted);font-size:8px}
+
+/* Category Tags */
+.ts-cat-section{margin-bottom:12px}
+.ts-cat-header{
+  display:flex;align-items:center;gap:6px;padding:5px 8px;
+  background:var(--tag-bg);border:1px solid var(--border);border-radius:4px;
+  margin-bottom:6px;cursor:pointer;transition:all .15s
+}
+.ts-cat-header:hover{border-color:var(--c3)}
+.ts-cat-header.collapsed{opacity:.7}
+.ts-cat-title{font-size:9px;font-weight:600;color:var(--c3);flex:1}
+.ts-cat-toggle{font-size:9px;color:var(--muted);transition:transform .2s}
+.ts-cat-header.collapsed .ts-cat-toggle{transform:rotate(-90deg)}
+
+.ts-cat-content{display:block;transition:all .2s}
+.ts-cat-content.collapsed{display:none}
+
+.ts-tag-item{
+  display:inline-flex;align-items:center;padding:3px 7px;
+  background:var(--tag-bg);border:1px solid var(--border);border-radius:3px;
+  margin:2px 2px 2px 0;cursor:pointer;transition:all .12s;font-size:9px;
+  color:var(--text);user-select:none
+}
+.ts-tag-item:hover{background:var(--tag-hover);border-color:var(--c4)}
+.ts-tag-item:active{transform:scale(.95)}
+.ts-tag-item.added{background:#0f1e14;border-color:#3d8c3d;color:#5cb85c}
+
+/* Gallery Resizer removed */
+
+/* Tag Sidebar Resizer */
+.tag-sidebar-resizer{
+  width:6px;background:transparent;cursor:ew-resize;z-index:25;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;position:relative
+}
+.tag-sidebar-resizer::after{
+  content:'';width:2px;height:50px;border-radius:2px;
+  background:var(--muted);transition:all .15s
+}
+.tag-sidebar-resizer:hover::after,.tag-sidebar-resizer.dragging::after{background:var(--c5);height:70px}
+
+/* Right panel (gallery) border adjustment when sidebar is on left of it */
+.right-panel{
+  border-left:1px solid var(--border);
+}
+
+/* ════════════════════════════════════════════════
+   MODALS & OVERLAYS
+════════════════════════════════════════════════ */
+.tg-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
+.tg-modal-overlay.hidden{display:none}
+.tg-modal{background:#13161f;border:1px solid var(--border);border-radius:10px;width:min(720px,95vw);max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.tg-modal-head{padding:14px 20px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0}
+.tg-modal-title{font-size:13px;font-weight:600;color:var(--white);letter-spacing:.06em;flex:1}
+.tg-modal-close{width:28px;height:28px;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--muted);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .12s;flex-shrink:0}
+.tg-modal-close:hover{border-color:#ff6b6b;color:#ff6b6b}
+.tg-modal-name-row{padding:10px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0}
+.tg-modal-name-label{font-size:10px;color:var(--muted);letter-spacing:.1em;white-space:nowrap}
+.tg-modal-name-input{flex:1;background:#0d1018;border:1px solid var(--border);border-radius:5px;color:var(--white);font-family:'IBM Plex Mono',monospace;font-size:12px;padding:6px 10px;outline:none;transition:border-color .15s}
+.tg-modal-name-input:focus{border-color:var(--c5)}
+.tg-modal-name-input::placeholder{color:var(--muted)}
+.tg-modal-search-row{padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
+.tg-modal-search{width:100%;background:#0d1018;border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:11px;padding:5px 10px;outline:none;transition:border-color .15s}
+.tg-modal-search:focus{border-color:var(--c1)}
+.tg-modal-search::placeholder{color:var(--muted)}
+.tg-modal-body{flex:1;overflow-y:auto;padding:12px 20px}
+.tg-modal-body::-webkit-scrollbar{width:4px}
+.tg-modal-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.tg-selected-summary{
+  padding:8px 20px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0
+}
+.tg-selected-summary-title{
+  font-size:9px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-bottom:6px
+}
+.tg-selected-summary-tags{
+  display:flex;flex-wrap:wrap;gap:5px;min-height:24px
+}
+.tg-summary-tag{
+  display:inline-flex;align-items:center;gap:4px;padding:3px 8px;
+  background:#1e1830;border:1px solid var(--c5);border-radius:4px;
+  font-size:9px;color:var(--white)
+}
+.tg-summary-tag .ctag-del{
+  cursor:pointer;color:var(--muted);font-size:11px;font-weight:700;transition:color .1s;line-height:1
+}
+.tg-summary-tag .ctag-del:hover{color:#ff6b6b}
+.tg-modal-section{margin-bottom:16px}
+.tg-modal-sec-title{font-size:9px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)}
+.tg-modal-tags{display:flex;flex-wrap:wrap;gap:6px}
+.tg-sel-tag{display:inline-flex;flex-direction:column;gap:1px;padding:5px 9px;background:var(--tag-bg);border:1px solid var(--border);border-radius:4px;cursor:pointer;transition:all .12s;user-select:none}
+.tg-sel-tag:hover{background:var(--tag-hover);border-color:var(--c5)}
+.tg-sel-tag.selected{background:#1e1830;border-color:var(--c5);box-shadow:0 0 0 1px var(--c5)}
+.tg-sel-tag-cn{font-family:'Noto Serif SC',serif;font-size:11px;color:var(--white)}
+.tg-sel-tag-en{font-size:9px;color:var(--muted);font-family:'IBM Plex Mono',monospace}
+.tg-sel-tag.selected .tg-sel-tag-cn{color:var(--c5)}
+.tg-sel-tag.selected .tg-sel-tag-en{color:var(--c5);opacity:.7}
+.tg-modal-foot{padding:10px 20px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0}
+.tg-modal-selected-count{flex:1;font-size:10px;color:var(--muted);letter-spacing:.06em}
+.tg-modal-selected-count em{color:var(--c5);font-style:normal;font-weight:600}
+.tg-modal-cancel{padding:6px 14px;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:11px;cursor:pointer;transition:all .15s}
+.tg-modal-cancel:hover{border-color:var(--text);color:var(--text)}
+.tg-modal-save{padding:6px 18px;background:rgba(176,136,249,.15);border:1px solid var(--c5);border-radius:5px;color:var(--c5);font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;letter-spacing:.06em}
+.tg-modal-save:hover{background:rgba(176,136,249,.25)}
+.tg-modal-save:disabled{opacity:.35;cursor:default;pointer-events:none}
+.tg-sel-all-btn{padding:3px 10px;background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:9px;cursor:pointer;transition:all .12s;white-space:nowrap}
+.tg-sel-all-btn:hover{border-color:var(--c5);color:var(--c5)}
+
+/* Toast */
+#toast{
+  position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:#1d2430;border:1px solid #3d8c3d;color:#5cb85c;
+  font-size:11px;font-family:'IBM Plex Mono',monospace;padding:9px 20px;
+  border-radius:6px;opacity:0;pointer-events:none;transition:all .25s;
+  white-space:nowrap;letter-spacing:.06em;z-index:999
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.warn{border-color:var(--c3);color:var(--c3);background:#1e1a0a}
+#toast.info{border-color:var(--c4);color:var(--c4);background:#091e18}
+
+/* Suffix bar */
+.suffix-bar{
+  padding:7px 12px;border-top:1px solid var(--border);flex-shrink:0;
+  display:flex;align-items:center;gap:8px;background:#0b0e15
+}
+.suffix-label{font-size:9px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;white-space:nowrap}
+.suffix-input{
+  flex:1;background:transparent;border:none;outline:none;
+  font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;
+  color:var(--c1);caret-color:var(--c1)
+}
+.suffix-input::placeholder{color:var(--muted);font-weight:400}
+.suffix-preview{font-size:9px;color:var(--muted);white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis}
+.suffix-preview em{color:var(--c4);font-style:normal}
+
+/* Language switcher */
+.lang-btn{
+  background:transparent;border:1px solid var(--c5);color:var(--c5);
+  font-family:'IBM Plex Mono',monospace;font-size:10px;
+  cursor:pointer;padding:3px 10px;border-radius:4px;
+  transition:all .15s;font-weight:600;letter-spacing:.05em;white-space:nowrap
+}
+.lang-btn:hover{background:rgba(176,136,249,.1)}
+.lang-btn.active{color:var(--c4);border-color:var(--c4);background:rgba(78,158,255,.15)}
+</style>
+</head>
+<body>
+<div class="main-container">
+
+<!-- ══════════════════ LEFT PANEL ══════════════════ -->
+<aside class="left-panel" id="leftPanel">
+
+  <!-- Header row -->
+  <div class="panel-header">
+    <div class="panel-title" data-i18n="panel.title">图片文件夹</div>
+    <button class="import-btn" onclick="importFolder()" data-i18n="import.btn">📂 导入文件夹</button>
+    <button class="batch-btn" id="batchBtn" onclick="batchAddTagsToAll()" data-i18n="batch.btn">⚡ 批量添加标签</button>
+    <div class="panel-stats" id="panelStats" style="display:none">
+      <span data-i18n="panel.stats" data-i18n-params='{"count":"<span class=\"stat-val\" id=\"imgCount\">0</span>"}'>共 <span class="stat-val" id="imgCount">0</span> 张</span>
+    </div>
+  </div>
+
+  <!-- Body: image | tag editing -->
+  <div class="panel-body">
+
+    <!-- Image column -->
+    <div class="img-col" id="imgCol">
+      <!-- Page nav -->
+      <div class="page-nav hidden" id="pageNav">
+        <div>
+          <div class="page-counter"><em id="pageCurrentNum">1</em> / <em id="pageTotalNum">0</em></div>
+          <div class="page-filename" id="pageFilename"></div>
+        </div>
+        <div class="nav-arrows">
+          <button class="arrow-btn" id="btnPrev" onclick="navigateImage(-1)" data-i18n-title="page.nav.prev" title="上一张 (A)">←</button>
+          <button class="arrow-btn" id="btnNext" onclick="navigateImage(1)" data-i18n-title="page.nav.next" title="下一张 (D)">→</button>
+        </div>
+      </div>
+
+      <!-- Big image -->
+      <div class="big-image-wrap empty-wrap" id="bigImageWrap">
+        <div class="big-img-placeholder">🖼</div>
+        <div class="big-img-hint" data-i18n="big.img.hint">导入文件夹后显示图片</div>
+      </div>
+
+      <!-- Column resizer -->
+      <div class="col-resizer" id="colResizer" title="拖拽调整宽度"></div>
+    </div>
+
+    <!-- Tag editing column -->
+    <div class="tag-col">
+      <div class="tag-col-header">
+        <span data-i18n="tag.col.header">当前 Tags</span>
+        <span class="tag-col-filename" id="detailFilename">—</span>
+      </div>
+
+      <!-- Manual input -->
+      <div class="tag-input-row">
+        <input class="tag-manual-input" id="tagManualInput" type="text"
+          data-i18n-placeholder="tag.input.placeholder" placeholder="输入 tag，多个用逗号分隔…" autocomplete="off" spellcheck="false">
+        <button class="tag-add-btn" onclick="addManualTags()" data-i18n="tag.add.btn">＋ 添加</button>
+      </div>
+
+      <!-- Search / replace -->
+      <div class="tag-search-row">
+        <input class="tag-search-input" id="tagSearchInput" type="text"
+          data-i18n-placeholder="tag.search.placeholder" placeholder="搜索…" autocomplete="off" spellcheck="false" oninput="renderCurrentTags()">
+        <span class="search-sep">→</span>
+        <input class="tag-replace-input" id="tagReplaceInput" type="text"
+          data-i18n-placeholder="tag.replace.placeholder" placeholder="替换为…" autocomplete="off" spellcheck="false">
+        <button class="tag-replace-btn" onclick="replaceTag()" data-i18n="tag.replace.btn">替换</button>
+        <button class="tag-replace-all-btn" onclick="replaceTagAll()" data-i18n="tag.replace.all.btn" data-i18n-title="tag.replace.all.title" title="对全部图片执行">全替</button>
+        <button class="tag-delete-all-btn" onclick="deleteTagAll()" data-i18n="tag.delete.all.btn" data-i18n-title="tag.delete.all.title" title="在全部图片中删除">全删</button>
+      </div>
+
+      <!-- Tag list -->
+      <div class="current-tags" id="currentTagsDisplay">
+        <span class="no-tags" data-i18n="no.tags">导入文件夹后选择图片</span>
+      </div>
+
+      <!-- Kbd hint -->
+      <div class="kbd-hint" data-i18n="kbd.hint">
+        <span class="kbd">A</span> 上一张 &nbsp;
+        <span class="kbd">D</span> 下一张 &nbsp;
+        <span class="kbd">←</span><span class="kbd">→</span> 同上
+      </div>
+
+      <!-- Suffix -->
+      <div class="suffix-bar">
+        <span class="suffix-label" data-i18n="suffix.label">后缀</span>
+        <input class="suffix-input" id="charidInput" type="text"
+          data-i18n-placeholder="suffix.input.placeholder" placeholder="输入后缀（可留空）…" maxlength="60" autocomplete="off" spellcheck="false">
+        <span class="suffix-preview" id="charidPreview" data-i18n="suffix.preview">示例：tag_name</span>
+      </div>
+    </div>
+
+  </div><!-- /.panel-body -->
+</aside>
+
+<!-- Panel resizer between left and right -->
+<div class="panel-resizer" id="mainPanelResizer" title="拖拽调整面板宽度"></div>
+
+<!-- ══════════════════ TAG SIDEBAR ══════════════════ -->
+<aside class="tag-sidebar" id="tagSidebar">
+  <!-- Language Toggle (moved to top) -->
+  <div class="tag-sidebar-lang-bar">
+    <button class="ts-action-btn" id="langToggleBtn2" onclick="toggleLanguage()"></button>
+  </div>
+  <!-- Tag Groups Bar (moved from gallery) -->
+  <div class="tag-groups-bar-sidebar" id="tagGroupsBarSidebar">
+    <div class="tg-header-row" onclick="toggleTagGroupsSidebar()">
+      <div class="tag-groups-label" data-i18n="tag.groups.label">标签组</div>
+      <span class="tg-toggle">▼</span>
+    </div>
+    <div class="tg-actions-row">
+      <button class="tg-add-btn" onclick="openTgModal(null)" data-i18n="tg.add.btn">＋ 新建</button>
+      <button class="tg-add-btn" style="border-color:var(--c3);color:var(--c3)" onclick="openCatModal()" data-i18n="tg.cat.btn">⚙ 管理栏目</button>
+    </div>
+    <div class="tg-chips-wrap" id="tagGroupsList">
+      <span style="font-size:9px;color:var(--muted);font-style:italic" data-i18n="tag.groups.empty">暂无标签组</span>
+    </div>
+  </div>
+  <div class="tag-sidebar-header">
+    <div class="tag-sidebar-title" data-i18n="tag.sidebar.title"></div>
+    <div class="tag-sidebar-search-wrap">
+      <input class="tag-sidebar-search" id="tagSidebarSearch" type="text"
+        data-i18n-placeholder="tag.sidebar.search.placeholder" placeholder="搜索标签…" autocomplete="off" spellcheck="false" oninput="onTagSidebarSearch()">
+    </div>
+  </div>
+  <div class="tag-sidebar-body" id="tagSidebarBody">
+    <!-- Search Results Section -->
+    <div id="tagSearchResults" style="display:none;padding:8px 10px;margin-bottom:12px;background:#0e1218;border-radius:6px;border:1px solid var(--border)">
+      <div style="font-size:9px;color:var(--muted);margin-bottom:6px" data-i18n="tag.sidebar.search.results">搜索结果</div>
+      <div id="tagSearchResultsList"></div>
+    </div>
+    <!-- Categories Section -->
+    <div id="categoriesSidebarList"></div>
+  </div>
+</aside>
+
+<!-- Tag Sidebar Resizer -->
+<div class="tag-sidebar-resizer" id="tagSidebarResizer" title="拖拽调整宽度"></div>
+
+<!-- ══════════════════ RIGHT PANEL — Gallery ══════════════════ -->
+<div class="right-panel" id="rightPanel">
+
+  <!-- Gallery header -->
+  <div class="gallery-header">
+    <div class="gallery-title" data-i18n="gallery.title">图片画廊 Gallery</div>
+    <div class="gallery-stats">
+      <div class="gstat"><span data-i18n="gallery.stats.per">每页</span> <select class="rows-select" id="rowsSelect" onchange="onRowsChange()">
+        <option value="20">20</option>
+        <option value="50" selected>50</option>
+        <option value="100">100</option>
+        <option value="200">200</option>
+      </select> 张</div>
+      <div class="gstat"><span data-i18n="gallery.stats.total" data-i18n-params='{"count":"<span class=\"gstat-val\" id=\"galleryTotal\">0</span>"}'>共 <span class="gstat-val" id="galleryTotal">0</span> 张</span></div>
+    </div>
+  </div>
+
+  <!-- Gallery list -->
+  <div class="gallery-grid" id="galleryGrid">
+    <div class="gallery-empty">
+      <span class="icon">📂</span>
+      <span data-i18n="gallery.empty">点击左侧「导入文件夹」加载图片</span>
+    </div>
+  </div>
+
+  <!-- Pagination -->
+  <div class="gallery-pagination" id="galleryPagination">
+    <button class="page-btn" id="gpPrev" onclick="galleryPageDelta(-1)">‹</button>
+    <span class="page-info"><em id="gpCurrent">1</em> / <em id="gpTotal">1</em></span>
+    <button class="page-btn" id="gpNext" onclick="galleryPageDelta(1)">›</button>
+  </div>
+
+</div>
+
+</div><!-- /.main-container -->
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- Tag Groups Modal -->
+<div class="tg-modal-overlay hidden" id="tgModalOverlay" onclick="onTgOverlayClick(event)">
+  <div class="tg-modal" onclick="event.stopPropagation()">
+    <div class="tg-modal-head">
+      <div class="tg-modal-title" id="tgModalTitle" data-i18n="tg.modal.title.new"></div>
+      <button class="tg-modal-close" onclick="closeTgModal()">✕</button>
+    </div>
+    <div class="tg-modal-name-row">
+      <span class="tg-modal-name-label" data-i18n="tg.modal.name.label"></span>
+      <input class="tg-modal-name-input" id="tgModalNameInput" type="text"
+        data-i18n-placeholder="tg.modal.name.placeholder" placeholder="输入标签组名称…" maxlength="40" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="tg-modal-search-row">
+      <input class="tg-modal-search" id="tgModalSearch" type="text"
+        data-i18n-placeholder="tg.modal.search.placeholder" placeholder="搜索标签…" autocomplete="off" spellcheck="false" oninput="renderTgModalTags()">
+    </div>
+    <div class="tg-selected-summary" id="tgSelectedSummary">
+      <div class="tg-selected-summary-title" data-i18n="tg.modal.selected.summary">已选标签</div>
+      <div class="tg-selected-summary-tags" id="tgSelectedSummaryTags">
+        <span style="font-size:9px;color:var(--muted);font-style:italic">暂无已选标签</span>
+      </div>
+    </div>
+    <div class="tg-modal-body" id="tgModalBody"></div>
+    <div class="tg-modal-foot">
+      <div class="tg-modal-selected-count"><span data-i18n="tg.modal.selected" data-i18n-params='{"count":"<em id=\"tgSelCount\">0</em>"}'>已选 <em id="tgSelCount">0</em> 个标签</span></div>
+      <button class="tg-sel-all-btn" id="tgSelAllBtn" onclick="tgToggleSelectAll()" data-i18n="tg.modal.select.all">全选当前</button>
+      <button class="tg-sel-all-btn" style="border-color:var(--c4);color:var(--c4)" onclick="addCustomTagToGroup()" data-i18n="tg.modal.add.custom">＋ 添加自定义标签</button>
+      <button class="tg-modal-cancel" onclick="closeTgModal()" data-i18n="tg.modal.cancel">取消</button>
+      <button class="tg-modal-save" id="tgModalSave" onclick="saveTgGroup()" disabled data-i18n="tg.modal.save">保存标签组</button>
+    </div>
+  </div>
+</div>
+
+<!-- Categories Management Modal -->
+<div class="tg-modal-overlay hidden" id="catModalOverlay" onclick="onCatOverlayClick(event)">
+  <div class="tg-modal" onclick="event.stopPropagation()" style="width:min(800px,95vw)">
+    <div class="tg-modal-head">
+      <div class="tg-modal-title" data-i18n="cat.modal.title"></div>
+      <button class="tg-modal-close" onclick="closeCatModal()">✕</button>
+    </div>
+    <div class="tg-modal-body" id="catModalBody" style="padding:16px 20px">
+      <div id="catList">
+        <div style="font-size:10px;color:var(--muted);font-style:italic" data-i18n="cat.modal.empty"></div>
+      </div>
+    </div>
+    <div class="tg-modal-foot">
+      <button class="tg-modal-cancel" onclick="closeCatModal()" data-i18n="cat.tags.modal.cancel">关闭</button>
+      <button class="tg-modal-save" style="background:rgba(240,165,0,.15);border-color:var(--c3);color:var(--c3)" onclick="addNewCategory()" data-i18n="cat.modal.add">＋ 添加栏目</button>
+    </div>
+  </div>
+</div>
+
+<!-- Category Tags Management Modal -->
+<div class="tg-modal-overlay hidden" id="catTagsModalOverlay" onclick="onCatTagsOverlayClick(event)">
+  <div class="tg-modal" onclick="event.stopPropagation()" style="width:min(700px,95vw)">
+    <div class="tg-modal-head">
+      <div class="tg-modal-title" id="catTagsModalTitle" data-i18n="cat.tags.modal.title"></div>
+      <button class="tg-modal-close" onclick="closeCatTagsModal()">✕</button>
+    </div>
+    <div class="tg-modal-name-row">
+      <span class="tg-modal-name-label" data-i18n="cat.tags.modal.name.label"></span>
+      <input class="tg-modal-name-input" id="catNameInput" type="text"
+        data-i18n-placeholder="cat.tags.modal.name.placeholder" placeholder="输入栏目名称…" maxlength="40" autocomplete="off" spellcheck="false">
+      <button class="tg-modal-save" style="padding:4px 12px;font-size:10px" onclick="saveCategoryName()" data-i18n="cat.tags.modal.save.name">保存名称</button>
+    </div>
+    <div class="tg-modal-search-row">
+      <input class="tg-modal-search" id="catTagSearch" type="text"
+        data-i18n-placeholder="cat.tags.modal.search.placeholder" placeholder="搜索标签…" autocomplete="off" spellcheck="false" oninput="renderCatTags()">
+    </div>
+    <div class="tg-modal-body" id="catTagsModalBody"></div>
+    <div class="tg-modal-foot">
+      <div class="tg-modal-selected-count" id="catTagsCount"><span data-i18n="cat.tags.modal.count" data-i18n-params='{"count":"<em>0</em>"}'>共 <em>0</em> 个标签</span></div>
+      <button class="tg-modal-cancel" onclick="closeCatTagsModal()" data-i18n="cat.tags.modal.cancel">关闭</button>
+      <button class="tg-modal-save" onclick="addNewTagToCategory()" data-i18n="cat.tags.modal.add">＋ 添加标签</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ DATA ═══════════════════ -->
+<script>
+// ═══════════════════ SCRIPTS ═══════════════════
+// ═══════════════════════════════════════════════════════════
+//  Language support
+// ═══════════════════════════════════════════════════════════
+const I18N = {
+  zh: {
+    'panel.title': '图片文件夹',
+    'import.btn': '📂 导入文件夹',
+    'batch.btn': '⚡ 批量添加标签',
+    'panel.stats': '共 {count} 张',
+    'page.nav.prev': '上一张 (A)',
+    'page.nav.next': '下一张 (D)',
+    'big.img.hint': '导入文件夹后显示图片',
+    'tag.col.header': '当前 Tags',
+    'tag.input.placeholder': '输入 tag，多个用逗号分隔…',
+    'tag.add.btn': '＋ 添加',
+    'tag.search.placeholder': '搜索…',
+    'tag.replace.placeholder': '替换为…',
+    'tag.replace.btn': '替换',
+    'tag.replace.all.btn': '全替',
+    'tag.delete.all.btn': '全删',
+    'tag.replace.all.title': '对全部图片执行',
+    'tag.delete.all.title': '在全部图片中删除',
+    'no.tags': '导入文件夹后选择图片',
+    'kbd.hint': '<span class="kbd">A</span> 上一张 &nbsp; <span class="kbd">D</span> 下一张 &nbsp; <span class="kbd">←</span><span class="kbd">→</span> 同上',
+    'suffix.label': '后缀',
+    'suffix.input.placeholder': '输入后缀（可留空）…',
+    'suffix.preview': '示例：tag_name',
+    'gallery.title': '图片画廊 Gallery',
+    'gallery.stats.per': '每页',
+    'gallery.stats.total': '共 {count} 张',
+    'tag.groups.label': '标签组',
+    'tag.groups.empty': '暂无标签组',
+    'tag.sidebar.title': '快速标签',
+    'tag.sidebar.search.placeholder': '搜索标签…',
+    'tag.sidebar.search.results': '搜索结果',
+    'tag.sidebar.search.noresults': '未找到匹配的标签',
+    'tg.add.btn': '＋ 新建',
+    'tg.cat.btn': '⚙ 管理栏目',
+    'gallery.empty': '点击左侧「导入文件夹」加载图片',
+    'tg.modal.title.new': '新建标签组',
+    'tg.modal.title.edit': '编辑标签组',
+    'tg.modal.name.label': '组名称',
+    'tg.modal.name.placeholder': '输入标签组名称…',
+    'tg.modal.search.placeholder': '搜索标签…',
+    'tg.modal.selected': '已选 {count} 个标签',
+    'tg.modal.select.all': '全选当前',
+    'tg.modal.select.none': '取消全选',
+    'tg.modal.add.custom': '＋ 添加自定义标签',
+    'tg.modal.selected.summary': '已选标签',
+    'tg.modal.selected.empty': '暂无已选标签',
+    'tg.modal.cancel': '取消',
+    'tg.modal.save': '保存标签组',
+    'toast.tg.custom.prompt': '请输入自定义标签名称：',
+    'toast.tg.custom.exists': '⚠ 该标签已存在',
+    'toast.tg.custom.success': '✓ 已添加自定义标签「{tag}」',
+    'cat.modal.title': '栏目管理',
+    'cat.modal.empty': '暂无栏目，点击下方按钮添加',
+    'cat.modal.add': '＋ 添加栏目',
+    'cat.tags.modal.title': '管理标签',
+    'cat.tags.modal.title.prefix': '管理「',
+    'cat.tags.modal.title.suffix': '」的标签',
+    'cat.tags.modal.name.label': '栏目名称',
+    'cat.tags.modal.name.placeholder': '输入栏目名称…',
+    'cat.tags.modal.save.name': '保存名称',
+    'cat.tags.modal.search.placeholder': '搜索标签…',
+    'cat.tags.modal.count': '共 {count} 个标签',
+    'cat.tags.modal.empty': '暂无标签',
+    'cat.tags.modal.cancel': '关闭',
+    'cat.tags.modal.add': '＋ 添加标签',
+    'cat.tags.modal.manage': '管理标签',
+    'cat.tags.modal.delete': '删除',
+    'toast.import.warn': '⚠ 浏览器不支持 File System Access API，请使用 Chrome/Edge 110+',
+    'toast.import.success': '✓ 已加载 {count} 张图片',
+    'toast.import.warn2': '❌ 无法打开文件夹：',
+    'toast.select.warn': '⚠ 请先导入文件夹并选择图片',
+    'toast.add.success': '✓ 已添加 {added} 个 tag{skipped}',
+    'toast.add.skip': '，跳过 {skipped} 个重复',
+    'toast.add.all.skip': '⚠ 全部 {skipped} 个 tag 已存在',
+    'toast.replace.warn': '⚠ 请先输入要搜索的 tag',
+    'toast.replace.success': '✓ 已替换 {count} 个匹配 tag',
+    'toast.replace.notfound': '⚠ 未找到匹配的 tag',
+    'toast.replace.all.success': '✓ 已在 {files} 张图片中替换 {count} 个 tag',
+    'toast.replace.all.notfound': '⚠ 全部图片中未找到匹配的 tag',
+    'toast.replace.all.partial': '⚠ 替换完成，成功 {files} 张，失败 {error} 张',
+    'toast.delete.confirm': '确定要在【全部图片】中删除包含「{tag}」的 tag 吗？\n此操作不可恢复！',
+    'toast.delete.success': '✓ 已在 {files} 张图片中删除 {count} 个 tag',
+    'toast.delete.notfound': '⚠ 全部图片中未找到匹配的 tag',
+    'toast.delete.partial': '⚠ 删除完成，成功 {files} 张，失败 {error} 张',
+    'toast.remove.success': '🗑 已删除 tag',
+    'toast.tag.exists': '⚠ 已存在：',
+    'toast.tag.write': '✓ 已写入：',
+    'toast.tag.copy': '✓ 已复制：',
+    'toast.batch.warn': '⚠ 请先导入文件夹',
+    'toast.batch.prompt': '请输入要添加到【全部图片】的 tag（多个用英文逗号分隔）：',
+    'toast.batch.noinput': '⚠ 未输入任何 tag',
+    'toast.batch.processing': '⏳ 写入中…',
+    'toast.batch.success': '✓ 已为 {success} 张图片添加 {count} 个 tag',
+    'toast.batch.partial': '⚠ 成功 {success} 张，失败 {error} 张',
+    'toast.write.fail': '❌ 写入失败：',
+    'toast.tg.save.warn': '⚠ 请输入标签组名称',
+    'toast.tg.select.warn': '⚠ 请至少选择一个标签',
+    'toast.tg.save.success': '✓ 标签组「{name}」已保存（{count} 个标签）',
+    'toast.tg.delete.confirm': '确定删除标签组「{name}」？',
+    'toast.tg.delete.success': '🗑 已删除标签组「{name}」',
+    'toast.tg.apply.success': '✓ 已添加「{name}」{added} 个标签{skipped}',
+    'toast.tg.apply.skip': '，跳过 {skipped} 个',
+    'toast.tg.apply.all.skip': '⚠ 「{name}」全部 {skipped} 个标签已存在',
+    'toast.tg.copy.success': '✓ 已复制「{name}」{count} 个标签',
+    'toast.cat.add.prompt': '请输入新栏目名称：',
+    'toast.cat.add.success': '✓ 已添加栏目「{name}」',
+    'toast.cat.delete.confirm': '确定删除栏目「{name}」及其所有标签？',
+    'toast.cat.delete.success': '🗑 已删除栏目「{name}」',
+    'toast.cat.name.warn': '⚠ 栏目名称不能为空',
+    'toast.cat.name.success': '✓ 栏目名称已更新',
+    'toast.cat.tag.add.prompt': '请输入新标签名称：',
+    'toast.cat.tag.exists': '⚠ 该标签已存在',
+    'toast.cat.tag.add.success': '✓ 已添加标签「{tag}」',
+    'toast.cat.tag.delete.confirm': '确定删除标签「{tag}」？',
+    'toast.cat.tag.delete.success': '🗑 已删除标签「{tag}」',
+    'toast.cat.no.categories': '暂无栏目，请先点击「管理栏目」添加栏目和标签',
+    'gallery.tags.empty': '暂无 tag',
+    'current.tags.empty': '暂无 tag',
+  },
+  en: {
+    'panel.title': 'Image Folder',
+    'import.btn': '📂 Import Folder',
+    'batch.btn': '⚡ Batch Add Tags',
+    'panel.stats': '{count} images',
+    'page.nav.prev': 'Previous (A)',
+    'page.nav.next': 'Next (D)',
+    'big.img.hint': 'Import folder to display images',
+    'tag.col.header': 'Current Tags',
+    'tag.input.placeholder': 'Enter tags, separated by commas…',
+    'tag.add.btn': '＋ Add',
+    'tag.search.placeholder': 'Search…',
+    'tag.replace.placeholder': 'Replace with…',
+    'tag.replace.btn': 'Replace',
+    'tag.replace.all.btn': 'All',
+    'tag.delete.all.btn': 'Del All',
+    'tag.replace.all.title': 'Apply to all images',
+    'tag.delete.all.title': 'Delete from all images',
+    'no.tags': 'Import folder and select image',
+    'kbd.hint': '<span class="kbd">A</span> Prev &nbsp; <span class="kbd">D</span> Next &nbsp; <span class="kbd">←</span><span class="kbd">→</span> Same',
+    'suffix.label': 'Suffix',
+    'suffix.input.placeholder': 'Enter suffix (optional)…',
+    'suffix.preview': 'Example: tag_name',
+    'gallery.title': 'Image Gallery',
+    'gallery.stats.per': 'Per page',
+    'gallery.stats.total': '{count} total',
+    'tag.groups.label': 'Tag Groups',
+    'tag.groups.empty': 'No tag groups',
+    'tag.sidebar.title': 'Quick Tags',
+    'tag.sidebar.search.placeholder': 'Search tags…',
+    'tag.sidebar.search.results': 'Search Results',
+    'tag.sidebar.search.noresults': 'No matching tags found',
+    'tg.add.btn': '＋ New',
+    'tg.cat.btn': '⚙ Manage Categories',
+    'gallery.empty': 'Click "Import Folder" on the left to load images',
+    'tg.modal.title.new': 'New Tag Group',
+    'tg.modal.title.edit': 'Edit Tag Group',
+    'tg.modal.name.label': 'Group Name',
+    'tg.modal.name.placeholder': 'Enter group name…',
+    'tg.modal.search.placeholder': 'Search tags…',
+    'tg.modal.selected': '{count} tags selected',
+    'tg.modal.select.all': 'Select All',
+    'tg.modal.select.none': 'Deselect All',
+    'tg.modal.add.custom': '＋ Add Custom Tag',
+    'tg.modal.selected.summary': 'Selected Tags',
+    'tg.modal.selected.empty': 'No selected tags',
+    'tg.modal.cancel': 'Cancel',
+    'tg.modal.save': 'Save Group',
+    'toast.tg.custom.prompt': 'Enter custom tag name:',
+    'toast.tg.custom.exists': '⚠ Tag already exists',
+    'toast.tg.custom.success': '✓ Added custom tag "{tag}"',
+    'cat.modal.title': 'Category Management',
+    'cat.modal.empty': 'No categories, click button below to add',
+    'cat.modal.add': '＋ Add Category',
+    'cat.tags.modal.title': 'Manage Tags',
+    'cat.tags.modal.title.prefix': 'Manage tags for "',
+    'cat.tags.modal.title.suffix': '"',
+    'cat.tags.modal.name.label': 'Category Name',
+    'cat.tags.modal.name.placeholder': 'Enter category name…',
+    'cat.tags.modal.save.name': 'Save Name',
+    'cat.tags.modal.search.placeholder': 'Search tags…',
+    'cat.tags.modal.count': '{count} tags total',
+    'cat.tags.modal.empty': 'No tags',
+    'cat.tags.modal.cancel': 'Close',
+    'cat.tags.modal.add': '＋ Add Tag',
+    'cat.tags.modal.manage': 'Manage Tags',
+    'cat.tags.modal.delete': 'Delete',
+    'toast.import.warn': '⚠ Browser does not support File System Access API, please use Chrome/Edge 110+',
+    'toast.import.success': '✓ Loaded {count} images',
+    'toast.import.warn2': '❌ Cannot open folder:',
+    'toast.select.warn': '⚠ Please import folder and select image first',
+    'toast.add.success': '✓ Added {added} tag(s){skipped}',
+    'toast.add.skip': ', skipped {skipped} duplicate(s)',
+    'toast.add.all.skip': '⚠ All {skipped} tags already exist',
+    'toast.replace.warn': '⚠ Please enter tag to search',
+    'toast.replace.success': '✓ Replaced {count} matching tag(s)',
+    'toast.replace.notfound': '⚠ No matching tags found',
+    'toast.replace.all.success': '✓ Replaced {count} tag(s) in {files} image(s)',
+    'toast.replace.all.notfound': '⚠ No matching tags found in all images',
+    'toast.replace.all.partial': '⚠ Replacement complete: {files} succeeded, {error} failed',
+    'toast.delete.confirm': 'Are you sure you want to delete tags containing "{tag}" from all images?\nThis action cannot be undone!',
+    'toast.delete.success': '✓ Deleted {count} tag(s) from {files} image(s)',
+    'toast.delete.notfound': '⚠ No matching tags found in all images',
+    'toast.delete.partial': '⚠ Deletion complete: {files} succeeded, {error} failed',
+    'toast.remove.success': '🗑 Tag deleted',
+    'toast.tag.exists': '⚠ Already exists:',
+    'toast.tag.write': '✓ Written:',
+    'toast.tag.copy': '✓ Copied:',
+    'toast.batch.warn': '⚠ Please import folder first',
+    'toast.batch.prompt': 'Enter tags to add to all images (comma separated):',
+    'toast.batch.noinput': '⚠ No tags entered',
+    'toast.batch.processing': '⏳ Writing…',
+    'toast.batch.success': '✓ Added {count} tag(s) to {success} image(s)',
+    'toast.batch.partial': '⚠ {success} succeeded, {error} failed',
+    'toast.write.fail': '❌ Write failed:',
+    'toast.tg.save.warn': '⚠ Please enter group name',
+    'toast.tg.select.warn': '⚠ Please select at least one tag',
+    'toast.tg.save.success': '✓ Group "{name}" saved ({count} tags)',
+    'toast.tg.delete.confirm': 'Delete tag group "{name}"?',
+    'toast.tg.delete.success': '🗑 Deleted tag group "{name}"',
+    'toast.tg.apply.success': '✓ Added {added} tag(s) from "{name}"{skipped}',
+    'toast.tg.apply.skip': ', skipped {skipped}',
+    'toast.tg.apply.all.skip': '⚠ All {skipped} tags from "{name}" already exist',
+    'toast.tg.copy.success': '✓ Copied {count} tag(s) from "{name}"',
+    'toast.cat.add.prompt': 'Enter new category name:',
+    'toast.cat.add.success': '✓ Added category "{name}"',
+    'toast.cat.delete.confirm': 'Delete category "{name}" and all its tags?',
+    'toast.cat.delete.success': '🗑 Deleted category "{name}"',
+    'toast.cat.name.warn': '⚠ Category name cannot be empty',
+    'toast.cat.name.success': '✓ Category name updated',
+    'toast.cat.tag.add.prompt': 'Enter new tag name:',
+    'toast.cat.tag.exists': '⚠ Tag already exists',
+    'toast.cat.tag.add.success': '✓ Added tag "{tag}"',
+    'toast.cat.tag.delete.confirm': 'Delete tag "{tag}"?',
+    'toast.cat.tag.delete.success': '🗑 Deleted tag "{tag}"',
+    'toast.cat.no.categories': 'No categories, please click "Manage Categories" to add categories and tags',
+    'gallery.tags.empty': 'No tags',
+    'current.tags.empty': 'No tags',
+  }
+};
+
+const LANGUAGE_SYNC_MESSAGE = 'web-tools-hub:set-language';
+let currentLang = localStorage.getItem('app_language') || 'zh';
+
+function toggleLanguage() {
+  const newLang = currentLang === 'zh' ? 'en' : 'zh';
+  switchLanguage(newLang);
+}
+
+function switchLanguage(lang) {
+  currentLang = lang;
+  localStorage.setItem('app_language', lang);
+  
+  // Update language button text
+  const langBtn = $('langToggleBtn2');
+  if (langBtn) {
+    langBtn.textContent = lang === 'zh' ? 'EN' : '中文';
+    langBtn.classList.toggle('active', lang === 'zh');
+  }
+  
+  // Update all elements with data-i18n attribute
+  updateI18n();
+}
+
+function t(key, params = {}) {
+  const text = I18N[currentLang][key] || I18N.zh[key] || key;
+  return text.replace(/{(\w+)}/g, (_, param) => params[param] || '');
+}
+
+function updateI18n() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.dataset.i18n;
+    const params = el.dataset.i18nParams ? JSON.parse(el.dataset.i18nParams) : {};
+    el.innerHTML = t(key, params);
+  });
+  
+  // Update placeholders
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    const key = el.dataset.i18nPlaceholder;
+    el.placeholder = t(key);
+  });
+  
+  // Update titles
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    const key = el.dataset.i18nTitle;
+    el.title = t(key);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Core state
+// ═══════════════════════════════════════════════════════════
+let folderHandle = null;
+let imageFiles   = [];
+let selectedIdx  = -1;
+let txtOpenUrls  = [];
+
+// Gallery pagination
+let galleryPage     = 1;
+let galleryRowsPage = 50;
+
+const IMG_EXTS = ['jpg','jpeg','png','webp','gif','bmp','avif'];
+
+const $ = id => document.getElementById(id);
+
+// ─── Suffix ────────────────────────────────────────────────
+function getSuffix() {
+  const v = $('charidInput').value.trim();
+  return v ? '_' + v : '';
+}
+
+// ─── Init ──────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  tgLoad();
+  catLoad();
+  renderTagGroups();
+  renderTagSidebar();
+  
+  // Initialize language button
+  const langBtn = $('langToggleBtn2');
+  if (langBtn) {
+    langBtn.textContent = currentLang === 'zh' ? 'EN' : '中文';
+  }
+  // Initialize language
+  switchLanguage(currentLang);
+
+  window.addEventListener('message', event => {
+    if (event.data?.type !== LANGUAGE_SYNC_MESSAGE) return;
+    const nextLang = event.data?.language === 'en' ? 'en' : 'zh';
+    if (currentLang === nextLang) return;
+    switchLanguage(nextLang);
+  });
+
+  $('charidInput').addEventListener('input', () => {
+    const v = $('charidInput').value.trim();
+    $('charidPreview').innerHTML = v
+      ? `${t('suffix.preview')}<em>_${v}</em>`
+      : `${t('suffix.preview')}`;
+  });
+
+  $('tagManualInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addManualTags(); }
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (imageFiles.length === 0) return;
+    if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') { e.preventDefault(); navigateImage(-1); }
+    else if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') { e.preventDefault(); navigateImage(1); }
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      const overlay = $('tgModalOverlay');
+      if (!overlay.classList.contains('hidden')) { e.stopPropagation(); closeTgModal(); }
+    }
+  });
+
+  $('tgModalNameInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); saveTgGroup(); }
+  });
+
+  initColResizer();
+  initRightPanelResizer();
+  initTagSidebarResizer();
+  initGalleryResizer();
+});
+
+// ─── Column resizer ────────────────────────────────────────
+function initColResizer() {
+  const resizer = $('colResizer');
+  const imgCol  = $('imgCol');
+  let dragging = false, startX = 0, startW = 0;
+  const minW = 120;
+  const maxW = 760;
+
+  resizer.addEventListener('mousedown', e => {
+    dragging = true; startX = e.clientX; startW = imgCol.offsetWidth;
+    resizer.classList.add('dragging');
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const w = Math.max(minW, Math.min(startW + e.clientX - startX, maxW));
+    imgCol.style.width = w + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    resizer.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+}
+
+// ─── Main panel resizer (between left and right) ───────
+function initRightPanelResizer() {
+  const resizer = $('mainPanelResizer');
+  const leftPanel = $('leftPanel');
+  const tagSidebar = $('tagSidebar');
+  const tagSidebarResizer = $('tagSidebarResizer');
+  let dragging = false, startX = 0, startLeftW = 0;
+  const minW = 320;
+  const hardMaxW = 1400;
+  const minGalleryW = 260;
+
+  resizer.addEventListener('mousedown', e => {
+    dragging = true;
+    startX = e.clientX;
+    startLeftW = leftPanel.offsetWidth;
+    resizer.classList.add('dragging');
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const mainContainer = document.querySelector('.main-container');
+    const containerW = mainContainer ? mainContainer.clientWidth : window.innerWidth;
+    const occupiedRightW = tagSidebar.offsetWidth + tagSidebarResizer.offsetWidth + minGalleryW;
+    const dynamicMaxW = Math.max(minW, Math.min(hardMaxW, containerW - resizer.offsetWidth - occupiedRightW));
+    const newLeftW = Math.max(minW, Math.min(startLeftW + e.clientX - startX, dynamicMaxW));
+    leftPanel.style.width = newLeftW + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    resizer.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+}
+
+// ─── Gallery Resizer removed ───────────────────────────────
+function initGalleryResizer() {}
+
+// ─── Tag Sidebar Resizer ────────────────────────────────────────
+function initTagSidebarResizer() {
+  const resizer = $('tagSidebarResizer');
+  const tagSidebar = $('tagSidebar');
+  const leftPanel = $('leftPanel');
+  const mainPanelResizer = $('mainPanelResizer');
+  const rightPanel = $('rightPanel');
+  let dragging = false, startX = 0, startTagW = 0;
+  const minW = 160;
+  const hardMaxW = 720;
+  const minGalleryW = 260;
+
+  resizer.addEventListener('mousedown', e => {
+    dragging = true;
+    startX = e.clientX;
+    startTagW = tagSidebar.offsetWidth;
+    resizer.classList.add('dragging');
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const mainContainer = document.querySelector('.main-container');
+    const containerW = mainContainer ? mainContainer.clientWidth : window.innerWidth;
+    const occupiedW = leftPanel.offsetWidth + mainPanelResizer.offsetWidth + resizer.offsetWidth;
+    const dynamicMaxW = Math.max(minW, Math.min(hardMaxW, containerW - occupiedW - minGalleryW));
+    const nextW = startTagW + (e.clientX - startX);
+    const newTagW = Math.max(minW, Math.min(nextW, dynamicMaxW));
+    tagSidebar.style.width = newTagW + 'px';
+    rightPanel.style.minWidth = minGalleryW + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    resizer.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+}
+
+// ─── Import folder ─────────────────────────────────────────
+async function importFolder() {
+  if (!window.showDirectoryPicker) {
+    showToast(t('toast.import.warn'), 'warn', 4000);
+    return;
+  }
+  try {
+    folderHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+  } catch (e) {
+    if (e.name !== 'AbortError') showToast(t('toast.import.warn2') + ' ' + e.message, 'warn');
+    return;
+  }
+
+  imageFiles = [];
+  const txtMap = {};
+
+  for await (const [name, handle] of folderHandle.entries()) {
+    if (handle.kind !== 'file') continue;
+    const ext = name.split('.').pop().toLowerCase();
+    if (ext === 'txt') { txtMap[name.slice(0, -(ext.length+1))] = handle; }
+  }
+  for await (const [name, handle] of folderHandle.entries()) {
+    if (handle.kind !== 'file') continue;
+    const ext = name.split('.').pop().toLowerCase();
+    if (!IMG_EXTS.includes(ext)) continue;
+    const base = name.slice(0, -(ext.length+1));
+    imageFiles.push({ name, base, imgHandle: handle, txtHandle: txtMap[base] || null, tags: [], objUrl: null });
+  }
+
+  imageFiles.sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  for (const item of imageFiles) {
+    if (item.txtHandle) item.tags = await readTags(item.txtHandle);
+  }
+
+  $('panelStats').style.display = 'flex';
+  $('imgCount').textContent = imageFiles.length;
+  $('galleryTotal').textContent = imageFiles.length;
+  $('pageTotalNum').textContent = imageFiles.length;
+  $('batchBtn').style.display = 'flex';
+
+  showToast(t('toast.import.success', {count: imageFiles.length}), 'info');
+
+  galleryPage = 1;
+  renderGallery();
+
+  if (imageFiles.length > 0) { selectedIdx = 0; renderPreview(); }
+}
+
+// ─── Read tags ─────────────────────────────────────────────
+async function readTags(handle) {
+  try {
+    const file = await handle.getFile();
+    const text = await file.text();
+    return text.split(',').map(t => t.trim()).filter(Boolean);
+  } catch { return []; }
+}
+
+// ─── Navigate ──────────────────────────────────────────────
+function navigateImage(delta) {
+  if (imageFiles.length === 0) return;
+  selectedIdx = ((selectedIdx < 0 ? 0 : selectedIdx) + delta + imageFiles.length) % imageFiles.length;
+  // also jump gallery page
+  const rowsPP = galleryRowsPage;
+  const targetPage = Math.floor(selectedIdx / rowsPP) + 1;
+  if (targetPage !== galleryPage) { galleryPage = targetPage; }
+  renderPreview();
+  renderGallery();
+}
+
+function selectImage(idx) {
+  selectedIdx = idx;
+  renderPreview();
+  renderGallery();
+}
+
+// ─── Render preview ────────────────────────────────────────
+async function renderPreview() {
+  if (selectedIdx < 0 || imageFiles.length === 0) return;
+  const item = imageFiles[selectedIdx];
+
+  $('pageNav').classList.remove('hidden');
+  $('pageCurrentNum').textContent = selectedIdx + 1;
+  $('pageTotalNum').textContent = imageFiles.length;
+  $('pageFilename').textContent = item.name;
+  $('btnPrev').disabled = false;
+  $('btnNext').disabled = false;
+
+  const wrap = $('bigImageWrap');
+  wrap.classList.remove('empty-wrap');
+  wrap.innerHTML = '';
+  const img = document.createElement('img');
+  img.className = 'big-img';
+  img.alt = item.name;
+  img.style.opacity = '0';
+  wrap.appendChild(img);
+  try {
+    if (!item.objUrl) {
+      const file = await item.imgHandle.getFile();
+      item.objUrl = URL.createObjectURL(file);
+    }
+    img.src = item.objUrl;
+    img.onload = () => { img.style.opacity = '1'; };
+  } catch {
+    wrap.innerHTML = '<div class="big-img-placeholder">⚠️</div><div class="big-img-hint">图片加载失败</div>';
+    wrap.classList.add('empty-wrap');
+  }
+
+  $('detailFilename').textContent = item.base + '.txt';
+  renderCurrentTags();
+}
+
+// ─── Render current tags ───────────────────────────────────
+function renderCurrentTags() {
+  if (selectedIdx < 0) return;
+  const item = imageFiles[selectedIdx];
+  const container = $('currentTagsDisplay');
+  container.innerHTML = '';
+  const keyword = $('tagSearchInput').value.trim().toLowerCase();
+
+  if (item.tags.length === 0) {
+    container.innerHTML = `<span class="no-tags">${t('current.tags.empty')}</span>`;
+    return;
+  }
+  item.tags.forEach((tag, ti) => {
+    const matched = keyword && tag.toLowerCase().includes(keyword);
+    const span = document.createElement('span');
+    span.className = 'ctag' + (matched ? ' highlight' : '');
+    span.innerHTML = `${escHtml(tag)}<span class="ctag-del" data-i18n-title="toast.remove.success" title="${t('toast.remove.success')}" onclick="removeTag(${ti})">×</span>`;
+    container.appendChild(span);
+  });
+}
+
+// ─── Gallery rendering ─────────────────────────────────────
+function renderGallery() {
+  const grid = $('galleryGrid');
+  const total = imageFiles.length;
+  $('galleryTotal').textContent = total;
+
+  if (total === 0) {
+    grid.innerHTML = `<div class="gallery-empty"><span class="icon">📂</span>${t('gallery.empty')}</div>`;
+    updateGalleryPagination(0,0);
+    return;
+  }
+
+  const rowsPP = galleryRowsPage;
+  const totalPages = Math.max(1, Math.ceil(total / rowsPP));
+  if (galleryPage > totalPages) galleryPage = totalPages;
+
+  const start = (galleryPage - 1) * rowsPP;
+  const end   = Math.min(start + rowsPP, total);
+  const slice = imageFiles.slice(start, end);
+
+  grid.innerHTML = '';
+  slice.forEach((item, localIdx) => {
+    const globalIdx = start + localIdx;
+    const row = document.createElement('div');
+    row.className = 'gallery-row' + (globalIdx === selectedIdx ? ' active' : '');
+    row.onclick = () => {
+      selectImage(globalIdx);
+    };
+
+    // Thumbnail
+    let thumbHtml;
+    if (item.objUrl) {
+      thumbHtml = `<img class="gallery-thumb" src="${item.objUrl}" alt="${escHtml(item.name)}" loading="lazy">`;
+    } else {
+      thumbHtml = `<div class="gallery-thumb-placeholder">🖼</div>`;
+      // lazy-load thumbnail
+      requestAnimationFrame(async () => {
+        if (!item.objUrl) {
+          try {
+            const file = await item.imgHandle.getFile();
+            item.objUrl = URL.createObjectURL(file);
+          } catch {}
+        }
+        const thumbEl = row.querySelector('.gallery-thumb-placeholder');
+        if (thumbEl && item.objUrl) {
+          const img = document.createElement('img');
+          img.className = 'gallery-thumb';
+          img.src = item.objUrl;
+          img.alt = escHtml(item.name);
+          img.loading = 'lazy';
+          thumbEl.replaceWith(img);
+        }
+      });
+    }
+
+    const tagPreview = item.tags.length > 0
+      ? item.tags.slice(0, 6).map(t => `<em>${escHtml(t)}</em>`).join(', ') + (item.tags.length > 6 ? ` <span class="gallery-tags-more">+${item.tags.length - 6}</span>` : '')
+      : `<span style="color:var(--muted);font-style:italic">${t('gallery.tags.empty')}</span>`;
+
+    row.innerHTML = thumbHtml +
+      `<div class="gallery-info">
+        <div class="gallery-name">${escHtml(item.name)}</div>
+        <div class="gallery-tags">${tagPreview}</div>
+      </div>
+      <div class="gallery-tag-count">${item.tags.length} tags</div>`;
+
+    grid.appendChild(row);
+  });
+
+  updateGalleryPagination(galleryPage, totalPages);
+}
+
+function updateGalleryPagination(current, total) {
+  $('gpCurrent').textContent = current || 1;
+  $('gpTotal').textContent   = total  || 1;
+  $('gpPrev').disabled = current <= 1;
+  $('gpNext').disabled = current >= total;
+}
+
+function galleryPageDelta(delta) {
+  const total = Math.max(1, Math.ceil(imageFiles.length / galleryRowsPage));
+  galleryPage = Math.max(1, Math.min(galleryPage + delta, total));
+  renderGallery();
+}
+
+function onRowsChange() {
+  galleryRowsPage = parseInt($('rowsSelect').value) || 50;
+  galleryPage = 1;
+  renderGallery();
+}
+
+// ─── Manual add tags ───────────────────────────────────────
+async function addManualTags() {
+  if (selectedIdx < 0 || !folderHandle) {
+    showToast(t('toast.select.warn'), 'warn', 2000);
+    return;
+  }
+  const raw = $('tagManualInput').value;
+  if (!raw.trim()) return;
+  const suffix = getSuffix();
+  const newTags = raw.split(',').map(t => t.trim()).filter(Boolean);
+  if (newTags.length === 0) return;
+
+  const item = imageFiles[selectedIdx];
+  let added = 0, skipped = 0;
+  for (const t of newTags) {
+    const fullTag = t + suffix;
+    if (item.tags.includes(fullTag)) { skipped++; }
+    else { item.tags.push(fullTag); added++; }
+  }
+  if (added > 0) {
+    try {
+      await saveTags(item);
+      renderCurrentTags();
+      renderGallery();
+      $('tagManualInput').value = '';
+      const skipText = skipped > 0 ? t('toast.add.skip', {skipped}) : '';
+      showToast(t('toast.add.success', {added, skipped: skipText}), 'info', 2200);
+    } catch {}
+  } else {
+    showToast(t('toast.add.all.skip', {skipped}), 'warn', 2000);
+  }
+}
+
+// ─── Replace tag ───────────────────────────────────────────
+async function replaceTag() {
+  if (selectedIdx < 0 || !folderHandle) { showToast(t('toast.select.warn'),'warn',2000); return; }
+  const searchVal  = $('tagSearchInput').value.trim();
+  const replaceVal = $('tagReplaceInput').value.trim();
+  if (!searchVal) { showToast(t('toast.replace.warn'),'warn',2000); return; }
+
+  const item = imageFiles[selectedIdx];
+  const kw = searchVal.toLowerCase();
+  let count = 0;
+  item.tags = item.tags.map(t => {
+    if (t.toLowerCase().includes(kw)) {
+      count++;
+      return t.toLowerCase() === kw ? (replaceVal || t) : t.replace(new RegExp(searchVal.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'), replaceVal);
+    }
+    return t;
+  });
+  if (!replaceVal) item.tags = item.tags.filter(Boolean);
+
+  if (count > 0) {
+    try { await saveTags(item); renderCurrentTags(); renderGallery(); showToast(t('toast.replace.success', {count}),'info',2200); }
+    catch {}
+  } else {
+    showToast(t('toast.replace.notfound'),'warn',2000);
+  }
+}
+
+async function replaceTagAll() {
+  if (!folderHandle || imageFiles.length === 0) { showToast(t('toast.batch.warn'),'warn',2000); return; }
+  const searchVal  = $('tagSearchInput').value.trim();
+  const replaceVal = $('tagReplaceInput').value.trim();
+  if (!searchVal) { showToast(t('toast.replace.warn'),'warn',2000); return; }
+
+  const kw = searchVal.toLowerCase();
+  let totalReplaced = 0, filesAffected = 0, errorCount = 0;
+
+  for (const item of imageFiles) {
+    let count = 0;
+    item.tags = item.tags.map(t => {
+      if (t.toLowerCase().includes(kw)) {
+        count++;
+        return t.toLowerCase() === kw ? (replaceVal || t) : t.replace(new RegExp(searchVal.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'), replaceVal);
+      }
+      return t;
+    });
+    if (!replaceVal) item.tags = item.tags.filter(Boolean);
+    if (count > 0) {
+      totalReplaced += count;
+      try { await saveTags(item); filesAffected++; } catch { errorCount++; }
+    }
+  }
+
+  if (selectedIdx >= 0) renderCurrentTags();
+  renderGallery();
+
+  if (totalReplaced === 0) showToast(t('toast.replace.all.notfound'),'warn',2500);
+  else if (errorCount === 0) showToast(t('toast.replace.all.success', {files: filesAffected, count: totalReplaced}),'info',3000);
+  else showToast(t('toast.replace.all.partial', {files: filesAffected, error: errorCount}),'warn',3500);
+}
+
+// ─── Delete tag all ────────────────────────────────────────
+async function deleteTagAll() {
+  if (!folderHandle || imageFiles.length === 0) { showToast(t('toast.batch.warn'),'warn',2000); return; }
+  const searchVal = $('tagSearchInput').value.trim();
+  if (!searchVal) { showToast(t('toast.replace.warn'),'warn',2000); return; }
+  
+  if (!confirm(t('toast.delete.confirm', {tag: searchVal}))) return;
+
+  const kw = searchVal.toLowerCase();
+  let totalDeleted = 0, filesAffected = 0, errorCount = 0;
+
+  for (const item of imageFiles) {
+    const originalLength = item.tags.length;
+    item.tags = item.tags.filter(t => !t.toLowerCase().includes(kw));
+    const deletedCount = originalLength - item.tags.length;
+    
+    if (deletedCount > 0) {
+      totalDeleted += deletedCount;
+      try { await saveTags(item); filesAffected++; } catch { errorCount++; }
+    }
+  }
+
+  if (selectedIdx >= 0) renderCurrentTags();
+  renderGallery();
+
+  if (totalDeleted === 0) showToast(t('toast.delete.notfound'),'warn',2500);
+  else if (errorCount === 0) showToast(t('toast.delete.success', {files: filesAffected, count: totalDeleted}),'info',3000);
+  else showToast(t('toast.delete.partial', {files: filesAffected, error: errorCount}),'warn',3500);
+}
+
+// ─── Remove tag ────────────────────────────────────────────
+async function removeTag(tagIdx) {
+  if (selectedIdx < 0) return;
+  const item = imageFiles[selectedIdx];
+  item.tags.splice(tagIdx, 1);
+  await saveTags(item);
+  renderCurrentTags();
+  renderGallery();
+  showToast(t('toast.remove.success'),'info',1500);
+}
+
+// ─── Save tags ─────────────────────────────────────────────
+async function saveTags(item) {
+  try {
+    if (!item.txtHandle) {
+      item.txtHandle = await folderHandle.getFileHandle(item.base + '.txt', { create: true });
+    }
+    const writable = await item.txtHandle.createWritable();
+    await writable.write(item.tags.join(', '));
+    await writable.close();
+  } catch (e) {
+    showToast(t('toast.write.fail') + ' ' + e.message, 'warn', 3000);
+    throw e;
+  }
+}
+
+// ─── Handle tag click (write mode only) ────────────────────
+async function handleTagClick(tagName) {
+  const fullTag = tagName + getSuffix();
+  if (selectedIdx >= 0 && folderHandle) {
+    const item = imageFiles[selectedIdx];
+    if (item.tags.includes(fullTag)) {
+      showToast(t('toast.tag.exists') + ' ' + fullTag, 'warn', 1800);
+      return;
+    }
+    item.tags.push(fullTag);
+    try {
+      await saveTags(item);
+      renderCurrentTags();
+      renderGallery();
+      showToast(t('toast.tag.write') + ' ' + fullTag, 'info', 1800);
+    } catch { item.tags.pop(); }
+  } else {
+    try { await navigator.clipboard.writeText(fullTag); } catch {
+      const ta = document.createElement('textarea');
+      ta.value = fullTag; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+    }
+    showToast(t('toast.tag.copy') + ' ' + fullTag);
+  }
+}
+
+// ─── Batch add tags ────────────────────────────────────────
+async function batchAddTagsToAll() {
+  if (!folderHandle || imageFiles.length === 0) { showToast(t('toast.batch.warn'),'warn',2000); return; }
+  const raw = prompt(t('toast.batch.prompt'));
+  if (raw === null) return;
+  const newTags = raw.split(',').map(t => t.trim()).filter(Boolean);
+  if (newTags.length === 0) { showToast(t('toast.batch.noinput'),'warn',2000); return; }
+
+  const btn = $('batchBtn');
+  btn.disabled = true; btn.textContent = t('toast.batch.processing');
+
+  let successCount = 0, errorCount = 0;
+  for (const item of imageFiles) {
+    let added = 0;
+    for (const t of newTags) { if (!item.tags.includes(t)) { item.tags.push(t); added++; } }
+    if (added > 0) {
+      try { await saveTags(item); successCount++; } catch { errorCount++; }
+    }
+  }
+
+  btn.disabled = false; btn.innerHTML = t('batch.btn');
+  if (selectedIdx >= 0) renderCurrentTags();
+  renderGallery();
+
+  if (errorCount === 0) showToast(t('toast.batch.success', {success: successCount, count: newTags.length}),'info',3000);
+  else showToast(t('toast.batch.partial', {success: successCount, error: errorCount}),'warn',3500);
+}
+
+// ─── Toast ─────────────────────────────────────────────────
+let _toastTimer = null;
+function showToast(msg, type='', duration=2000) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'show' + (type ? ' '+type : '');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { t.className = ''; }, duration);
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+
+<!-- ═══════════════════ TAG GROUPS ═══════════════════ -->
+<script>
+let tagGroups  = [];
+let tgEditId   = null;
+let tgSelected = new Set();
+const TG_STORAGE_KEY = 'anatomy_tag_groups_v1';
+
+// ═══════════════════ CATEGORIES MANAGEMENT ═══════════════════
+let categories = [];
+let catEditId  = null;
+let catTagEditId = null; // 正在编辑标签的栏目ID
+const CAT_STORAGE_KEY = 'anatomy_categories_v1';
+
+function tgSave() { try { localStorage.setItem(TG_STORAGE_KEY, JSON.stringify(tagGroups)); } catch {} }
+function tgLoad() {
+  try { const raw = localStorage.getItem(TG_STORAGE_KEY); if (raw) tagGroups = JSON.parse(raw); } catch { tagGroups = []; }
+}
+
+// ═══════════════════ CATEGORIES STORAGE ═══════════════════
+function catSave() { try { localStorage.setItem(CAT_STORAGE_KEY, JSON.stringify(categories)); } catch {} }
+function catLoad() {
+  try { const raw = localStorage.getItem(CAT_STORAGE_KEY); if (raw) categories = JSON.parse(raw); } catch { categories = []; }
+}
+
+function renderTagGroups() {
+  const list = $('tagGroupsList');
+  list.innerHTML = '';
+  if (tagGroups.length === 0) {
+    list.innerHTML = `<span style="font-size:9px;color:var(--muted);font-style:italic" data-i18n="tag.groups.empty">${t('tag.groups.empty')}</span>`;
+    return;
+  }
+  tagGroups.forEach(grp => {
+    const chip = document.createElement('div');
+    chip.className = 'tg-chip';
+    chip.dataset.gid = grp.id;
+    chip.title = grp.tags.join(', ');
+
+    const body = document.createElement('div');
+    body.className = 'tg-chip-body';
+    body.innerHTML = `<div class="tg-chip-name">${escHtml(grp.name)}</div>
+                      <div class="tg-chip-count">${grp.tags.length}个</div>`;
+    body.addEventListener('click', () => applyTagGroup(grp.id, chip));
+
+    const actions = document.createElement('div');
+    actions.className = 'tg-chip-actions';
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'tg-chip-edit'; editBtn.title = t('cat.tags.modal.manage'); editBtn.textContent = '✎';
+    editBtn.addEventListener('click', e => { e.stopPropagation(); openTgModal(grp.id); });
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'tg-chip-del'; delBtn.title = t('cat.tags.modal.delete'); delBtn.textContent = '✕';
+    delBtn.addEventListener('click', e => { e.stopPropagation(); deleteTgGroup(grp.id); });
+
+    actions.appendChild(editBtn);
+    actions.appendChild(delBtn);
+    chip.appendChild(body);
+    chip.appendChild(actions);
+    list.appendChild(chip);
+  });
+}
+
+// ─── Tag Sidebar Rendering ────────────────────────────────────────
+function renderTagSidebar() {
+  renderCategoriesSidebar();
+}
+
+// ─── Tag Sidebar Search ───────────────────────────────────────────
+function onTagSidebarSearch() {
+  const searchInput = $('tagSidebarSearch');
+  const keyword = searchInput.value.trim().toLowerCase();
+  const resultsContainer = $('tagSearchResults');
+  const resultsList = $('tagSearchResultsList');
+  
+  if (!keyword) {
+    resultsContainer.style.display = 'none';
+    return;
+  }
+  
+  // 收集所有来自categories的标签
+  const allTags = [];
+  categories.forEach(cat => {
+    cat.tags.forEach(tag => {
+      allTags.push({
+        name: tag,
+        category: cat.name
+      });
+    });
+  });
+  
+  // 搜索匹配的标签
+  const matchedTags = allTags.filter(tag => {
+    // 支持英文搜索（包含匹配）
+    if (tag.name.toLowerCase().includes(keyword)) return true;
+    // 支持英文首字母搜索
+    const words = tag.name.split(/[\s_]+/);
+    const firstLetters = words.map(w => w.charAt(0)).join('');
+    if (firstLetters.toLowerCase().includes(keyword)) return true;
+    return false;
+  });
+  
+  // 渲染搜索结果
+  resultsList.innerHTML = '';
+  if (matchedTags.length === 0) {
+    resultsList.innerHTML = `<div style="font-size:9px;color:var(--muted);font-style:italic">${t('tag.sidebar.search.noresults')}</div>`;
+  } else {
+    matchedTags.forEach(tag => {
+      const tagEl = document.createElement('div');
+      tagEl.className = 'ts-tag-item';
+      tagEl.style.cursor = 'pointer';
+      tagEl.textContent = tag.name;
+      tagEl.title = tag.category;
+      tagEl.addEventListener('click', () => handleTagClick(tag.name));
+      resultsList.appendChild(tagEl);
+    });
+  }
+  
+  resultsContainer.style.display = 'block';
+}
+
+function renderCategoriesSidebar() {
+  const list = $('categoriesSidebarList');
+  list.innerHTML = '';
+  
+  if (categories.length === 0) {
+    list.innerHTML = `<div style="font-size:9px;color:var(--muted);font-style:italic;padding:8px" data-i18n="cat.modal.empty">${t('cat.modal.empty')}</div>`;
+    return;
+  }
+  
+  categories.forEach(cat => {
+    const catSection = document.createElement('div');
+    catSection.className = 'ts-cat-section';
+    catSection.dataset.catId = cat.id;
+    
+    const header = document.createElement('div');
+    header.className = 'ts-cat-header';
+    header.innerHTML = `<span class="ts-cat-title">${escHtml(cat.name)}</span>
+                       <span class="ts-cat-count">${cat.tags.length}</span>
+                       <span class="ts-cat-toggle">▼</span>`;
+    header.addEventListener('click', () => toggleCategorySection(cat.id));
+    
+    const content = document.createElement('div');
+    content.className = 'ts-cat-content';
+    content.id = `catContent_${cat.id}`;
+    
+    if (cat.tags.length === 0) {
+      content.innerHTML = `<div style="font-size:9px;color:var(--muted);font-style:italic;padding:6px">${t('cat.tags.modal.empty')}</div>`;
+    } else {
+      cat.tags.forEach(tag => {
+        const tagEl = document.createElement('div');
+        tagEl.className = 'ts-tag-item';
+        tagEl.dataset.tag = tag;
+        tagEl.textContent = tag;
+        tagEl.addEventListener('click', () => addTagFromSidebar(tag, tagEl));
+        content.appendChild(tagEl);
+      });
+    }
+    
+    catSection.appendChild(header);
+    catSection.appendChild(content);
+    list.appendChild(catSection);
+  });
+}
+
+function toggleTagGroupsSidebar() {
+  const bar = $('tagGroupsBarSidebar');
+  bar.classList.toggle('collapsed');
+}
+
+function toggleSection(contentId) {
+  const content = $(contentId);
+  const header = content.previousElementSibling;
+  content.classList.toggle('collapsed');
+  header.classList.toggle('collapsed');
+}
+
+function toggleCategorySection(catId) {
+  const content = $(`catContent_${catId}`);
+  const header = content.previousElementSibling;
+  content.classList.toggle('collapsed');
+  header.classList.toggle('collapsed');
+}
+
+async function addTagFromSidebar(tagName, tagEl) {
+  const fullTag = tagName + getSuffix();
+  if (selectedIdx >= 0 && folderHandle) {
+    const item = imageFiles[selectedIdx];
+    if (item.tags.includes(fullTag)) {
+      showToast(t('toast.tag.exists') + ' ' + fullTag, 'warn', 1500);
+      return;
+    }
+    item.tags.push(fullTag);
+    try {
+      await saveTags(item);
+      renderCurrentTags();
+      renderGallery();
+      tagEl.classList.add('added');
+      setTimeout(() => tagEl.classList.remove('added'), 500);
+      showToast(t('toast.tag.write') + ' ' + fullTag, 'info', 1500);
+    } catch { item.tags.pop(); }
+  } else {
+    try { await navigator.clipboard.writeText(fullTag); } catch {
+      const ta = document.createElement('textarea');
+      ta.value = fullTag; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+    }
+    showToast(t('toast.tag.copy') + ' ' + fullTag, 'info', 1500);
+  }
+}
+
+async function applyTagGroup(id, chipEl) {
+  const grp = tagGroups.find(g => g.id === id);
+  if (!grp) return;
+  const suffix   = getSuffix();
+  const tagsToAdd = grp.tags.map(t => t + suffix);
+
+  if (selectedIdx >= 0 && folderHandle) {
+    const item = imageFiles[selectedIdx];
+    let added = 0, skipped = 0;
+    for (const t of tagsToAdd) {
+      if (item.tags.includes(t)) { skipped++; }
+      else { item.tags.push(t); added++; }
+    }
+    if (added > 0) {
+      try {
+        await saveTags(item);
+        renderCurrentTags();
+        renderGallery();
+        chipEl && chipEl.classList.add('applying');
+        setTimeout(() => chipEl && chipEl.classList.remove('applying'), 700);
+        const skipText = skipped > 0 ? t('toast.tg.apply.skip', {skipped}) : '';
+        showToast(t('toast.tg.apply.success', {name: grp.name, added, skipped: skipText}), 'info', 2500);
+      } catch {}
+    } else {
+      showToast(t('toast.tg.apply.all.skip', {name: grp.name, skipped}), 'warn', 2000);
+    }
+  } else {
+    const text = tagsToAdd.join(', ');
+    try { await navigator.clipboard.writeText(text); } catch {
+      const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta);
+      ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    }
+    chipEl && chipEl.classList.add('applying');
+    setTimeout(() => chipEl && chipEl.classList.remove('applying'), 700);
+    showToast(t('toast.tg.copy.success', {name: grp.name, count: tagsToAdd.length}), 'info', 2200);
+  }
+}
+
+function deleteTgGroup(id) {
+  const grp = tagGroups.find(g => g.id === id);
+  if (!grp) return;
+  if (!confirm(t('toast.tg.delete.confirm', {name: grp.name}))) return;
+  tagGroups = tagGroups.filter(g => g.id !== id);
+  tgSave(); renderTagGroups();
+  showToast(t('toast.tg.delete.success', {name: grp.name}), 'info', 1800);
+}
+
+function openTgModal(editId) {
+  tgEditId   = editId;
+  tgSelected = new Set();
+  const overlay   = $('tgModalOverlay');
+  const titleEl   = $('tgModalTitle');
+  const nameInput = $('tgModalNameInput');
+  const search    = $('tgModalSearch');
+
+  if (editId) {
+    const grp = tagGroups.find(g => g.id === editId);
+    if (grp) {
+      titleEl.textContent = t('tg.modal.title.edit');
+      nameInput.value = grp.name;
+      grp.tags.forEach(t => tgSelected.add(t));
+    }
+  } else {
+    titleEl.textContent = t('tg.modal.title.new');
+    nameInput.value = '';
+  }
+  search.value = '';
+  overlay.classList.remove('hidden');
+  renderTgModalTags();
+  updateTgSelCount();
+  setTimeout(() => nameInput.focus(), 60);
+}
+
+function closeTgModal() { $('tgModalOverlay').classList.add('hidden'); }
+function onTgOverlayClick(e) { if (e.target === $('tgModalOverlay')) closeTgModal(); }
+
+function renderTgModalTags() {
+  const body   = $('tgModalBody');
+  const kw     = $('tgModalSearch').value.trim().toLowerCase();
+  body.innerHTML = '';
+
+  // 收集所有已选但不在categories中的自定义标签
+  const allCatTags = new Set();
+  categories.forEach(cat => cat.tags.forEach(t => allCatTags.add(t)));
+  const customTags = [...tgSelected].filter(t => !allCatTags.has(t));
+
+  // 显示栏目标签
+  if (categories.length === 0 && customTags.length === 0) {
+    body.innerHTML = `<div style="font-size:10px;color:var(--muted);font-style:italic;text-align:center;padding:20px">${t('toast.cat.no.categories')}</div>`;
+    return;
+  }
+
+  categories.forEach(cat => {
+    const tags = cat.tags.filter(t => !kw || t.toLowerCase().includes(kw));
+    if (tags.length === 0) return;
+
+    const section = document.createElement('div');
+    section.className = 'tg-modal-section';
+    section.innerHTML = `<div class="tg-modal-sec-title" style="color:var(--c3)">${escHtml(cat.name)}</div>`;
+    const tagsDiv = document.createElement('div');
+    tagsDiv.className = 'tg-modal-tags';
+
+    tags.forEach(tag => {
+      const el = document.createElement('div');
+      el.className = 'tg-sel-tag' + (tgSelected.has(tag) ? ' selected' : '');
+      el.dataset.en = tag;
+      el.innerHTML = `<span class="tg-sel-tag-cn">${escHtml(tag)}</span>`;
+      el.addEventListener('click', () => {
+        if (tgSelected.has(tag)) { tgSelected.delete(tag); el.classList.remove('selected'); }
+        else { tgSelected.add(tag); el.classList.add('selected'); }
+        updateTgSelCount();
+      });
+      tagsDiv.appendChild(el);
+    });
+    section.appendChild(tagsDiv);
+    body.appendChild(section);
+  });
+
+  // 显示已选的自定义标签
+  const filteredCustomTags = customTags.filter(t => !kw || t.toLowerCase().includes(kw));
+  if (filteredCustomTags.length > 0) {
+    const section = document.createElement('div');
+    section.className = 'tg-modal-section';
+    section.innerHTML = `<div class="tg-modal-sec-title" style="color:var(--c4)">已选自定义标签</div>`;
+    const tagsDiv = document.createElement('div');
+    tagsDiv.className = 'tg-modal-tags';
+
+    filteredCustomTags.forEach(tag => {
+      const el = document.createElement('div');
+      el.className = 'tg-sel-tag selected';
+      el.dataset.en = tag;
+      el.innerHTML = `<span class="tg-sel-tag-cn">${escHtml(tag)}</span>
+                      <span class="ctag-del" style="margin-left:6px" onclick="removeCustomTagFromGroup('${escHtml(tag)}', event)">×</span>`;
+      el.querySelector('.tg-sel-tag-cn').addEventListener('click', () => {
+        tgSelected.delete(tag);
+        renderTgModalTags();
+        updateTgSelCount();
+      });
+      tagsDiv.appendChild(el);
+    });
+    section.appendChild(tagsDiv);
+    body.appendChild(section);
+  }
+}
+
+function removeCustomTagFromGroup(tag, event) {
+  if (event) event.stopPropagation();
+  tgSelected.delete(tag);
+  renderTgModalTags();
+  updateTgSelCount();
+}
+
+function tgToggleSelectAll() {
+  const visible = document.querySelectorAll('#tgModalBody .tg-sel-tag');
+  const allSel  = [...visible].every(el => el.classList.contains('selected'));
+  visible.forEach(el => {
+    const tag = el.dataset.en;
+    if (allSel) { tgSelected.delete(tag); el.classList.remove('selected'); }
+    else { tgSelected.add(tag); el.classList.add('selected'); }
+  });
+  $('tgSelAllBtn').textContent = allSel ? t('tg.modal.select.none') : t('tg.modal.select.all');
+  updateTgSelCount();
+}
+
+function updateTgSelCount() {
+  const n = tgSelected.size;
+  $('tgSelCount').textContent = n;
+  $('tgModalSave').disabled = (n === 0);
+  updateTgSelectedSummary();
+}
+
+function updateTgSelectedSummary() {
+  const container = $('tgSelectedSummaryTags');
+  container.innerHTML = '';
+  
+  if (tgSelected.size === 0) {
+    container.innerHTML = `<span style="font-size:9px;color:var(--muted);font-style:italic">${t('tg.modal.selected.empty')}</span>`;
+    return;
+  }
+  
+  const sortedTags = [...tgSelected].sort();
+  sortedTags.forEach(tag => {
+    const el = document.createElement('div');
+    el.className = 'tg-summary-tag';
+    el.innerHTML = `${escHtml(tag)}<span class="ctag-del" onclick="removeTagFromSummary('${escHtml(tag)}', event)">×</span>`;
+    container.appendChild(el);
+  });
+}
+
+function removeTagFromSummary(tag, event) {
+  if (event) event.stopPropagation();
+  tgSelected.delete(tag);
+  updateTgSelCount();
+  renderTgModalTags();
+}
+
+function addCustomTagToGroup() {
+  const tag = prompt(t('toast.tg.custom.prompt'));
+  if (!tag || !tag.trim()) return;
+  
+  const trimmedTag = tag.trim();
+  
+  // 检查是否已存在于已选标签中
+  if (tgSelected.has(trimmedTag)) {
+    showToast(t('toast.tg.custom.exists'), 'warn', 1800);
+    return;
+  }
+  
+  // 添加到已选标签集合
+  tgSelected.add(trimmedTag);
+  
+  // 更新UI
+  updateTgSelCount();
+  renderTgModalTags();
+  
+  showToast(t('toast.tg.custom.success', {tag: trimmedTag}), 'info', 1800);
+}
+
+function saveTgGroup() {
+  const name = $('tgModalNameInput').value.trim();
+  if (!name) { $('tgModalNameInput').focus(); showToast(t('toast.tg.save.warn'),'warn',1800); return; }
+  if (tgSelected.size === 0) { showToast(t('toast.tg.select.warn'),'warn',1800); return; }
+
+  if (tgEditId) {
+    const grp = tagGroups.find(g => g.id === tgEditId);
+    if (grp) { grp.name = name; grp.tags = [...tgSelected]; }
+  } else {
+    tagGroups.push({ id: 'tg_' + Date.now(), name, tags: [...tgSelected] });
+  }
+
+  tgSave(); renderTagGroups(); renderTagSidebar(); closeTgModal();
+  showToast(t('toast.tg.save.success', {name, count: tgSelected.size}), 'info', 2500);
+}
+
+// ═══════════════════ CATEGORIES MANAGEMENT FUNCTIONS ═══════════════════
+function openCatModal() {
+  const overlay = $('catModalOverlay');
+  overlay.classList.remove('hidden');
+  renderCatList();
+}
+
+function closeCatModal() {
+  $('catModalOverlay').classList.add('hidden');
+}
+
+function onCatOverlayClick(e) {
+  if (e.target === $('catModalOverlay')) closeCatModal();
+}
+
+function renderCatList() {
+  const list = $('catList');
+  list.innerHTML = '';
+  
+  if (categories.length === 0) {
+    list.innerHTML = `<div style="font-size:10px;color:var(--muted);font-style:italic">${t('cat.modal.empty')}</div>`;
+    return;
+  }
+  
+  categories.forEach(cat => {
+    const catEl = document.createElement('div');
+    catEl.className = 'tg-modal-section';
+    catEl.style.marginBottom = '12px';
+    catEl.style.padding = '10px';
+    catEl.style.background = 'var(--tag-bg)';
+    catEl.style.borderRadius = '6px';
+    catEl.style.border = '1px solid var(--border)';
+    
+    const header = document.createElement('div');
+    header.style.display = 'flex';
+    header.style.alignItems = 'center';
+    header.style.justifyContent = 'space-between';
+    header.style.marginBottom = '8px';
+    
+    const nameDiv = document.createElement('div');
+    nameDiv.style.fontSize = '11px';
+    nameDiv.style.fontWeight = '600';
+    nameDiv.style.color = 'var(--c3)';
+    nameDiv.textContent = cat.name;
+    
+    const actions = document.createElement('div');
+    actions.style.display = 'flex';
+    actions.style.gap = '6px';
+    
+    const manageBtn = document.createElement('button');
+    manageBtn.className = 'tg-sel-all-btn';
+    manageBtn.style.borderColor = 'var(--c3)';
+    manageBtn.style.color = 'var(--c3)';
+    manageBtn.textContent = t('cat.tags.modal.manage');
+    manageBtn.onclick = () => openCatTagsModal(cat.id);
+    
+    const delBtn = document.createElement('button');
+    delBtn.className = 'tg-sel-all-btn';
+    delBtn.style.borderColor = '#ff6b6b';
+    delBtn.style.color = '#ff6b6b';
+    delBtn.textContent = t('cat.tags.modal.delete');
+    delBtn.onclick = () => deleteCategory(cat.id);
+    
+    actions.appendChild(manageBtn);
+    actions.appendChild(delBtn);
+    
+    header.appendChild(nameDiv);
+    header.appendChild(actions);
+    
+    const tagsPreview = document.createElement('div');
+    tagsPreview.style.fontSize = '9px';
+    tagsPreview.style.color = 'var(--muted)';
+    tagsPreview.style.lineHeight = '1.5';
+    tagsPreview.textContent = `${t('cat.tags.modal.count', {count: cat.tags.length}).replace('{count}', cat.tags.length)}：${cat.tags.slice(0, 5).join(', ')}${cat.tags.length > 5 ? '...' : ''}`;
+    
+    catEl.appendChild(header);
+    catEl.appendChild(tagsPreview);
+    list.appendChild(catEl);
+  });
+}
+
+function addNewCategory() {
+  const name = prompt(t('toast.cat.add.prompt'));
+  if (!name || !name.trim()) return;
+  
+  categories.push({
+    id: 'cat_' + Date.now(),
+    name: name.trim(),
+    tags: []
+  });
+  
+  catSave();
+  renderCatList();
+  renderTagSidebar();
+  showToast(t('toast.cat.add.success', {name: name.trim()}), 'info', 2000);
+}
+
+function deleteCategory(id) {
+  const cat = categories.find(c => c.id === id);
+  if (!cat) return;
+  
+  if (!confirm(t('toast.cat.delete.confirm', {name: cat.name}))) return;
+  
+  categories = categories.filter(c => c.id !== id);
+  catSave();
+  renderCatList();
+  renderTagSidebar();
+  showToast(t('toast.cat.delete.success', {name: cat.name}), 'info', 1800);
+}
+
+function openCatTagsModal(catId) {
+  catTagEditId = catId;
+  const cat = categories.find(c => c.id === catId);
+  if (!cat) return;
+  
+  $('catTagsModalTitle').textContent = t('cat.tags.modal.title.prefix') + cat.name + t('cat.tags.modal.title.suffix');
+  $('catNameInput').value = cat.name;
+  $('catTagSearch').value = '';
+  $('catTagsModalOverlay').classList.remove('hidden');
+  renderCatTags();
+}
+
+function closeCatTagsModal() {
+  $('catTagsModalOverlay').classList.add('hidden');
+  catTagEditId = null;
+}
+
+function onCatTagsOverlayClick(e) {
+  if (e.target === $('catTagsModalOverlay')) closeCatTagsModal();
+}
+
+function saveCategoryName() {
+  const cat = categories.find(c => c.id === catTagEditId);
+  if (!cat) return;
+  
+  const name = $('catNameInput').value.trim();
+  if (!name) {
+    showToast(t('toast.cat.name.warn'), 'warn', 1800);
+    return;
+  }
+  
+  cat.name = name;
+  catSave();
+  $('catTagsModalTitle').textContent = t('cat.tags.modal.title.prefix') + name + t('cat.tags.modal.title.suffix');
+  renderCatList();
+  renderTagSidebar();
+  showToast(t('toast.cat.name.success'), 'info', 1800);
+}
+
+function renderCatTags() {
+  const body = $('catTagsModalBody');
+  const kw = $('catTagSearch').value.trim().toLowerCase();
+  const cat = categories.find(c => c.id === catTagEditId);
+  if (!cat) return;
+  
+  body.innerHTML = '';
+  
+  const filteredTags = cat.tags.filter(tag =>
+    !kw || tag.toLowerCase().includes(kw)
+  );
+  
+  if (filteredTags.length === 0) {
+    body.innerHTML = `<div style="font-size:10px;color:var(--muted);font-style:italic;text-align:center;padding:20px">${t('cat.tags.modal.empty')}</div>`;
+    $('catTagsCount').innerHTML = t('cat.tags.modal.count', {count: '0'});
+    return;
+  }
+  
+  const tagsDiv = document.createElement('div');
+  tagsDiv.className = 'tg-modal-tags';
+  
+  filteredTags.forEach(tag => {
+    const el = document.createElement('div');
+    el.className = 'tg-sel-tag';
+    el.style.position = 'relative';
+    el.innerHTML = `<span class="tg-sel-tag-cn">${escHtml(tag)}</span>
+                    <span class="ctag-del" style="position:absolute;top:2px;right:2px;font-size:10px;padding:0 4px" onclick="deleteCatTag('${escHtml(tag)}', event)">×</span>`;
+    tagsDiv.appendChild(el);
+  });
+  
+  body.appendChild(tagsDiv);
+  $('catTagsCount').innerHTML = t('cat.tags.modal.count', {count: cat.tags.length});
+}
+
+function addNewTagToCategory() {
+  const tag = prompt(t('toast.cat.tag.add.prompt'));
+  if (!tag || !tag.trim()) return;
+  
+  const cat = categories.find(c => c.id === catTagEditId);
+  if (!cat) return;
+  
+  const trimmedTag = tag.trim();
+  if (cat.tags.includes(trimmedTag)) {
+    showToast(t('toast.cat.tag.exists'), 'warn', 1800);
+    return;
+  }
+  
+  cat.tags.push(trimmedTag);
+  catSave();
+  renderCatTags();
+  renderCatList();
+  renderTagSidebar();
+  showToast(t('toast.cat.tag.add.success', {tag: trimmedTag}), 'info', 1800);
+}
+
+function deleteCatTag(tag, event) {
+  if (event) event.stopPropagation();
+  
+  const cat = categories.find(c => c.id === catTagEditId);
+  if (!cat) return;
+  
+  if (!confirm(t('toast.cat.tag.delete.confirm', {tag}))) return;
+  
+  cat.tags = cat.tags.filter(tagItem => tagItem !== tag);
+  catSave();
+  renderCatTags();
+  renderCatList();
+  renderTagSidebar();
+  showToast(t('toast.cat.tag.delete.success', {tag}), 'info', 1500);
+}
+</script>
+
+</body>
+</html>

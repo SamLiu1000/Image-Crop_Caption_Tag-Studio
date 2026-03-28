@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>网页工具合集</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="hub-shell">
+    <header class="hub-header">
+      <div class="tab-bar" id="toolTabs" role="tablist" aria-label="工具切换">
+        <button class="tool-tab active" type="button" role="tab" aria-selected="true" aria-controls="panel-cropper" id="tab-cropper" data-tab="cropper">图片裁切</button>
+        <button class="tool-tab" type="button" role="tab" aria-selected="false" aria-controls="panel-captioner" id="tab-captioner" data-tab="captioner">图片描述</button>
+        <button class="tool-tab" type="button" role="tab" aria-selected="false" aria-controls="panel-tagtool" id="tab-tagtool" data-tab="tagtool">标签工具</button>
+      </div>
+      <div class="header-actions">
+        <button id="exportConfigBtn" class="config-btn" type="button" data-i18n="exportConfig" title="导出所有工具配置">📥 导出配置</button>
+        <button id="importConfigBtn" class="config-btn" type="button" data-i18n="importConfig" title="导入配置文件">📤 导入配置</button>
+        <button id="langToggleBtn" class="lang-toggle" type="button" aria-label="切换到英文" title="切换到英文">EN</button>
+      </div>
+    </header>
+
+    <main class="panel-stack">
+      <section class="tool-panel active" id="panel-cropper" role="tabpanel" aria-labelledby="tab-cropper">
+        <iframe class="tool-frame" src="../image_cropper_web/index.html" title="图片裁切工具"></iframe>
+      </section>
+      <section class="tool-panel" id="panel-captioner" role="tabpanel" aria-labelledby="tab-captioner" hidden>
+        <iframe class="tool-frame" src="../Image_Captioner/index.html" title="图片描述工具"></iframe>
+      </section>
+      <section class="tool-panel" id="panel-tagtool" role="tabpanel" aria-labelledby="tab-tagtool" hidden>
+        <iframe class="tool-frame" src="../tag tool.html" title="标签工具"></iframe>
+      </section>
+    </main>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
