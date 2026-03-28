@@ -14,6 +14,8 @@ All settings are saved directly in your browser, with options to export and impo
 Getting started is simple: just install Python. No additional dependencies required.
 
 ---
+<img width="403" height="75" alt="c6c111ca-ceb8-4105-88db-b3e138362a96" src="https://github.com/user-attachments/assets/147ebe32-d065-478a-a01a-6637b82645e6" />
+
 ### 🖼️ Image Cropper
 
 Easily adjust the crop box size or apply your saved presets.
