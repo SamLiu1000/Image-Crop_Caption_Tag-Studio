@@ -121,7 +121,16 @@
           <button id="zoomResetBtn" class="icon-btn" type="button" aria-label="重置缩放" title="重置缩放">○</button>
           <button id="zoomOutBtn" class="icon-btn" type="button" aria-label="缩小" title="缩小">⊖</button>
         </div>
-        <canvas id="previewCanvas"></canvas>
+        <div class="canvas-area">
+          <canvas id="previewCanvas"></canvas>
+          <div id="imageScaleBar" class="image-scale-bar hidden" aria-hidden="true">
+            <span class="scale-bar-label" id="imageScaleMinLabel">0.1×</span>
+            <input id="imageScaleSlider" type="range" min="0" max="1000" step="1" value="500"
+              aria-label="图片缩放" title="图片缩放" />
+            <span class="scale-bar-label" id="imageScaleMaxLabel">20×</span>
+            <span class="scale-bar-value" id="imageScaleValue">1.00×</span>
+          </div>
+        </div>
       </section>
     </main>
   </div>

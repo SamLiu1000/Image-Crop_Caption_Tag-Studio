@@ -222,6 +222,9 @@ const els = {
   zoomOutBtn: document.getElementById('zoomOutBtn'),
   langToggleBtn: document.getElementById('langToggleBtn'),
   canvas: document.getElementById('previewCanvas'),
+  imageScaleBar: document.getElementById('imageScaleBar'),
+  imageScaleSlider: document.getElementById('imageScaleSlider'),
+  imageScaleValue: document.getElementById('imageScaleValue'),
 };
 
 const ctx = els.canvas.getContext('2d');
@@ -587,6 +590,17 @@ function constrainBox() {
   state.crop = { x1, y1, x2: x1 + w, y2: y1 + h };
 }
 
+function syncTargetSizeFromCropBox() {
+  if (!state.dragStart) return;
+  const curW = state.crop.x2 - state.crop.x1;
+  const curH = state.crop.y2 - state.crop.y1;
+  const ratioW = curW / Math.max(1, state.dragStart.boxW);
+  const ratioH = curH / Math.max(1, state.dragStart.boxH);
+  state.targetW = Math.max(1, Math.round(state.dragStart.tw * ratioW));
+  state.targetH = Math.max(1, Math.round(state.dragStart.th * ratioH));
+  syncSizeInputs();
+}
+
 function applyAspectToBox() {
   const cx = (state.crop.x1 + state.crop.x2) / 2;
   const cy = (state.crop.y1 + state.crop.y2) / 2;
@@ -829,6 +843,7 @@ async function loadCurrentImage() {
   setNav(`${state.imageIndex + 1} / ${state.imageItems.length} - ${item.file.name}`);
   setStatus(t('loadedImage', { name: item.file.name, size: `${bitmap.width} x ${bitmap.height}` }));
   updateNavButtons();
+  syncScaleBarVisibility();
 }
 
 function updateNavButtons() {
@@ -855,7 +870,13 @@ function onPointerDown(event) {
   const mode = hitTest(x, y);
   if (!mode) return;
   state.dragMode = mode;
-  state.dragStart = { x, y, ...state.crop };
+  state.dragStart = {
+    x, y, ...state.crop,
+    boxW: state.crop.x2 - state.crop.x1,
+    boxH: state.crop.y2 - state.crop.y1,
+    tw: state.targetW,
+    th: state.targetH,
+  };
 }
 
 function onPointerMove(event) {
@@ -988,6 +1009,9 @@ function onPointerMove(event) {
   }
 
   constrainBox();
+  if (state.useActualSize && mode !== 'move') {
+    syncTargetSizeFromCropBox();
+  }
   scheduleRedraw();
 }
 
@@ -1014,20 +1038,62 @@ function cursorForMode(mode) {
   }[mode] || 'crosshair';
 }
 
+// 将 imageUserScale (0.1 ~ 20) 映射到滑动条值 (0 ~ 1000)，使用对数刻度
+function scaleToSlider(scale) {
+  const minLog = Math.log(0.1);
+  const maxLog = Math.log(20);
+  return Math.round(((Math.log(scale) - minLog) / (maxLog - minLog)) * 1000);
+}
+
+function sliderToScale(value) {
+  const minLog = Math.log(0.1);
+  const maxLog = Math.log(20);
+  return Math.exp(minLog + (value / 1000) * (maxLog - minLog));
+}
+
+function syncScaleSlider() {
+  if (!els.imageScaleSlider) return;
+  const sliderVal = scaleToSlider(state.imageUserScale);
+  els.imageScaleSlider.value = String(sliderVal);
+  els.imageScaleValue.textContent = `${state.imageUserScale.toFixed(2)}×`;
+  // 更新滑动条渐变背景，反映当前位置
+  const pct = (sliderVal / 1000) * 100;
+  els.imageScaleSlider.style.background =
+    `linear-gradient(to right, var(--accent) 0%, var(--accent) ${pct}%, var(--border) ${pct}%, var(--border) 100%)`;
+}
+
+function syncScaleBarVisibility() {
+  const show = state.freeTransform && !!state.currentBitmap;
+  els.imageScaleBar.classList.toggle('hidden', !show);
+  els.imageScaleBar.setAttribute('aria-hidden', String(!show));
+  if (show) syncScaleSlider();
+}
+
 function onWheel(event) {
   if (!state.currentBitmap) return;
   event.preventDefault();
-  const delta = event.deltaY < 0 ? 1 : -1;
   if (state.freeTransform) {
     if (event.shiftKey) {
+      // 旋转：保持原有逻辑，每次 ±2 度
+      const delta = event.deltaY < 0 ? 1 : -1;
       state.imageRotation = (state.imageRotation + delta * 2 + 360) % 360;
     } else {
-      const factor = delta > 0 ? 1.06 : 1 / 1.06;
+      // 无级缩放：根据 deltaY 实际值计算缩放因子，更丝滑
+      // deltaY 通常为 ±100（鼠标滚轮）或更小（触控板），归一化后乘以灵敏度系数
+      const sensitivity = 0.001;
+      const rawDelta = event.deltaY;
+      // 对 deltaMode 做适配：0=像素, 1=行, 2=页
+      const normalizedDelta = event.deltaMode === 1 ? rawDelta * 20
+        : event.deltaMode === 2 ? rawDelta * 400
+        : rawDelta;
+      const factor = Math.exp(-normalizedDelta * sensitivity);
       state.imageUserScale = Math.max(0.1, Math.min(state.imageUserScale * factor, 20));
+      syncScaleSlider();
     }
     scheduleRedraw();
     return;
   }
+  const delta = event.deltaY < 0 ? 1 : -1;
 
   const cx = (state.crop.x1 + state.crop.x2) / 2;
   const cy = (state.crop.y1 + state.crop.y2) / 2;
@@ -1049,6 +1115,12 @@ function onWheel(event) {
   state.crop.y1 = cy - hh;
   state.crop.y2 = cy + hh;
   constrainBox();
+  if (state.useActualSize) {
+    const factor = delta > 0 ? 1.04 : 1 / 1.04;
+    state.targetW = Math.max(1, Math.round(state.targetW * factor));
+    state.targetH = Math.max(1, Math.round(state.targetH * factor));
+    syncSizeInputs();
+  }
   scheduleRedraw();
 }
 
@@ -1416,6 +1488,7 @@ function bindEvents() {
     } else {
       scheduleRedraw();
     }
+    syncScaleBarVisibility();
   });
 
   els.constrainCheck.addEventListener('change', () => {
@@ -1440,6 +1513,14 @@ function bindEvents() {
     state.fillColor = els.fillColorInput.value || '#000000';
     syncFillBackgroundControls();
     scheduleRedraw();
+  });
+
+  els.imageScaleSlider.addEventListener('input', () => {
+    const val = Number(els.imageScaleSlider.value);
+    state.imageUserScale = Math.max(0.1, Math.min(sliderToScale(val), 20));
+    syncScaleSlider();
+    scheduleRedraw();
+    updateInfo();
   });
 
   els.zoomInBtn.addEventListener('click', () => zoomPreview(1.25));
