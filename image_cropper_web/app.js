@@ -42,6 +42,7 @@ const I18N = {
     swapSizeBtn: '交换宽高',
     actualSizeLabel: '按实际尺寸预览',
     sizeHint: '未勾选时按比例裁切；勾选后输入尺寸会直接控制实际输出尺寸。',
+    fixedOutputSizeLabel: '固定导出尺寸，仅缩放取景范围',
     presetTitle: '常用尺寸',
     optionsTitle: '选项',
     freeTransformLabel: '图片自由变换',
@@ -126,6 +127,7 @@ const I18N = {
     swapSizeBtn: 'Swap Width/Height',
     actualSizeLabel: 'Preview at actual size',
     sizeHint: 'When unchecked, cropping follows the ratio; when checked, the entered size directly controls the real output size.',
+    fixedOutputSizeLabel: 'Keep output size fixed, scale framing only',
     presetTitle: 'Common Sizes',
     optionsTitle: 'Options',
     freeTransformLabel: 'Free transform image',
@@ -205,6 +207,7 @@ const els = {
   addPresetBtn: document.getElementById('addPresetBtn'),
   swapSizeBtn: document.getElementById('swapSizeBtn'),
   actualSizeCheck: document.getElementById('actualSizeCheck'),
+  fixedOutputSizeCheck: document.getElementById('fixedOutputSizeCheck'),
   freeTransformCheck: document.getElementById('freeTransformCheck'),
   constrainCheck: document.getElementById('constrainCheck'),
   fillBgCheck: document.getElementById('fillBgCheck'),
@@ -238,6 +241,7 @@ const state = {
   targetW: 512,
   targetH: 512,
   useActualSize: true,
+  fixedOutputSize: false,
   freeTransform: false,
   constrain: true,
   fillBackground: false,
@@ -729,13 +733,14 @@ function updateInfo() {
   const rawW = Math.max(0, rect.x2 - rect.x1);
   const rawH = Math.max(0, rect.y2 - rect.y1);
   if (state.useActualSize) {
+    const exportHint = state.fixedOutputSize ? t('infoExportMatchesFrame') : t('infoExportResized');
     els.infoText.textContent = [
       t('infoModeCrop'),
       t('infoInputSize', { size: `${state.targetW} x ${state.targetH}` }),
       t('infoOutputSize', { size: `${state.targetW} x ${state.targetH}` }),
       t('infoSourceSample', { size: `${rawW} x ${rawH}` }),
       t('infoOverflowFill', { value: getFillDescription() }),
-      t('infoExportResized'),
+      exportHint,
     ].join('\n');
   } else {
     els.infoText.textContent = [
@@ -906,6 +911,38 @@ function onPointerMove(event) {
     state.crop.y1 = oy1 + dy;
     state.crop.x2 = ox2 + dx;
     state.crop.y2 = oy2 + dy;
+  } else if (state.fixedOutputSize) {
+    const factorX = 1 + dx / Math.max(MIN_BOX_SIZE, state.dragStart.boxW);
+    const factorY = 1 + dy / Math.max(MIN_BOX_SIZE, state.dragStart.boxH);
+    let factor;
+
+    if (mode === 'tl') {
+      factor = Math.min(1 - dx / Math.max(MIN_BOX_SIZE, state.dragStart.boxW), 1 - dy / Math.max(MIN_BOX_SIZE, state.dragStart.boxH));
+    } else if (mode === 'tr') {
+      factor = Math.min(1 + dx / Math.max(MIN_BOX_SIZE, state.dragStart.boxW), 1 - dy / Math.max(MIN_BOX_SIZE, state.dragStart.boxH));
+    } else if (mode === 'bl') {
+      factor = Math.min(1 - dx / Math.max(MIN_BOX_SIZE, state.dragStart.boxW), 1 + dy / Math.max(MIN_BOX_SIZE, state.dragStart.boxH));
+    } else if (mode === 'br') {
+      factor = Math.min(1 + dx / Math.max(MIN_BOX_SIZE, state.dragStart.boxW), 1 + dy / Math.max(MIN_BOX_SIZE, state.dragStart.boxH));
+    } else if (mode === 't') {
+      factor = 1 - dy / Math.max(MIN_BOX_SIZE, state.dragStart.boxH);
+    } else if (mode === 'b') {
+      factor = 1 + dy / Math.max(MIN_BOX_SIZE, state.dragStart.boxH);
+    } else if (mode === 'l') {
+      factor = 1 - dx / Math.max(MIN_BOX_SIZE, state.dragStart.boxW);
+    } else if (mode === 'r') {
+      factor = 1 + dx / Math.max(MIN_BOX_SIZE, state.dragStart.boxW);
+    }
+
+    factor = Math.max(MIN_BOX_SIZE / Math.max(state.dragStart.boxW, state.dragStart.boxH), factor || 1);
+    const halfW = (state.dragStart.boxW * factor) / 2;
+    const halfH = (state.dragStart.boxH * factor) / 2;
+    const cx = (ox1 + ox2) / 2;
+    const cy = (oy1 + oy2) / 2;
+    state.crop.x1 = cx - halfW;
+    state.crop.x2 = cx + halfW;
+    state.crop.y1 = cy - halfH;
+    state.crop.y2 = cy + halfH;
   } else if (mode === 'tl') {
     if (lockRatio) {
       const newH = Math.max(MIN_BOX_SIZE, (oy2 - oy1) - dy);
@@ -1009,7 +1046,7 @@ function onPointerMove(event) {
   }
 
   constrainBox();
-  if (state.useActualSize && mode !== 'move') {
+  if (state.useActualSize && !state.fixedOutputSize && mode !== 'move') {
     syncTargetSizeFromCropBox();
   }
   scheduleRedraw();
@@ -1102,8 +1139,13 @@ function onWheel(event) {
 
   if (state.useActualSize) {
     const factor = delta > 0 ? 1.04 : 1 / 1.04;
-    hw = Math.max(MIN_BOX_SIZE / 2, hw * factor);
-    hh = Math.max(MIN_BOX_SIZE / 2, hh * factor);
+    if (state.fixedOutputSize) {
+      hw = Math.max(MIN_BOX_SIZE / 2, hw / factor);
+      hh = Math.max(MIN_BOX_SIZE / 2, hh / factor);
+    } else {
+      hw = Math.max(MIN_BOX_SIZE / 2, hw * factor);
+      hh = Math.max(MIN_BOX_SIZE / 2, hh * factor);
+    }
   } else {
     const step = event.shiftKey ? 1 : Math.max(2, (state.crop.y2 - state.crop.y1) * 0.03);
     hh = Math.max(MIN_BOX_SIZE / 2, hh + delta * step);
@@ -1115,7 +1157,7 @@ function onWheel(event) {
   state.crop.y1 = cy - hh;
   state.crop.y2 = cy + hh;
   constrainBox();
-  if (state.useActualSize) {
+  if (state.useActualSize && !state.fixedOutputSize) {
     const factor = delta > 0 ? 1.04 : 1 / 1.04;
     state.targetW = Math.max(1, Math.round(state.targetW * factor));
     state.targetH = Math.max(1, Math.round(state.targetH * factor));
@@ -1477,7 +1519,24 @@ function bindEvents() {
 
   els.actualSizeCheck.addEventListener('change', () => {
     state.useActualSize = els.actualSizeCheck.checked;
+    if (!state.useActualSize) {
+      state.fixedOutputSize = false;
+      els.fixedOutputSizeCheck.checked = false;
+      els.fixedOutputSizeCheck.disabled = true;
+    } else {
+      els.fixedOutputSizeCheck.disabled = false;
+    }
     applySizeInputs();
+  });
+
+  els.fixedOutputSizeCheck.checked = state.fixedOutputSize;
+  els.fixedOutputSizeCheck.disabled = !state.useActualSize;
+  els.fixedOutputSizeCheck.addEventListener('change', () => {
+    state.fixedOutputSize = state.useActualSize && els.fixedOutputSizeCheck.checked;
+    if (state.currentBitmap) {
+      constrainBox();
+      scheduleRedraw();
+    }
   });
 
   els.freeTransformCheck.addEventListener('change', () => {
@@ -1582,6 +1641,10 @@ async function init() {
   renderPresets();
   syncSizeInputs();
   syncFillBackgroundControls();
+  if (els.fixedOutputSizeCheck) {
+    els.fixedOutputSizeCheck.checked = state.fixedOutputSize;
+    els.fixedOutputSizeCheck.disabled = !state.useActualSize;
+  }
   bindEvents();
   updateNavButtons();
   updateSaveDirInfo();

@@ -192,6 +192,10 @@ input[type="number"] {
   color: var(--text);
 }
 
+.check-row input:disabled + span {
+  color: var(--text-dim);
+}
+
 .check-row.inline {
   display: inline-flex;
 }
