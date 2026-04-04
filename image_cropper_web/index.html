@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>图片裁切工具 Web 版</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="topbar-actions">
+        <label class="btn primary">
+          <span data-i18n="openImageBtn">打开图片</span>
+          <input id="fileInput" type="file" accept="image/*" hidden />
+        </label>
+        <label class="btn">
+          <span data-i18n="importFolderBtn">导入文件夹</span>
+          <input id="multiFileInput" type="file" accept="image/*" webkitdirectory directory multiple hidden />
+        </label>
+        <button id="chooseSaveDirBtn" class="btn" type="button" data-i18n="chooseSaveDirBtn">设置保存位置</button>
+        <button id="prevBtn" class="btn" type="button" data-i18n="prevBtn">上一张</button>
+        <button id="nextBtn" class="btn" type="button" data-i18n="nextBtn">下一张</button>
+        <button id="saveBtn" class="btn success" type="button" data-i18n="saveBtn">裁切并保存</button>
+      </div>
+      <div class="status-group">
+        <div class="status-head">
+          <button id="langToggleBtn" class="btn lang-toggle" type="button" aria-label="切换到英文" title="切换到英文">EN</button>
+        </div>
+        <div id="statusText" class="status-line">请选择图片或导入图片文件夹</div>
+        <div id="navText" class="status-line muted">未加载图片</div>
+      </div>
+    </header>
+
+    <main class="main-layout">
+      <aside class="sidebar">
+        <section class="card">
+          <h2 data-i18n="sizeTitle">尺寸</h2>
+          <div class="field-row compact">
+            <label>
+              <span data-i18n="widthLabel">宽</span>
+              <input id="widthInput" type="number" min="1" step="1" value="512" />
+            </label>
+            <label>
+              <span data-i18n="heightLabel">高</span>
+              <input id="heightInput" type="number" min="1" step="1" value="512" />
+            </label>
+            <button id="addPresetBtn" class="icon-btn" type="button" aria-label="添加预设" title="添加预设">+</button>
+          </div>
+          <div class="field-row">
+            <button id="swapSizeBtn" class="btn small" type="button" data-i18n="swapSizeBtn">交换宽高</button>
+            <label class="check-row">
+              <input id="actualSizeCheck" type="checkbox" checked />
+              <span data-i18n="actualSizeLabel">按实际尺寸预览</span>
+            </label>
+          </div>
+          <label class="check-row">
+            <input id="fixedOutputSizeCheck" type="checkbox" />
+            <span data-i18n="fixedOutputSizeLabel">固定导出尺寸，仅缩放取景范围</span>
+          </label>
+          <p class="hint" data-i18n="sizeHint">未勾选时按比例裁切；勾选后输入尺寸会直接控制实际输出尺寸。</p>
+        </section>
+
+        <section class="card">
+          <h2 data-i18n="presetTitle">常用尺寸</h2>
+          <div id="presetList" class="preset-grid"></div>
+        </section>
+
+        <section class="card">
+          <h2 data-i18n="optionsTitle">选项</h2>
+          <label class="check-row">
+            <input id="freeTransformCheck" type="checkbox" />
+            <span data-i18n="freeTransformLabel">图片自由变换</span>
+          </label>
+          <label class="check-row">
+            <input id="constrainCheck" type="checkbox" checked />
+            <span data-i18n="constrainLabel">裁切框限制在图片范围内</span>
+          </label>
+          <label class="check-row">
+            <input id="fillBgCheck" type="checkbox" />
+            <span data-i18n="fillBgLabel">裁切框超出图片时填充背景</span>
+          </label>
+          <div id="fillBgControls" class="fill-bg-controls hidden" aria-hidden="true">
+            <label class="check-row inline">
+              <input id="fillTransparentCheck" type="checkbox" />
+              <span data-i18n="fillTransparentLabel">使用透明背景</span>
+            </label>
+            <label class="color-field">
+              <span data-i18n="fillColorLabel">背景颜色</span>
+              <input id="fillColorInput" type="color" value="#000000" />
+            </label>
+          </div>
+          <p class="hint" data-i18n="optionsHint">自由变换：裁切框固定为输出尺寸，拖动/滚轮操作图片，Shift + 滚轮旋转图片。勾选背景填充后，裁切框超出原图范围的区域可填充为指定颜色或透明。</p>
+        </section>
+
+        <section class="card">
+          <h2 data-i18n="saveLocationTitle">保存位置</h2>
+          <pre id="saveDirText" class="info-box">未设置，默认通过浏览器下载</pre>
+        </section>
+
+        <section class="card">
+          <h2 data-i18n="cropInfoTitle">裁切信息</h2>
+          <pre id="infoText" class="info-box">等待加载图片</pre>
+        </section>
+
+        <section class="card">
+          <h2 data-i18n="tipsTitle">操作提示</h2>
+          <pre id="tipsText" class="info-box">裁切框模式：
+• 拖动框内移动裁切框
+• 拖动边或角调整裁切框
+• Ctrl + 拖动可锁定比例
+• 滚轮缩放裁切框
+
+图片自由变换模式：
+• 拖动图片移动取景
+• 滚轮缩放图片
+• Shift + 滚轮旋转图片
+• 导出结果与框内内容保持一致</pre>
+        </section>
+      </aside>
+
+      <section class="canvas-panel">
+        <div class="canvas-toolbar">
+          <button id="zoomInBtn" class="icon-btn" type="button" aria-label="放大" title="放大">⊕</button>
+          <button id="zoomResetBtn" class="icon-btn" type="button" aria-label="重置缩放" title="重置缩放">○</button>
+          <button id="zoomOutBtn" class="icon-btn" type="button" aria-label="缩小" title="缩小">⊖</button>
+        </div>
+        <div class="canvas-area">
+          <canvas id="previewCanvas"></canvas>
+          <div id="imageScaleBar" class="image-scale-bar hidden" aria-hidden="true">
+            <span class="scale-bar-label" id="imageScaleMinLabel">0.1×</span>
+            <input id="imageScaleSlider" type="range" min="0" max="1000" step="1" value="500"
+              aria-label="图片缩放" title="图片缩放" />
+            <span class="scale-bar-label" id="imageScaleMaxLabel">20×</span>
+            <span class="scale-bar-value" id="imageScaleValue">1.00×</span>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
