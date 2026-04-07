@@ -14,10 +14,9 @@ All settings are saved directly in your browser, with options to export and impo
 Getting started is simple: just install Python. No additional dependencies required.
 
 ---
-<img width="403" height="75" alt="c6c111ca-ceb8-4105-88db-b3e138362a96" src="https://github.com/user-attachments/assets/147ebe32-d065-478a-a01a-6637b82645e6" />
 
-<img width="568" height="123" alt="4" src="https://github.com/user-attachments/assets/e6a5f049-fcc9-4eea-8edf-a6471ec10626" />
-
+<img width="461" height="58" alt="中文" src="https://github.com/user-attachments/assets/5969cfbd-c64c-4134-ae76-bfc4c50d6b6c" />
+<img width="461" height="58" alt="en" src="https://github.com/user-attachments/assets/621d6e49-3355-4c3f-beff-f836f8b830d9" />
 
 
 ### 🖼️ Image Cropper
