@@ -16,6 +16,10 @@ Getting started is simple: just install Python. No additional dependencies requi
 ---
 <img width="403" height="75" alt="c6c111ca-ceb8-4105-88db-b3e138362a96" src="https://github.com/user-attachments/assets/147ebe32-d065-478a-a01a-6637b82645e6" />
 
+<img width="568" height="123" alt="4" src="https://github.com/user-attachments/assets/e6a5f049-fcc9-4eea-8edf-a6471ec10626" />
+
+
+
 ### 🖼️ Image Cropper
 
 Easily adjust the crop box size or apply your saved presets.
