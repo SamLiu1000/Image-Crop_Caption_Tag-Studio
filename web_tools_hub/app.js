@@ -27,6 +27,7 @@ const I18N = {
     importConfirm: '导入配置将覆盖现有设置，是否继续？',
     importError: '❌ 配置导入失败',
     exportError: '❌ 配置导出失败',
+    importInvalid: '❌ 无效的配置文件',
   },
   en: {
     toggle: '中文',
@@ -43,6 +44,7 @@ const I18N = {
     importConfirm: 'Importing configuration will overwrite existing settings. Continue?',
     importError: '❌ Configuration import failed',
     exportError: '❌ Configuration export failed',
+    importInvalid: '❌ Invalid configuration file',
   },
 };
 
@@ -144,65 +146,136 @@ if (langToggleBtn) {
 // Storage keys for each tool
 const TOOL_STORAGE_KEYS = {
   cropper: ['image_cropper_web_sizes', 'image-cropper-web-language'],
-  captioner: ['image-captioner-config', 'image-captioner-language'],
-  captionerProgress: [], // Progress records with prefix 'image-captioner-progress:'
+  captioner: ['image-captioner-config', 'image-captioner-config-presets', 'image-captioner-language'],
   tagtool: ['anatomy_tag_groups_v1', 'anatomy_categories_v1', 'app_language'],
 };
 
-// Collect all localStorage data for all tools
-function collectAllLocalStorageData() {
-  const config = {
-    version: '1.0',
-    exportDate: new Date().toISOString(),
-    tools: {},
-  };
+const TOOL_SELECTORS = {
+  captioner: {
+    providerType: '#providerTabs [data-provider].active',
+    serverUrl: '#serverUrlInput',
+    model: '#modelInput',
+    timeoutSeconds: '#timeoutInput',
+    apiKey: '#apiKeyInput',
+    recursive: '#recursiveCheck',
+    skipExisting: '#skipExistingCheck',
+    stripThinking: '#stripThinkingCheck',
+    systemPrompt: '#systemPromptInput',
+    userPrompt: '#userPromptInput',
+  },
+};
 
-  // Collect Image Cropper data
-  config.tools.cropper = {};
-  for (const key of TOOL_STORAGE_KEYS.cropper) {
+const PREFIX_STORAGE_KEYS = {
+  captionerProgress: 'image-captioner-progress:',
+};
+
+const CONFIG_VERSION = '1.1';
+
+function readScopedLocalStorage(keys) {
+  const output = {};
+  for (const key of keys) {
     const value = localStorage.getItem(key);
     if (value !== null) {
-      config.tools.cropper[key] = value;
+      output[key] = value;
     }
   }
+  return output;
+}
 
-  // Collect Image Captioner data
-  config.tools.captioner = {};
-  for (const key of TOOL_STORAGE_KEYS.captioner) {
-    const value = localStorage.getItem(key);
-    if (value !== null) {
-      config.tools.captioner[key] = value;
-    }
-  }
-
-  // Collect Image Captioner progress records
-  config.tools.captionerProgress = {};
-  for (let i = 0; i < localStorage.length; i++) {
+function readPrefixedLocalStorage(prefix) {
+  const output = {};
+  for (let i = 0; i < localStorage.length; i += 1) {
     const key = localStorage.key(i);
-    if (key.startsWith('image-captioner-progress:')) {
-      config.tools.captionerProgress[key] = localStorage.getItem(key);
+    if (key && key.startsWith(prefix)) {
+      output[key] = localStorage.getItem(key);
+    }
+  }
+  return output;
+}
+
+function readFormSnapshot(frameDocument, selectors) {
+  if (!frameDocument || !selectors) return null;
+
+  const readValue = (selector) => frameDocument.querySelector(selector)?.value ?? '';
+  const readChecked = (selector, fallback = true) => {
+    const element = frameDocument.querySelector(selector);
+    return element ? !!element.checked : fallback;
+  };
+  const activeProvider = frameDocument.querySelector(selectors.providerType);
+
+  return {
+    providerType: activeProvider?.dataset?.provider === 'openai' ? 'openai' : 'lmstudio',
+    serverUrl: String(readValue(selectors.serverUrl)).trim(),
+    model: String(readValue(selectors.model)).trim(),
+    timeoutSeconds: Number.parseInt(readValue(selectors.timeoutSeconds), 10) || 120,
+    apiKey: String(readValue(selectors.apiKey)),
+    recursive: readChecked(selectors.recursive, true),
+    skipExisting: readChecked(selectors.skipExisting, true),
+    stripThinking: readChecked(selectors.stripThinking, true),
+    systemPrompt: String(readValue(selectors.systemPrompt)).trim(),
+    userPrompt: String(readValue(selectors.userPrompt)).trim(),
+  };
+}
+
+function collectCaptionerData() {
+  const stored = readScopedLocalStorage(TOOL_STORAGE_KEYS.captioner);
+  const captionerFrame = document.querySelector('#panel-captioner iframe');
+
+  try {
+    const frameDocument = captionerFrame?.contentDocument;
+    const liveConfig = readFormSnapshot(frameDocument, TOOL_SELECTORS.captioner);
+    if (liveConfig) {
+      stored['image-captioner-config'] = JSON.stringify(liveConfig);
+    }
+  } catch {
+    // Ignore iframe access/read issues and fall back to stored values.
+  }
+
+  return stored;
+}
+
+function collectAllLocalStorageData() {
+  return {
+    version: CONFIG_VERSION,
+    exportDate: new Date().toISOString(),
+    tools: {
+      cropper: readScopedLocalStorage(TOOL_STORAGE_KEYS.cropper),
+      captioner: collectCaptionerData(),
+      captionerProgress: readPrefixedLocalStorage(PREFIX_STORAGE_KEYS.captionerProgress),
+      tagtool: readScopedLocalStorage(TOOL_STORAGE_KEYS.tagtool),
+      hub: readScopedLocalStorage(Object.values(STORAGE_KEYS)),
+    },
+  };
+}
+
+function writeScopedLocalStorage(data, keys) {
+  if (!data || typeof data !== 'object') return;
+  for (const key of keys) {
+    const value = data[key];
+    if (value !== undefined) {
+      localStorage.setItem(key, value);
+    }
+  }
+}
+
+function replacePrefixedLocalStorage(prefix, data) {
+  for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith(prefix)) {
+      localStorage.removeItem(key);
     }
   }
 
-  // Collect Tag Tool data
-  config.tools.tagtool = {};
-  for (const key of TOOL_STORAGE_KEYS.tagtool) {
-    const value = localStorage.getItem(key);
-    if (value !== null) {
-      config.tools.tagtool[key] = value;
+  if (!data || typeof data !== 'object') return;
+  for (const [key, value] of Object.entries(data)) {
+    if (key.startsWith(prefix)) {
+      localStorage.setItem(key, value);
     }
   }
+}
 
-  // Collect Web Tools Hub data
-  config.tools.hub = {};
-  for (const key of Object.values(STORAGE_KEYS)) {
-    const value = localStorage.getItem(key);
-    if (value !== null) {
-      config.tools.hub[key] = value;
-    }
-  }
-
-  return config;
+function isValidConfigPayload(config) {
+  return !!config && typeof config === 'object' && !!config.tools && typeof config.tools === 'object';
 }
 
 // Export configuration to JSON file
@@ -241,65 +314,19 @@ async function importConfig() {
       const text = await file.text();
       const config = JSON.parse(text);
       
-      // Validate config structure
-      if (!config.tools || typeof config.tools !== 'object') {
-        throw new Error('Invalid configuration file');
+      if (!isValidConfigPayload(config)) {
+        throw new Error(t('importInvalid'));
       }
       
-      // Confirm import
       if (!confirm(t('importConfirm'))) {
         return;
       }
       
-      // Clear existing data and import new data
-      // Import Image Cropper data
-      if (config.tools.cropper) {
-        for (const key of TOOL_STORAGE_KEYS.cropper) {
-          if (config.tools.cropper[key] !== undefined) {
-            localStorage.setItem(key, config.tools.cropper[key]);
-          }
-        }
-      }
-      
-      // Import Image Captioner data
-      if (config.tools.captioner) {
-        for (const key of TOOL_STORAGE_KEYS.captioner) {
-          if (config.tools.captioner[key] !== undefined) {
-            localStorage.setItem(key, config.tools.captioner[key]);
-          }
-        }
-      }
-      
-      // Import Image Captioner progress records
-      if (config.tools.captionerProgress) {
-        // Clear existing progress records
-        for (let i = localStorage.length - 1; i >= 0; i--) {
-          const key = localStorage.key(i);
-          if (key.startsWith('image-captioner-progress:')) {
-            localStorage.removeItem(key);
-          }
-        }
-        // Import new progress records
-        for (const [key, value] of Object.entries(config.tools.captionerProgress)) {
-          localStorage.setItem(key, value);
-        }
-      }
-      
-      // Import Tag Tool data
-      if (config.tools.tagtool) {
-        for (const key of TOOL_STORAGE_KEYS.tagtool) {
-          if (config.tools.tagtool[key] !== undefined) {
-            localStorage.setItem(key, config.tools.tagtool[key]);
-          }
-        }
-      }
-      
-      // Import Web Tools Hub data
-      if (config.tools.hub) {
-        for (const [key, value] of Object.entries(config.tools.hub)) {
-          localStorage.setItem(key, value);
-        }
-      }
+      writeScopedLocalStorage(config.tools.cropper, TOOL_STORAGE_KEYS.cropper);
+      writeScopedLocalStorage(config.tools.captioner, TOOL_STORAGE_KEYS.captioner);
+      replacePrefixedLocalStorage(PREFIX_STORAGE_KEYS.captionerProgress, config.tools.captionerProgress);
+      writeScopedLocalStorage(config.tools.tagtool, TOOL_STORAGE_KEYS.tagtool);
+      writeScopedLocalStorage(config.tools.hub, Object.values(STORAGE_KEYS));
       
       // Reload page to apply changes
       alert(t('importSuccess'));
