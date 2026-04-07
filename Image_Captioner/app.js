@@ -820,6 +820,11 @@ async function fileToDataUrl(file) {
   });
 }
 
+function dataUrlToBase64(dataUrl) {
+  const match = String(dataUrl || '').match(/^data:[^;]+;base64,(.+)$/i);
+  return match ? match[1] : String(dataUrl || '').trim();
+}
+
 async function compressImage(file) {
   const imageUrl = await fileToDataUrl(file);
   const image = await loadImage(imageUrl);
@@ -924,6 +929,7 @@ async function requestCaption(config, item, file) {
   const baseUrl = sanitizeBaseUrl(config.serverUrl) || LM_STUDIO_DEFAULT_URL;
   const model = await detectModelIfNeeded(config);
   const imageDataUrl = await imageFileToPayloadUrl(file);
+  const imageBase64 = dataUrlToBase64(imageDataUrl);
   const messages = [];
 
   if (config.systemPrompt) {
@@ -933,7 +939,12 @@ async function requestCaption(config, item, file) {
   messages.push({
     role: 'user',
     content: [
-      { type: 'image_url', image_url: { url: imageDataUrl } },
+      {
+        type: 'image_url',
+        image_url: {
+          url: config.providerType === 'lmstudio' ? imageBase64 : imageDataUrl,
+        },
+      },
       { type: 'text', text: config.userPrompt || DEFAULT_USER_PROMPT },
     ],
   });
