@@ -360,7 +360,8 @@ textarea {
 .action-row,
 .hero-actions,
 .preview-meta,
-.log-header-line {
+.log-header-line,
+.preset-toolbar {
   display: flex;
   gap: 8px;
 }
@@ -377,6 +378,39 @@ textarea {
 
 .action-row.compact {
   margin-top: 12px;
+}
+
+.preset-toolbar {
+  align-items: flex-end;
+  margin-top: 12px;
+}
+
+.preset-select-field {
+  flex: 1 1 auto;
+}
+
+.preset-select-field select {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  border-radius: var(--radius-md);
+  padding: 9px 12px;
+  outline: none;
+}
+
+.preset-select-field select:focus {
+  border-color: rgba(37, 99, 235, 0.45);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+}
+
+.danger-ghost-btn {
+  color: var(--danger);
+  border-color: rgba(220, 38, 38, 0.2);
+}
+
+.danger-ghost-btn:hover {
+  background: #fff1f2;
 }
 
 .action-row.mini {
@@ -453,6 +487,14 @@ textarea {
   overflow: hidden;
   display: grid;
   place-items: center;
+  padding: 16px;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.preview-stage.drag-active {
+  border-color: rgba(37, 99, 235, 0.72);
+  background: #eff6ff;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.08);
 }
 
 .preview-stage img {
@@ -462,11 +504,25 @@ textarea {
   display: block;
 }
 
+.preview-stage img[hidden] {
+  display: none;
+}
+
 .preview-placeholder {
   max-width: 320px;
   padding: 20px;
   text-align: center;
   color: var(--text-soft);
+}
+
+.preview-placeholder p {
+  margin: 0;
+}
+
+.preview-drop-hint {
+  margin-top: 10px !important;
+  font-size: 12px;
+  color: var(--text-dim);
 }
 
 .preview-meta {
@@ -538,7 +594,8 @@ textarea {
 
   .brand-topbar,
   .section-heading,
-  .preview-meta {
+  .preview-meta,
+  .preset-toolbar {
     flex-direction: column;
     align-items: stretch;
   }

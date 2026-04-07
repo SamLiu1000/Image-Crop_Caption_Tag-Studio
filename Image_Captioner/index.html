@@ -66,9 +66,20 @@
           </label>
         </div>
 
+        <div class="preset-toolbar">
+          <label class="field preset-select-field">
+            <span data-i18n="presetSelectLabel">已保存配置</span>
+            <select id="configPresetSelect">
+              <option value="" data-i18n="presetSelectPlaceholder">选择一个已保存配置</option>
+            </select>
+          </label>
+          <button id="loadPresetBtn" class="ghost-btn" type="button" data-i18n="loadPresetBtn">载入</button>
+          <button id="deletePresetBtn" class="ghost-btn danger-ghost-btn" type="button" data-i18n="deletePresetBtn">删除</button>
+        </div>
+
         <div class="action-row compact">
           <button id="testConnectionBtn" class="primary-btn" type="button" data-i18n="testConnectionBtn">测试连接并读取模型</button>
-          <button id="saveConfigBtn" class="secondary-btn" type="button" data-i18n="saveConfigBtn">保存配置</button>
+          <button id="saveConfigBtn" class="secondary-btn" type="button" data-i18n="saveConfigBtn">保存当前配置</button>
         </div>
         <p class="helper-text" data-i18n="apiHelper">兼容 `/models` 与 `/chat/completions` 接口；可接 LM Studio、本地中转、OpenAI 兼容服务。</p>
       </section>
@@ -177,10 +188,11 @@
             </div>
           </div>
 
-          <div class="preview-stage">
+          <div id="previewStage" class="preview-stage" tabindex="0">
             <img id="previewImage" alt="预览图" hidden />
             <div id="previewPlaceholder" class="preview-placeholder">
               <p data-i18n="previewPlaceholder">选择图片目录后，可在这里查看当前处理图片。</p>
+              <p class="preview-drop-hint" data-i18n="previewDropHint">支持单张图片拖拽到此区域进行导入，并直接生成描述/反推提示词。</p>
             </div>
           </div>
 

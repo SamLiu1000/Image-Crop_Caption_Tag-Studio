@@ -2112,13 +2112,24 @@ function renderTgModalTags() {
       const el = document.createElement('div');
       el.className = 'tg-sel-tag selected';
       el.dataset.en = tag;
-      el.innerHTML = `<span class="tg-sel-tag-cn">${escHtml(tag)}</span>
-                      <span class="ctag-del" style="margin-left:6px" onclick="removeCustomTagFromGroup('${escHtml(tag)}', event)">×</span>`;
-      el.querySelector('.tg-sel-tag-cn').addEventListener('click', () => {
+
+      const label = document.createElement('span');
+      label.className = 'tg-sel-tag-cn';
+      label.textContent = tag;
+      label.addEventListener('click', () => {
         tgSelected.delete(tag);
         renderTgModalTags();
         updateTgSelCount();
       });
+
+      const deleteBtn = document.createElement('span');
+      deleteBtn.className = 'ctag-del';
+      deleteBtn.style.marginLeft = '6px';
+      deleteBtn.textContent = '×';
+      deleteBtn.addEventListener('click', (event) => removeCustomTagFromGroup(tag, event));
+
+      el.appendChild(label);
+      el.appendChild(deleteBtn);
       tagsDiv.appendChild(el);
     });
     section.appendChild(tagsDiv);
@@ -2165,7 +2176,17 @@ function updateTgSelectedSummary() {
   sortedTags.forEach(tag => {
     const el = document.createElement('div');
     el.className = 'tg-summary-tag';
-    el.innerHTML = `${escHtml(tag)}<span class="ctag-del" onclick="removeTagFromSummary('${escHtml(tag)}', event)">×</span>`;
+
+    const label = document.createElement('span');
+    label.textContent = tag;
+
+    const deleteBtn = document.createElement('span');
+    deleteBtn.className = 'ctag-del';
+    deleteBtn.textContent = '×';
+    deleteBtn.addEventListener('click', (event) => removeTagFromSummary(tag, event));
+
+    el.appendChild(label);
+    el.appendChild(deleteBtn);
     container.appendChild(el);
   });
 }
@@ -2389,8 +2410,23 @@ function renderCatTags() {
     const el = document.createElement('div');
     el.className = 'tg-sel-tag';
     el.style.position = 'relative';
-    el.innerHTML = `<span class="tg-sel-tag-cn">${escHtml(tag)}</span>
-                    <span class="ctag-del" style="position:absolute;top:2px;right:2px;font-size:10px;padding:0 4px" onclick="deleteCatTag('${escHtml(tag)}', event)">×</span>`;
+
+    const label = document.createElement('span');
+    label.className = 'tg-sel-tag-cn';
+    label.textContent = tag;
+
+    const deleteBtn = document.createElement('span');
+    deleteBtn.className = 'ctag-del';
+    deleteBtn.style.position = 'absolute';
+    deleteBtn.style.top = '2px';
+    deleteBtn.style.right = '2px';
+    deleteBtn.style.fontSize = '10px';
+    deleteBtn.style.padding = '0 4px';
+    deleteBtn.textContent = '×';
+    deleteBtn.addEventListener('click', (event) => deleteCatTag(tag, event));
+
+    el.appendChild(label);
+    el.appendChild(deleteBtn);
     tagsDiv.appendChild(el);
   });
   

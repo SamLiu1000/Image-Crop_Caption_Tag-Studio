@@ -1,4 +1,5 @@
 const CONFIG_KEY = 'image-captioner-config';
+const PRESETS_KEY = 'image-captioner-config-presets';
 const PROGRESS_PREFIX = 'image-captioner-progress:';
 const LANGUAGE_KEY = 'image-captioner-language';
 const LANGUAGE_SYNC_MESSAGE = 'web-tools-hub:set-language';
@@ -58,7 +59,19 @@ const I18N = {
     show: '显示',
     hide: '隐藏',
     testConnectionBtn: '测试连接并读取模型',
-    saveConfigBtn: '保存配置',
+    saveConfigBtn: '保存当前配置',
+    presetSelectLabel: '已保存配置',
+    presetSelectPlaceholder: '选择一个已保存配置',
+    loadPresetBtn: '载入',
+    deletePresetBtn: '删除',
+    presetSaved: '已保存配置：{name}',
+    presetLoaded: '已载入配置：{name}',
+    presetDeleted: '已删除配置：{name}',
+    presetDeleteMissing: '请先选择一个要删除的配置。',
+    presetLoadMissing: '请先选择一个要载入的配置。',
+    presetSaveCancelled: '已取消保存配置。',
+    presetNameExists: '配置名已存在，已覆盖：{name}',
+    presetPromptLabel: '请输入配置名称',
     apiHelper: '兼容 `/models` 与 `/chat/completions` 接口；可接 LM Studio、本地中转、OpenAI 兼容服务。',
     sectionTaskTitle: '任务设置',
     folderLabel: '图片文件夹',
@@ -87,6 +100,7 @@ const I18N = {
     nextPreviewBtn: '下一张',
     previewImageAlt: '预览图',
     previewPlaceholder: '选择图片目录后，可在这里查看当前处理图片。',
+    previewDropHint: '支持单张图片拖拽到此区域进行导入，并直接生成描述/反推提示词。',
     currentFileLabel: '当前文件',
     currentFileNone: '未选择目录',
     progressLabel: '进度',
@@ -123,6 +137,7 @@ const I18N = {
     emptyResponse: '返回内容为空',
     retryRequest: '  {name} 第 {attempt} 次请求失败，{seconds} 秒后重试。',
     unknownRequestError: '未知请求错误',
+    taskCompletedWithFailure: '任务已结束，但有 {count} 张图片处理失败。',
     chooseDirectoryFirst: '请先选择图片目录。',
     directoryPermissionDenied: '目录读写权限被拒绝。',
     progressDetected: '检测到历史进度记录：{count} 项。',
@@ -162,7 +177,19 @@ const I18N = {
     show: 'Show',
     hide: 'Hide',
     testConnectionBtn: 'Test Connection & Load Model',
-    saveConfigBtn: 'Save Settings',
+    saveConfigBtn: 'Save Current Config',
+    presetSelectLabel: 'Saved Presets',
+    presetSelectPlaceholder: 'Select a saved preset',
+    loadPresetBtn: 'Load',
+    deletePresetBtn: 'Delete',
+    presetSaved: 'Saved preset: {name}',
+    presetLoaded: 'Loaded preset: {name}',
+    presetDeleted: 'Deleted preset: {name}',
+    presetDeleteMissing: 'Select a preset to delete first.',
+    presetLoadMissing: 'Select a preset to load first.',
+    presetSaveCancelled: 'Preset save cancelled.',
+    presetNameExists: 'Preset already existed and was overwritten: {name}',
+    presetPromptLabel: 'Enter a preset name',
     apiHelper: 'Compatible with `/models` and `/chat/completions`; works with LM Studio, local relays, and OpenAI-compatible services.',
     sectionTaskTitle: 'Task Settings',
     folderLabel: 'Image Folder',
@@ -191,6 +218,7 @@ const I18N = {
     nextPreviewBtn: 'Next',
     previewImageAlt: 'Preview image',
     previewPlaceholder: 'After selecting an image folder, the current image will be previewed here.',
+    previewDropHint: 'This area also supports dragging in a single image for direct import and caption/prompt generation.',
     currentFileLabel: 'Current File',
     currentFileNone: 'No folder selected',
     progressLabel: 'Progress',
@@ -227,6 +255,7 @@ const I18N = {
     emptyResponse: 'The response content is empty',
     retryRequest: '  Request failed for {name} on attempt {attempt}, retrying in {seconds} seconds.',
     unknownRequestError: 'Unknown request error',
+    taskCompletedWithFailure: 'Task finished, but {count} image(s) failed.',
     chooseDirectoryFirst: 'Please choose an image directory first.',
     directoryPermissionDenied: 'Directory read/write permission was denied.',
     progressDetected: 'Detected historical progress records: {count}.',
@@ -258,6 +287,9 @@ const els = {
   toggleApiKeyBtn: document.getElementById('toggleApiKeyBtn'),
   testConnectionBtn: document.getElementById('testConnectionBtn'),
   saveConfigBtn: document.getElementById('saveConfigBtn'),
+  configPresetSelect: document.getElementById('configPresetSelect'),
+  loadPresetBtn: document.getElementById('loadPresetBtn'),
+  deletePresetBtn: document.getElementById('deletePresetBtn'),
   folderPathInput: document.getElementById('folderPathInput'),
   chooseFolderBtn: document.getElementById('chooseFolderBtn'),
   recursiveCheck: document.getElementById('recursiveCheck'),
@@ -276,6 +308,7 @@ const els = {
   clearProgressBtn: document.getElementById('clearProgressBtn'),
   prevPreviewBtn: document.getElementById('prevPreviewBtn'),
   nextPreviewBtn: document.getElementById('nextPreviewBtn'),
+  previewStage: document.getElementById('previewStage'),
   previewImage: document.getElementById('previewImage'),
   previewPlaceholder: document.getElementById('previewPlaceholder'),
   currentFileText: document.getElementById('currentFileText'),
@@ -295,11 +328,15 @@ const state = {
   currentObjectUrl: '',
   directoryHandle: null,
   directoryLabel: '',
+  singleFileMode: false,
+  singleFileSource: null,
   currentModel: '',
   language: localStorage.getItem(LANGUAGE_KEY) === 'en' ? 'en' : 'zh',
   connectionBadgeType: 'idle',
   runtimeStatusKey: 'runtimeIdle',
   lastLogLines: [],
+  presets: [],
+  activePresetName: '',
   stats: {
     processed: 0,
     skipped: 0,
@@ -338,6 +375,7 @@ function applyI18n() {
   els.userPromptInput.placeholder = t('userPromptPlaceholder');
   els.resultOutput.placeholder = t('resultPlaceholder');
   els.previewImage.alt = t('previewImageAlt');
+  updatePresetSelectOptions();
 
   els.toggleApiKeyBtn.textContent = els.apiKeyInput.type === 'password' ? t('show') : t('hide');
   els.langToggleBtn.textContent = t('langToggle');
@@ -382,6 +420,48 @@ function loadConfig() {
   }
 }
 
+function loadPresets() {
+  try {
+    const raw = localStorage.getItem(PRESETS_KEY);
+    if (!raw) {
+      state.presets = [];
+      return;
+    }
+    const parsed = JSON.parse(raw);
+    state.presets = Array.isArray(parsed)
+      ? parsed.filter((item) => item && typeof item.name === 'string' && item.name.trim())
+      : [];
+  } catch {
+    state.presets = [];
+  }
+}
+
+function persistPresets() {
+  localStorage.setItem(PRESETS_KEY, JSON.stringify(state.presets));
+}
+
+function updatePresetSelectOptions() {
+  if (!els.configPresetSelect) return;
+  const previousValue = state.activePresetName || els.configPresetSelect.value;
+  els.configPresetSelect.innerHTML = '';
+
+  const placeholderOption = document.createElement('option');
+  placeholderOption.value = '';
+  placeholderOption.textContent = t('presetSelectPlaceholder');
+  els.configPresetSelect.appendChild(placeholderOption);
+
+  for (const preset of state.presets) {
+    const option = document.createElement('option');
+    option.value = preset.name;
+    option.textContent = preset.name;
+    els.configPresetSelect.appendChild(option);
+  }
+
+  const nextValue = state.presets.some((preset) => preset.name === previousValue) ? previousValue : '';
+  state.activePresetName = nextValue;
+  els.configPresetSelect.value = nextValue;
+}
+
 function applyConfig(config) {
   state.providerType = config.providerType === 'openai' ? 'openai' : 'lmstudio';
   els.serverUrlInput.value = config.serverUrl || LM_STUDIO_DEFAULT_URL;
@@ -396,10 +476,78 @@ function applyConfig(config) {
   updateProviderTabs();
 }
 
+function persistCurrentConfig(config = getConfig(), shouldLog = true) {
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+  if (shouldLog) {
+    log('configSaved');
+  }
+}
+
 function saveConfig() {
   const config = getConfig();
-  localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+  persistCurrentConfig(config, true);
+}
+
+function saveConfigAsPreset() {
+  const config = getConfig();
+  const presetName = window.prompt(t('presetPromptLabel'), state.activePresetName || config.model || state.providerType);
+  if (presetName === null) {
+    log('presetSaveCancelled');
+    return;
+  }
+
+  const normalizedName = presetName.trim();
+  if (!normalizedName) {
+    log('presetSaveCancelled');
+    return;
+  }
+
+  const existed = state.presets.some((preset) => preset.name === normalizedName);
+  state.presets = state.presets.filter((preset) => preset.name !== normalizedName);
+  state.presets.push({ name: normalizedName, config });
+  state.presets.sort((a, b) => a.name.localeCompare(b.name, state.language === 'zh' ? 'zh-CN' : 'en'));
+  state.activePresetName = normalizedName;
+  persistPresets();
+  updatePresetSelectOptions();
+  persistCurrentConfig(config, false);
   log('configSaved');
+  log(existed ? 'presetNameExists' : 'presetSaved', { name: normalizedName });
+}
+
+function loadSelectedPreset(options = {}) {
+  const { shouldLog = true } = options;
+  const presetName = els.configPresetSelect.value;
+  if (!presetName) {
+    if (shouldLog) log('presetLoadMissing');
+    return;
+  }
+
+  const preset = state.presets.find((item) => item.name === presetName);
+  if (!preset) {
+    if (shouldLog) log('presetLoadMissing');
+    return;
+  }
+
+  state.activePresetName = preset.name;
+  applyConfig(preset.config || {});
+  persistCurrentConfig(getConfig(), false);
+  if (shouldLog) {
+    log('presetLoaded', { name: preset.name });
+  }
+}
+
+function deleteSelectedPreset() {
+  const presetName = els.configPresetSelect.value;
+  if (!presetName) {
+    log('presetDeleteMissing');
+    return;
+  }
+
+  state.presets = state.presets.filter((preset) => preset.name !== presetName);
+  state.activePresetName = '';
+  persistPresets();
+  updatePresetSelectOptions();
+  log('presetDeleted', { name: presetName });
 }
 
 function updateProviderTabs() {
@@ -474,6 +622,7 @@ function getHeaders(config) {
 async function testConnection() {
   const config = getConfig();
   const baseUrl = sanitizeBaseUrl(config.serverUrl) || LM_STUDIO_DEFAULT_URL;
+  const manualModel = config.model;
   setConnectionBadgeByKey('running');
   try {
     const data = await safeFetchJson(`${baseUrl}/models`, {
@@ -481,8 +630,11 @@ async function testConnection() {
       mode: 'cors',
       headers: config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {},
     });
-    const modelId = data?.data?.[0]?.id || config.model || 'local-model';
-    els.modelInput.value = modelId;
+    const detectedModel = data?.data?.[0]?.id || '';
+    const modelId = manualModel || detectedModel || 'local-model';
+    if (!manualModel && detectedModel) {
+      els.modelInput.value = detectedModel;
+    }
     state.currentModel = modelId;
     setConnectionBadgeByKey('success');
     log('connectionSuccessLog', { model: modelId });
@@ -532,6 +684,19 @@ function getExtension(name) {
   return index >= 0 ? name.slice(index).toLowerCase() : '';
 }
 
+function createVirtualFileItem(file) {
+  return {
+    handle: {
+      async getFile() {
+        return file;
+      },
+    },
+    relativePath: file.name,
+    name: file.name,
+    sourceFile: file,
+  };
+}
+
 async function collectImageFiles(directoryHandle, recursive) {
   const files = [];
   async function walk(handle, path = '') {
@@ -555,6 +720,37 @@ async function collectImageFiles(directoryHandle, recursive) {
   return files;
 }
 
+async function loadSingleFile(file) {
+  const ext = getExtension(file?.name || '');
+  if (!file || !SUPPORTED_EXTENSIONS.has(ext)) {
+    return;
+  }
+
+  state.singleFileMode = true;
+  state.singleFileSource = file;
+  state.directoryHandle = null;
+  state.directoryLabel = '';
+  els.folderPathInput.value = '';
+  state.files = [createVirtualFileItem(file)];
+  state.currentIndex = 0;
+  state.isRunning = false;
+  state.stopRequested = false;
+  resetCounters();
+  els.resultOutput.value = '';
+  els.startBtn.disabled = false;
+  els.stopBtn.disabled = true;
+  setRuntimeStatus('runtimeIdle');
+  setConnectionBadgeByKey('idle');
+  await renderPreview();
+}
+
+async function handlePreviewDrop(event) {
+  event.preventDefault();
+  els.previewStage.classList.remove('drag-active');
+  const [file] = Array.from(event.dataTransfer?.files || []);
+  await loadSingleFile(file);
+}
+
 async function chooseFolder() {
   if (typeof window.showDirectoryPicker !== 'function') {
     log('browserNoDirectoryPicker');
@@ -562,6 +758,7 @@ async function chooseFolder() {
   }
   try {
     const directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    state.singleFileMode = false;
     state.directoryHandle = directoryHandle;
     state.directoryLabel = directoryHandle.name || 'selected-folder';
     els.folderPathInput.value = state.directoryLabel;
@@ -592,6 +789,7 @@ async function renderPreview() {
     state.currentObjectUrl = '';
   }
   if (state.currentIndex < 0 || state.currentIndex >= state.files.length) {
+    els.previewImage.removeAttribute('src');
     els.previewImage.hidden = true;
     els.previewPlaceholder.hidden = false;
     els.currentFileText.textContent = t('currentFileNone');
@@ -682,10 +880,9 @@ function loadImage(src) {
 }
 
 async function imageFileToPayloadUrl(file) {
-  if (file.size <= MAX_IMAGE_SIZE_BYTES) {
-    return fileToDataUrl(file);
-  }
-  return compressImage(file);
+  return file.size <= MAX_IMAGE_SIZE_BYTES
+    ? await fileToDataUrl(file)
+    : await compressImage(file);
 }
 
 function buildAbortSignal(timeoutSeconds) {
@@ -816,22 +1013,41 @@ async function hasExistingCaption(item) {
 
 async function processAll() {
   if (state.isRunning) return;
-  if (!state.directoryHandle || !state.files.length) {
+
+  const shouldRestoreSingleFile = state.singleFileMode
+    && !state.files.length
+    && state.singleFileSource
+    && SUPPORTED_EXTENSIONS.has(getExtension(state.singleFileSource.name || ''));
+
+  if (shouldRestoreSingleFile) {
+    state.files = [createVirtualFileItem(state.singleFileSource)];
+    state.currentIndex = 0;
+    await renderPreview();
+  }
+
+  if (!state.files.length) {
     log('chooseDirectoryFirst');
     return;
   }
 
-  const hasPermission = await ensureDirectoryPermission(state.directoryHandle, 'readwrite');
-  if (!hasPermission) {
-    log('directoryPermissionDenied');
+  if (!state.singleFileMode && !state.directoryHandle) {
+    log('chooseDirectoryFirst');
     return;
+  }
+
+  if (!state.singleFileMode) {
+    const hasPermission = await ensureDirectoryPermission(state.directoryHandle, 'readwrite');
+    if (!hasPermission) {
+      log('directoryPermissionDenied');
+      return;
+    }
   }
 
   const config = getConfig();
   config.serverUrl = sanitizeBaseUrl(config.serverUrl) || LM_STUDIO_DEFAULT_URL;
   if (!config.userPrompt) config.userPrompt = DEFAULT_USER_PROMPT;
 
-  saveConfig();
+  persistCurrentConfig(config, false);
   state.isRunning = true;
   state.stopRequested = false;
   resetCounters();
@@ -840,7 +1056,7 @@ async function processAll() {
   els.startBtn.disabled = true;
   els.stopBtn.disabled = false;
 
-  const progressSet = loadProgressRecord();
+  const progressSet = state.singleFileMode ? new Set() : loadProgressRecord();
   if (progressSet.size) {
     log('progressDetected', { count: progressSet.size });
   }
@@ -862,7 +1078,7 @@ async function processAll() {
         continue;
       }
 
-      if (config.skipExisting && await hasExistingCaption(item)) {
+      if (!state.singleFileMode && config.skipExisting && await hasExistingCaption(item)) {
         progressSet.add(progressName);
         saveProgressRecord(progressSet);
         state.stats.skipped += 1;
@@ -875,10 +1091,14 @@ async function processAll() {
         const file = await item.handle.getFile();
         log('processingStarted', { name: progressName });
         const caption = await requestCaption(config, item, file);
-        await writeCaptionFile(item, caption);
+        if (!state.singleFileMode) {
+          await writeCaptionFile(item, caption);
+        }
         els.resultOutput.value = caption;
-        progressSet.add(progressName);
-        saveProgressRecord(progressSet);
+        if (!state.singleFileMode) {
+          progressSet.add(progressName);
+          saveProgressRecord(progressSet);
+        }
         state.stats.processed += 1;
         syncStats();
         log('processingFinished', { name: progressName });
@@ -891,6 +1111,8 @@ async function processAll() {
 
     if (state.stopRequested) {
       log('taskStopped');
+    } else if (state.stats.failed > 0) {
+      log('taskCompletedWithFailure', { count: state.stats.failed });
     } else {
       log('taskCompleted');
     }
@@ -939,11 +1161,26 @@ function fillDefaultPrompts() {
 }
 
 function bindEvents() {
-  els.providerTabs.addEventListener('click', (event) => {
+  els.providerTabs.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-provider]');
     if (!button) return;
-    state.providerType = button.dataset.provider === 'openai' ? 'openai' : 'lmstudio';
+    const nextProviderType = button.dataset.provider === 'openai' ? 'openai' : 'lmstudio';
+    if (state.providerType === nextProviderType) return;
+    state.providerType = nextProviderType;
     updateProviderTabs();
+
+    if (state.singleFileMode) {
+      state.files = [];
+      state.currentIndex = -1;
+      state.directoryHandle = null;
+      state.directoryLabel = '';
+      state.singleFileMode = false;
+      state.singleFileSource = null;
+      els.folderPathInput.value = '';
+      els.resultOutput.value = '';
+      resetCounters();
+      await renderPreview();
+    }
   });
 
   els.toggleApiKeyBtn.addEventListener('click', () => {
@@ -968,10 +1205,32 @@ function bindEvents() {
   });
 
   els.testConnectionBtn.addEventListener('click', testConnection);
-  els.saveConfigBtn.addEventListener('click', saveConfig);
+  els.saveConfigBtn.addEventListener('click', saveConfigAsPreset);
+  els.loadPresetBtn.addEventListener('click', () => loadSelectedPreset());
+  els.deletePresetBtn.addEventListener('click', deleteSelectedPreset);
+  els.configPresetSelect.addEventListener('change', () => {
+    state.activePresetName = els.configPresetSelect.value;
+    if (state.activePresetName) {
+      loadSelectedPreset({ shouldLog: false });
+    }
+  });
   els.chooseFolderBtn.addEventListener('click', chooseFolder);
   els.startBtn.addEventListener('click', processAll);
   els.stopBtn.addEventListener('click', stopProcessing);
+  els.previewStage.addEventListener('dragenter', (event) => {
+    event.preventDefault();
+    els.previewStage.classList.add('drag-active');
+  });
+  els.previewStage.addEventListener('dragover', (event) => {
+    event.preventDefault();
+    els.previewStage.classList.add('drag-active');
+  });
+  els.previewStage.addEventListener('dragleave', (event) => {
+    if (event.currentTarget === event.target || !els.previewStage.contains(event.relatedTarget)) {
+      els.previewStage.classList.remove('drag-active');
+    }
+  });
+  els.previewStage.addEventListener('drop', handlePreviewDrop);
   els.clearProgressBtn.addEventListener('click', clearProgressRecord);
   els.clearPromptsBtn.addEventListener('click', clearPrompts);
   els.fillDefaultPromptBtn.addEventListener('click', fillDefaultPrompts);
@@ -996,7 +1255,7 @@ function bindEvents() {
   });
 
   els.recursiveCheck.addEventListener('change', async () => {
-    if (!state.directoryHandle) return;
+    if (!state.directoryHandle || state.singleFileMode) return;
     state.files = await collectImageFiles(state.directoryHandle, els.recursiveCheck.checked);
     state.currentIndex = state.files.length ? 0 : -1;
     resetCounters();
@@ -1006,11 +1265,13 @@ function bindEvents() {
 }
 
 function init() {
+  loadPresets();
   loadConfig();
   resetCounters();
   renderPreview();
   bindEvents();
   applyI18n();
+  updatePresetSelectOptions();
   setConnectionBadgeByKey('idle');
   setRuntimeStatus('runtimeIdle');
   log('appReady');
