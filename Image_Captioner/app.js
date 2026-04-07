@@ -825,6 +825,11 @@ function dataUrlToBase64(dataUrl) {
   return match ? match[1] : String(dataUrl || '').trim();
 }
 
+function getMimeTypeFromDataUrl(dataUrl) {
+  const match = String(dataUrl || '').match(/^data:([^;]+);base64,/i);
+  return match ? match[1].trim() : '';
+}
+
 async function compressImage(file) {
   const imageUrl = await fileToDataUrl(file);
   const image = await loadImage(imageUrl);
@@ -884,10 +889,12 @@ function loadImage(src) {
   });
 }
 
-async function imageFileToPayloadUrl(file) {
-  return file.size <= MAX_IMAGE_SIZE_BYTES
-    ? await fileToDataUrl(file)
-    : await compressImage(file);
+async function imageFileToPayloadUrl(file, providerType = 'openai') {
+  const preferJpeg = providerType === 'lmstudio';
+  const shouldConvert = preferJpeg || file.size > MAX_IMAGE_SIZE_BYTES;
+  return shouldConvert
+    ? await compressImage(file)
+    : await fileToDataUrl(file);
 }
 
 function buildAbortSignal(timeoutSeconds) {
@@ -928,8 +935,10 @@ async function detectModelIfNeeded(config) {
 async function requestCaption(config, item, file) {
   const baseUrl = sanitizeBaseUrl(config.serverUrl) || LM_STUDIO_DEFAULT_URL;
   const model = await detectModelIfNeeded(config);
-  const imageDataUrl = await imageFileToPayloadUrl(file);
+  const imageDataUrl = await imageFileToPayloadUrl(file, config.providerType);
   const imageBase64 = dataUrlToBase64(imageDataUrl);
+  const imageMimeType = getMimeTypeFromDataUrl(imageDataUrl) || file.type || 'image/jpeg';
+  const localImageUrl = `data:${imageMimeType};base64,${imageBase64}`;
   const messages = [];
 
   if (config.systemPrompt) {
@@ -942,7 +951,7 @@ async function requestCaption(config, item, file) {
       {
         type: 'image_url',
         image_url: {
-          url: config.providerType === 'lmstudio' ? imageBase64 : imageDataUrl,
+          url: config.providerType === 'lmstudio' ? localImageUrl : imageDataUrl,
         },
       },
       { type: 'text', text: config.userPrompt || DEFAULT_USER_PROMPT },
