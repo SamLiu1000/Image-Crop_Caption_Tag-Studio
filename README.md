@@ -27,6 +27,8 @@ Zoom and move images freely to select the exact area you want.
 
 https://github.com/user-attachments/assets/13776a8e-df9a-4443-a59c-df02db782ea6
 
+
+
 ---
 
 ### 📝 Image Captioner
@@ -42,6 +44,8 @@ Works seamlessly with local LLM tools like **LM Studio**, and supports OpenAI-co
 * If captioning stops midway on some images, try increasing the **context length**
 
 https://github.com/user-attachments/assets/63da1bc7-1969-4758-97b4-8126b9cc0214
+
+https://github.com/user-attachments/assets/ea35a440-1333-4289-9880-f36ad04f9a79
 
 ---
 
