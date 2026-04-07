@@ -28,7 +28,7 @@ Zoom and move images freely to select the exact area you want.
 * Import images from any folder
 * Export `.txt` files to any location
   
-https://github.com/user-attachments/assets/afb486cf-de86-4737-886f-300e48de7efa
+https://github.com/user-attachments/assets/68396e02-a069-499d-99f2-c46127a69529
 
 ---
 
