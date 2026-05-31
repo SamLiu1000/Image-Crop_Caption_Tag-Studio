@@ -3,6 +3,7 @@ const PRESETS_KEY = 'image-captioner-config-presets';
 const PROGRESS_PREFIX = 'image-captioner-progress:';
 const LANGUAGE_KEY = 'image-captioner-language';
 const LANGUAGE_SYNC_MESSAGE = 'web-tools-hub:set-language';
+const THEME_SYNC_MESSAGE = 'web-tools-hub:set-theme';
 const SUPPORTED_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.avif']);
 const LM_STUDIO_DEFAULT_URL = 'http://localhost:1234/v1';
 const DEFAULT_TIMEOUT_SECONDS = 120;
@@ -43,36 +44,37 @@ const I18N = {
     pageTitle: 'Image_Captioner',
     langToggle: 'EN',
     langToggleLabel: '切换到英文',
-    brandEyebrow: 'LM Studio / OpenAI Compatible',
-    brandDesc: '面向批量图片描述生成的轻量工具，支持本地 API、OpenAI 兼容接口、进度记录与连续处理。',
+    brandEyebrow: 'OpenAI Compatible API',
+    brandDesc: '面向批量图片描述生成的轻量工具，支持 OpenAI 兼容接口、进度记录与连续处理。',
     badgeFrontend: '纯前端',
     badgeBatch: '批量处理',
     badgeVision: '视觉模型',
     sectionApiTitle: 'API 配置',
-    providerLmstudio: 'LM Studio / 本地',
-    providerOpenai: 'OpenAI 类型 API',
     serverUrlLabel: '接口地址',
     modelLabel: '模型 ID',
     modelPlaceholder: '自动读取或手动填写',
     timeoutLabel: '请求超时（秒）',
-    apiKeyPlaceholder: 'OpenAI 类型接口可填写，LM Studio 本地可留空',
+    apiKeyPlaceholder: 'OpenAI 兼容接口可填写，本地服务可留空',
     show: '显示',
     hide: '隐藏',
     testConnectionBtn: '测试连接并读取模型',
     saveConfigBtn: '保存当前配置',
     presetSelectLabel: '已保存配置',
     presetSelectPlaceholder: '选择一个已保存配置',
+    presetSaveLabel: '配置名称',
     loadPresetBtn: '载入',
     deletePresetBtn: '删除',
+    copyPresetBtn: '复制',
     presetSaved: '已保存配置：{name}',
+    presetCopied: '已复制配置：{name}',
     presetLoaded: '已载入配置：{name}',
     presetDeleted: '已删除配置：{name}',
     presetDeleteMissing: '请先选择一个要删除的配置。',
     presetLoadMissing: '请先选择一个要载入的配置。',
-    presetSaveCancelled: '已取消保存配置。',
+    presetSaveEmpty: '请输入配置名称。',
     presetNameExists: '配置名已存在，已覆盖：{name}',
     presetPromptLabel: '请输入配置名称',
-    apiHelper: '兼容 `/models` 与 `/chat/completions` 接口；可接 LM Studio、本地中转、OpenAI 兼容服务。',
+    apiHelper: '兼容 `/models` 与 `/chat/completions` 接口；可接本地服务、中转、OpenAI 兼容服务。',
     sectionTaskTitle: '任务设置',
     folderLabel: '图片文件夹',
     folderPlaceholder: '使用浏览器目录选择器选择图片文件夹',
@@ -161,36 +163,37 @@ const I18N = {
     pageTitle: 'Image_Captioner',
     langToggle: '中文',
     langToggleLabel: 'Switch to Chinese',
-    brandEyebrow: 'LM Studio / OpenAI Compatible',
-    brandDesc: 'A lightweight tool for batch image caption generation with local APIs, OpenAI-compatible endpoints, progress tracking, and continuous processing.',
+    brandEyebrow: 'OpenAI Compatible API',
+    brandDesc: 'A lightweight tool for batch image caption generation with OpenAI-compatible endpoints, progress tracking, and continuous processing.',
     badgeFrontend: 'Frontend Only',
     badgeBatch: 'Batch Processing',
     badgeVision: 'Vision Model',
     sectionApiTitle: 'API Settings',
-    providerLmstudio: 'LM Studio / Local',
-    providerOpenai: 'OpenAI-style API',
     serverUrlLabel: 'Server URL',
     modelLabel: 'Model ID',
     modelPlaceholder: 'Auto-detect or enter manually',
     timeoutLabel: 'Timeout (seconds)',
-    apiKeyPlaceholder: 'Optional for OpenAI-style APIs, can be left blank for local LM Studio',
+    apiKeyPlaceholder: 'Optional for OpenAI-compatible APIs, can be left blank for local services',
     show: 'Show',
     hide: 'Hide',
     testConnectionBtn: 'Test Connection & Load Model',
     saveConfigBtn: 'Save Current Config',
     presetSelectLabel: 'Saved Presets',
     presetSelectPlaceholder: 'Select a saved preset',
+    presetSaveLabel: 'Preset Name',
     loadPresetBtn: 'Load',
     deletePresetBtn: 'Delete',
+    copyPresetBtn: 'Copy',
     presetSaved: 'Saved preset: {name}',
+    presetCopied: 'Copied preset: {name}',
     presetLoaded: 'Loaded preset: {name}',
     presetDeleted: 'Deleted preset: {name}',
     presetDeleteMissing: 'Select a preset to delete first.',
     presetLoadMissing: 'Select a preset to load first.',
-    presetSaveCancelled: 'Preset save cancelled.',
+    presetSaveEmpty: 'Please enter a preset name.',
     presetNameExists: 'Preset already existed and was overwritten: {name}',
     presetPromptLabel: 'Enter a preset name',
-    apiHelper: 'Compatible with `/models` and `/chat/completions`; works with LM Studio, local relays, and OpenAI-compatible services.',
+    apiHelper: 'Compatible with `/models` and `/chat/completions`; works with local services, relays, and OpenAI-compatible services.',
     sectionTaskTitle: 'Task Settings',
     folderLabel: 'Image Folder',
     folderPlaceholder: 'Use the browser directory picker to select an image folder',
@@ -278,17 +281,20 @@ const I18N = {
 };
 
 const els = {
-  providerTabs: document.getElementById('providerTabs'),
   connectionBadge: document.getElementById('connectionBadge'),
   serverUrlInput: document.getElementById('serverUrlInput'),
   modelInput: document.getElementById('modelInput'),
+  modelDropdownBtn: document.getElementById('modelDropdownBtn'),
+  modelDropdown: document.getElementById('modelDropdown'),
   timeoutInput: document.getElementById('timeoutInput'),
   apiKeyInput: document.getElementById('apiKeyInput'),
   toggleApiKeyBtn: document.getElementById('toggleApiKeyBtn'),
   testConnectionBtn: document.getElementById('testConnectionBtn'),
   saveConfigBtn: document.getElementById('saveConfigBtn'),
   configPresetSelect: document.getElementById('configPresetSelect'),
+  presetNameInput: document.getElementById('presetNameInput'),
   loadPresetBtn: document.getElementById('loadPresetBtn'),
+  copyPresetBtn: document.getElementById('copyPresetBtn'),
   deletePresetBtn: document.getElementById('deletePresetBtn'),
   folderPathInput: document.getElementById('folderPathInput'),
   chooseFolderBtn: document.getElementById('chooseFolderBtn'),
@@ -318,11 +324,9 @@ const els = {
   resultOutput: document.getElementById('resultOutput'),
   runtimeStatusText: document.getElementById('runtimeStatusText'),
   logOutput: document.getElementById('logOutput'),
-  langToggleBtn: document.getElementById('langToggleBtn'),
 };
 
 const state = {
-  providerType: 'lmstudio',
   files: [],
   currentIndex: -1,
   currentObjectUrl: '',
@@ -331,6 +335,7 @@ const state = {
   singleFileMode: false,
   singleFileSource: null,
   currentModel: '',
+  availableModels: [],
   language: localStorage.getItem(LANGUAGE_KEY) === 'en' ? 'en' : 'zh',
   connectionBadgeType: 'idle',
   runtimeStatusKey: 'runtimeIdle',
@@ -378,9 +383,6 @@ function applyI18n() {
   updatePresetSelectOptions();
 
   els.toggleApiKeyBtn.textContent = els.apiKeyInput.type === 'password' ? t('show') : t('hide');
-  els.langToggleBtn.textContent = t('langToggle');
-  els.langToggleBtn.setAttribute('aria-label', t('langToggleLabel'));
-  els.langToggleBtn.setAttribute('title', t('langToggleLabel'));
 
   setConnectionBadgeByKey(state.connectionBadgeType);
   setRuntimeStatus(state.runtimeStatusKey);
@@ -394,7 +396,6 @@ function applyI18n() {
 
 function getConfig() {
   return {
-    providerType: state.providerType,
     serverUrl: (els.serverUrlInput.value || '').trim(),
     model: (els.modelInput.value || '').trim(),
     timeoutSeconds: clampNumber(Number.parseInt(els.timeoutInput.value, 10), 5, 600, DEFAULT_TIMEOUT_SECONDS),
@@ -460,10 +461,13 @@ function updatePresetSelectOptions() {
   const nextValue = state.presets.some((preset) => preset.name === previousValue) ? previousValue : '';
   state.activePresetName = nextValue;
   els.configPresetSelect.value = nextValue;
+
+  if (els.presetNameInput) {
+    els.presetNameInput.value = nextValue;
+  }
 }
 
 function applyConfig(config) {
-  state.providerType = config.providerType === 'openai' ? 'openai' : 'lmstudio';
   els.serverUrlInput.value = config.serverUrl || LM_STUDIO_DEFAULT_URL;
   els.modelInput.value = config.model || '';
   els.timeoutInput.value = String(clampNumber(config.timeoutSeconds, 5, 600, DEFAULT_TIMEOUT_SECONDS));
@@ -473,7 +477,6 @@ function applyConfig(config) {
   els.stripThinkingCheck.checked = config.stripThinking ?? true;
   els.systemPromptInput.value = config.systemPrompt || DEFAULT_SYSTEM_PROMPT;
   els.userPromptInput.value = config.userPrompt || DEFAULT_USER_PROMPT;
-  updateProviderTabs();
 }
 
 function persistCurrentConfig(config = getConfig(), shouldLog = true) {
@@ -490,28 +493,21 @@ function saveConfig() {
 
 function saveConfigAsPreset() {
   const config = getConfig();
-  const presetName = window.prompt(t('presetPromptLabel'), state.activePresetName || config.model || state.providerType);
-  if (presetName === null) {
-    log('presetSaveCancelled');
+  const presetName = (els.presetNameInput.value || '').trim();
+  if (!presetName) {
+    log('presetSaveEmpty');
     return;
   }
 
-  const normalizedName = presetName.trim();
-  if (!normalizedName) {
-    log('presetSaveCancelled');
-    return;
-  }
-
-  const existed = state.presets.some((preset) => preset.name === normalizedName);
-  state.presets = state.presets.filter((preset) => preset.name !== normalizedName);
-  state.presets.push({ name: normalizedName, config });
+  const existed = state.presets.some((preset) => preset.name === presetName);
+  state.presets = state.presets.filter((preset) => preset.name !== presetName);
+  state.presets.push({ name: presetName, config });
   state.presets.sort((a, b) => a.name.localeCompare(b.name, state.language === 'zh' ? 'zh-CN' : 'en'));
-  state.activePresetName = normalizedName;
+  state.activePresetName = presetName;
   persistPresets();
   updatePresetSelectOptions();
   persistCurrentConfig(config, false);
-  log('configSaved');
-  log(existed ? 'presetNameExists' : 'presetSaved', { name: normalizedName });
+  log(existed ? 'presetNameExists' : 'presetSaved', { name: presetName });
 }
 
 function loadSelectedPreset(options = {}) {
@@ -529,6 +525,7 @@ function loadSelectedPreset(options = {}) {
   }
 
   state.activePresetName = preset.name;
+  els.presetNameInput.value = preset.name;
   applyConfig(preset.config || {});
   persistCurrentConfig(getConfig(), false);
   if (shouldLog) {
@@ -545,20 +542,38 @@ function deleteSelectedPreset() {
 
   state.presets = state.presets.filter((preset) => preset.name !== presetName);
   state.activePresetName = '';
+  els.presetNameInput.value = '';
   persistPresets();
   updatePresetSelectOptions();
   log('presetDeleted', { name: presetName });
 }
 
-function updateProviderTabs() {
-  for (const button of els.providerTabs.querySelectorAll('[data-provider]')) {
-    const active = button.dataset.provider === state.providerType;
-    button.classList.toggle('active', active);
+function copySelectedPreset() {
+  const sourceName = els.configPresetSelect.value;
+  if (!sourceName) {
+    log('presetLoadMissing');
+    return;
   }
-  if (state.providerType === 'lmstudio' && !els.serverUrlInput.value.trim()) {
-    els.serverUrlInput.value = LM_STUDIO_DEFAULT_URL;
+
+  const source = state.presets.find((item) => item.name === sourceName);
+  if (!source) {
+    log('presetLoadMissing');
+    return;
   }
+
+  const copiedName = sourceName + '_copy';
+  state.presets = state.presets.filter((preset) => preset.name !== copiedName);
+  state.presets.push({ name: copiedName, config: { ...source.config } });
+  state.presets.sort((a, b) => a.name.localeCompare(b.name, state.language === 'zh' ? 'zh-CN' : 'en'));
+  state.activePresetName = copiedName;
+  els.presetNameInput.value = copiedName;
+  persistPresets();
+  updatePresetSelectOptions();
+  applyConfig(source.config);
+  persistCurrentConfig(getConfig(), false);
+  log('presetCopied', { name: copiedName });
 }
+
 
 function setConnectionBadgeByKey(type = 'idle') {
   state.connectionBadgeType = type;
@@ -630,11 +645,9 @@ async function testConnection() {
       mode: 'cors',
       headers: config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {},
     });
-    const detectedModel = data?.data?.[0]?.id || '';
-    const modelId = manualModel || detectedModel || 'local-model';
-    if (!manualModel && detectedModel) {
-      els.modelInput.value = detectedModel;
-    }
+    const models = (data?.data || []).map((item) => item.id).filter(Boolean);
+    populateModelList(models, manualModel);
+    const modelId = manualModel || models[0] || 'local-model';
     state.currentModel = modelId;
     setConnectionBadgeByKey('success');
     log('connectionSuccessLog', { model: modelId });
@@ -642,6 +655,59 @@ async function testConnection() {
     setConnectionBadgeByKey('error');
     log('connectionFailedLog', { error: error.message || error });
     log('corsHint');
+  }
+}
+
+function populateModelList(models, preferredModel) {
+  state.availableModels = models.slice();
+  if (preferredModel) {
+    els.modelInput.value = preferredModel;
+  } else if (models.length === 1) {
+    els.modelInput.value = models[0];
+  }
+  renderModelDropdown('');
+}
+
+function renderModelDropdown(filter) {
+  const filterLower = filter.toLowerCase();
+  const filtered = filter
+    ? state.availableModels.filter((m) => m.toLowerCase().includes(filterLower))
+    : state.availableModels;
+
+  els.modelDropdown.innerHTML = '';
+  if (state.availableModels.length === 0) return;
+
+  if (filtered.length === 0 && filter) {
+    const noMatch = document.createElement('div');
+    noMatch.className = 'combobox-option no-match';
+    noMatch.textContent = state.language === 'zh' ? '无匹配模型，可直接输入' : 'No match, type to enter custom';
+    els.modelDropdown.appendChild(noMatch);
+  } else {
+    for (const modelId of filtered) {
+      const item = document.createElement('div');
+      item.className = 'combobox-option';
+      item.textContent = modelId;
+      item.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        selectModel(modelId);
+      });
+      els.modelDropdown.appendChild(item);
+    }
+  }
+}
+
+function selectModel(modelId) {
+  els.modelInput.value = modelId;
+  state.currentModel = modelId;
+  els.modelDropdown.hidden = true;
+}
+
+function toggleModelDropdown() {
+  if (els.modelDropdown.hidden) {
+    renderModelDropdown(els.modelInput.value.trim());
+    els.modelDropdown.hidden = false;
+  } else {
+    els.modelDropdown.hidden = true;
   }
 }
 
@@ -820,15 +886,6 @@ async function fileToDataUrl(file) {
   });
 }
 
-function dataUrlToBase64(dataUrl) {
-  const match = String(dataUrl || '').match(/^data:[^;]+;base64,(.+)$/i);
-  return match ? match[1] : String(dataUrl || '').trim();
-}
-
-function getMimeTypeFromDataUrl(dataUrl) {
-  const match = String(dataUrl || '').match(/^data:([^;]+);base64,/i);
-  return match ? match[1].trim() : '';
-}
 
 async function compressImage(file) {
   const imageUrl = await fileToDataUrl(file);
@@ -889,12 +946,8 @@ function loadImage(src) {
   });
 }
 
-async function imageFileToPayloadUrl(file, providerType = 'openai') {
-  const preferJpeg = providerType === 'lmstudio';
-  const shouldConvert = preferJpeg || file.size > MAX_IMAGE_SIZE_BYTES;
-  return shouldConvert
-    ? await compressImage(file)
-    : await fileToDataUrl(file);
+async function imageFileToPayloadUrl(file) {
+  return compressImage(file);
 }
 
 function buildAbortSignal(timeoutSeconds) {
@@ -925,9 +978,10 @@ async function detectModelIfNeeded(config) {
     mode: 'cors',
     headers: config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {},
   });
-  const modelId = data?.data?.[0]?.id;
+  const models = (data?.data || []).map((item) => item.id).filter(Boolean);
+  const modelId = models[0];
   if (!modelId) throw new Error(t('modelListEmpty'));
-  els.modelInput.value = modelId;
+  populateModelList(models, modelId);
   state.currentModel = modelId;
   return modelId;
 }
@@ -935,10 +989,7 @@ async function detectModelIfNeeded(config) {
 async function requestCaption(config, item, file) {
   const baseUrl = sanitizeBaseUrl(config.serverUrl) || LM_STUDIO_DEFAULT_URL;
   const model = await detectModelIfNeeded(config);
-  const imageDataUrl = await imageFileToPayloadUrl(file, config.providerType);
-  const imageBase64 = dataUrlToBase64(imageDataUrl);
-  const imageMimeType = getMimeTypeFromDataUrl(imageDataUrl) || file.type || 'image/jpeg';
-  const localImageUrl = `data:${imageMimeType};base64,${imageBase64}`;
+  const imageDataUrl = await imageFileToPayloadUrl(file);
   const messages = [];
 
   if (config.systemPrompt) {
@@ -951,7 +1002,7 @@ async function requestCaption(config, item, file) {
       {
         type: 'image_url',
         image_url: {
-          url: config.providerType === 'lmstudio' ? localImageUrl : imageDataUrl,
+          url: imageDataUrl,
         },
       },
       { type: 'text', text: config.userPrompt || DEFAULT_USER_PROMPT },
@@ -1152,6 +1203,8 @@ async function processAll() {
 function stopProcessing() {
   if (!state.isRunning) return;
   state.stopRequested = true;
+  state.isRunning = false;
+  els.startBtn.disabled = false;
   els.stopBtn.disabled = true;
   log('stopRequested');
 }
@@ -1181,52 +1234,48 @@ function fillDefaultPrompts() {
 }
 
 function bindEvents() {
-  els.providerTabs.addEventListener('click', async (event) => {
-    const button = event.target.closest('[data-provider]');
-    if (!button) return;
-    const nextProviderType = button.dataset.provider === 'openai' ? 'openai' : 'lmstudio';
-    if (state.providerType === nextProviderType) return;
-    state.providerType = nextProviderType;
-    updateProviderTabs();
-
-    if (state.singleFileMode) {
-      state.files = [];
-      state.currentIndex = -1;
-      state.directoryHandle = null;
-      state.directoryLabel = '';
-      state.singleFileMode = false;
-      state.singleFileSource = null;
-      els.folderPathInput.value = '';
-      els.resultOutput.value = '';
-      resetCounters();
-      await renderPreview();
-    }
-  });
-
   els.toggleApiKeyBtn.addEventListener('click', () => {
     const isPassword = els.apiKeyInput.type === 'password';
     els.apiKeyInput.type = isPassword ? 'text' : 'password';
     els.toggleApiKeyBtn.textContent = isPassword ? t('hide') : t('show');
   });
 
-  els.langToggleBtn.addEventListener('click', () => {
-    state.language = state.language === 'zh' ? 'en' : 'zh';
-    localStorage.setItem(LANGUAGE_KEY, state.language);
-    applyI18n();
-  });
-
   window.addEventListener('message', (event) => {
-    if (event.data?.type !== LANGUAGE_SYNC_MESSAGE) return;
-    const nextLanguage = event.data?.language === 'en' ? 'en' : 'zh';
-    if (state.language === nextLanguage) return;
-    state.language = nextLanguage;
-    localStorage.setItem(LANGUAGE_KEY, state.language);
-    applyI18n();
+    if (event.data?.type === LANGUAGE_SYNC_MESSAGE) {
+      const nextLanguage = event.data?.language === 'en' ? 'en' : 'zh';
+      if (state.language === nextLanguage) return;
+      state.language = nextLanguage;
+      localStorage.setItem(LANGUAGE_KEY, state.language);
+      applyI18n();
+    }
+    if (event.data?.type === THEME_SYNC_MESSAGE) {
+      document.documentElement.setAttribute('data-theme', event.data.theme);
+    }
   });
 
   els.testConnectionBtn.addEventListener('click', testConnection);
+  els.modelDropdownBtn.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    toggleModelDropdown();
+  });
+  els.modelInput.addEventListener('focus', () => {
+    if (state.availableModels.length > 0 && els.modelDropdown.hidden) {
+      renderModelDropdown(els.modelInput.value.trim());
+      els.modelDropdown.hidden = false;
+    }
+  });
+  els.modelInput.addEventListener('input', () => {
+    renderModelDropdown(els.modelInput.value.trim());
+    els.modelDropdown.hidden = false;
+  });
+  document.addEventListener('click', (e) => {
+    if (!els.modelInput.parentElement.contains(e.target)) {
+      els.modelDropdown.hidden = true;
+    }
+  });
   els.saveConfigBtn.addEventListener('click', saveConfigAsPreset);
   els.loadPresetBtn.addEventListener('click', () => loadSelectedPreset());
+  els.copyPresetBtn.addEventListener('click', copySelectedPreset);
   els.deletePresetBtn.addEventListener('click', deleteSelectedPreset);
   els.configPresetSelect.addEventListener('change', () => {
     state.activePresetName = els.configPresetSelect.value;

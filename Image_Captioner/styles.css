@@ -25,6 +25,40 @@
   --radius-lg: 14px;
   --radius-md: 10px;
   --radius-sm: 8px;
+  --input-bg: #fff;
+  --btn-text: #fff;
+  --seg-active-bg: #eff6ff;
+  --seg-active-border: rgba(37, 99, 235, 0.35);
+  --tag-bg: #fff1f2;
+}
+[data-theme="dark"] {
+  --bg: #0d0f14;
+  --bg-soft: #151820;
+  --panel: #151820;
+  --panel-muted: #1a1e28;
+  --border: #252a35;
+  --border-strong: #353a48;
+  --text: #c8cdd8;
+  --text-soft: #8a94a3;
+  --text-dim: #5a6070;
+  --primary: #4e9eff;
+  --primary-hover: #6db3ff;
+  --secondary: #1a1e28;
+  --secondary-hover: #202535;
+  --danger: #f87171;
+  --danger-hover: #fca5a5;
+  --success-bg: #0f1e14;
+  --success-text: #5cb85c;
+  --error-bg: #1e0a0a;
+  --error-text: #f87171;
+  --running-bg: #1e1a0a;
+  --running-text: #f0a500;
+  --shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
+  --input-bg: #111520;
+  --btn-text: #0d0f14;
+  --seg-active-bg: #1a2540;
+  --seg-active-border: rgba(78, 158, 255, 0.35);
+  --tag-bg: #2a1520;
 }
 
 * {
@@ -41,7 +75,7 @@ body {
   min-height: 100vh;
   font: 13px/1.5 'Inter', 'Microsoft YaHei UI', 'Segoe UI', sans-serif;
   color: var(--text);
-  background: linear-gradient(180deg, #f7f9fb 0%, #f1f4f8 100%);
+  background: var(--bg);
 }
 
 button,
@@ -58,10 +92,11 @@ textarea,
 input[type='text'],
 input[type='url'],
 input[type='password'],
-input[type='number'] {
+input[type='number'],
+select {
   width: 100%;
   border: 1px solid var(--border);
-  background: #fff;
+  background: var(--input-bg);
   color: var(--text);
   border-radius: var(--radius-md);
   padding: 9px 12px;
@@ -70,7 +105,8 @@ input[type='number'] {
 }
 
 textarea:focus,
-input:focus {
+input:focus,
+select:focus {
   border-color: rgba(37, 99, 235, 0.45);
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
 }
@@ -207,6 +243,12 @@ textarea {
   padding: 16px;
 }
 
+.prompts-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
 .section-heading {
   display: flex;
   justify-content: space-between;
@@ -244,13 +286,13 @@ textarea {
 
 .segmented-item {
   padding: 9px 12px;
-  background: #fff;
+  background: var(--input-bg);
   border: 1px solid var(--border);
 }
 
 .segmented-item.active {
-  background: #eff6ff;
-  border-color: rgba(37, 99, 235, 0.35);
+  background: var(--seg-active-bg);
+  border-color: var(--seg-active-border);
   color: var(--primary);
 }
 
@@ -271,7 +313,7 @@ textarea {
 }
 
 .primary-btn {
-  color: #fff;
+  color: var(--btn-text);
   background: var(--primary);
   box-shadow: 0 8px 18px rgba(37, 99, 235, 0.18);
 }
@@ -292,7 +334,7 @@ textarea {
 
 .danger-btn {
   background: var(--danger);
-  color: #fff;
+  color: var(--btn-text);
 }
 
 .danger-btn:hover {
@@ -300,7 +342,7 @@ textarea {
 }
 
 .ghost-btn {
-  background: #fff;
+  background: var(--input-bg);
   border: 1px solid var(--border);
   color: var(--text-soft);
 }
@@ -385,21 +427,31 @@ textarea {
   margin-top: 12px;
 }
 
+.preset-toolbar.save-row {
+  margin-top: 8px;
+}
+
+.preset-save-field {
+  flex: 1 1 auto;
+}
+
 .preset-select-field {
   flex: 1 1 auto;
 }
 
-.preset-select-field select {
+.preset-select-field select,
+.preset-select-field input {
   width: 100%;
   border: 1px solid var(--border);
-  background: #fff;
+  background: var(--input-bg);
   color: var(--text);
   border-radius: var(--radius-md);
   padding: 9px 12px;
   outline: none;
 }
 
-.preset-select-field select:focus {
+.preset-select-field select:focus,
+.preset-select-field input:focus {
   border-color: rgba(37, 99, 235, 0.45);
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
 }
@@ -409,8 +461,95 @@ textarea {
   border-color: rgba(220, 38, 38, 0.2);
 }
 
+.combobox {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+
+.combobox input {
+  flex: 1 1 auto;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: none;
+}
+
+.combobox-btn {
+  flex: 0 0 auto;
+  width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  color: var(--text-soft);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0;
+  transition: background 0.18s ease;
+}
+
+.combobox-btn:hover {
+  background: var(--panel-muted);
+}
+
+.combobox input:focus,
+.combobox input:focus + .combobox-btn {
+  border-color: rgba(37, 99, 235, 0.45);
+}
+
+.combobox input:focus {
+  box-shadow: -4px 0 0 4px rgba(37, 99, 235, 0.1);
+}
+
+.combobox-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 32px;
+  z-index: 100;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--input-bg);
+  border: 1px solid var(--border-strong);
+  border-top: none;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+}
+
+.combobox-dropdown[hidden] {
+  display: none;
+}
+
+.combobox-option {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text);
+  transition: background 0.12s ease;
+}
+
+.combobox-option:hover,
+.combobox-option.active {
+  background: var(--seg-active-bg);
+  color: var(--primary);
+}
+
+.combobox-option.no-match {
+  color: var(--text-dim);
+  cursor: default;
+  font-style: italic;
+}
+
+.combobox-option.no-match:hover {
+  background: transparent;
+  color: var(--text-dim);
+}
+
 .danger-ghost-btn:hover {
-  background: #fff1f2;
+  background: var(--tag-bg);
 }
 
 .action-row.mini {
@@ -424,28 +563,29 @@ textarea {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 8px;
 }
 
 .stat-card {
-  padding: 12px;
-  border-radius: var(--radius-lg);
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
   background: var(--panel-muted);
   border: 1px solid var(--border);
+  text-align: center;
 }
 
 .stat-label,
 .meta-label {
   display: block;
-  margin-bottom: 6px;
-  font-size: 12px;
+  margin-bottom: 2px;
+  font-size: 11px;
 }
 
 .stat-card strong,
 .preview-meta strong {
-  font-size: 18px;
+  font-size: 14px;
 }
 
 .hero-card {
@@ -493,7 +633,7 @@ textarea {
 
 .preview-stage.drag-active {
   border-color: rgba(37, 99, 235, 0.72);
-  background: #eff6ff;
+  background: var(--seg-active-bg);
   box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.08);
 }
 
@@ -583,7 +723,6 @@ textarea {
   }
 
   .form-grid,
-  .segmented-control,
   .stats-grid {
     grid-template-columns: 1fr;
   }

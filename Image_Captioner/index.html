@@ -16,12 +16,11 @@
         <div class="brand-copy">
           <div class="brand-topbar">
             <div>
-              <p class="eyebrow" data-i18n="brandEyebrow">LM Studio / OpenAI Compatible</p>
+              <p class="eyebrow" data-i18n="brandEyebrow">OpenAI Compatible API</p>
               <h1>Image_Captioner</h1>
             </div>
-            <button id="langToggleBtn" class="ghost-btn lang-toggle" type="button" aria-label="切换到英文" title="切换到英文">EN</button>
           </div>
-          <p class="brand-desc" data-i18n="brandDesc">面向批量图片描述生成的轻量工具，支持本地 API、OpenAI 兼容接口、进度记录与连续处理。</p>
+          <p class="brand-desc" data-i18n="brandDesc">面向批量图片描述生成的轻量工具，支持 OpenAI 兼容接口、进度记录与连续处理。</p>
         </div>
         <div class="brand-badges">
           <span class="badge" data-i18n="badgeFrontend">纯前端</span>
@@ -33,15 +32,9 @@
       <section class="panel glass-card">
         <div class="section-heading">
           <div>
-            <p class="section-kicker">01</p>
             <h2 data-i18n="sectionApiTitle">API 配置</h2>
           </div>
           <span id="connectionBadge" class="status-badge idle">未检测</span>
-        </div>
-
-        <div class="segmented-control" id="providerTabs">
-          <button type="button" class="segmented-item active" data-provider="lmstudio" data-i18n="providerLmstudio">LM Studio / 本地</button>
-          <button type="button" class="segmented-item" data-provider="openai" data-i18n="providerOpenai">OpenAI 类型 API</button>
         </div>
 
         <div class="form-grid">
@@ -51,7 +44,11 @@
           </label>
           <label class="field">
             <span data-i18n="modelLabel">模型 ID</span>
-            <input id="modelInput" type="text" placeholder="自动读取或手动填写" />
+            <div class="combobox" id="modelCombobox">
+              <input id="modelInput" type="text" placeholder="自动读取或手动填写" autocomplete="off" />
+              <button id="modelDropdownBtn" class="combobox-btn" type="button" tabindex="-1" aria-label="展开模型列表">&#9662;</button>
+              <div class="combobox-dropdown" id="modelDropdown" hidden></div>
+            </div>
           </label>
           <label class="field">
             <span data-i18n="timeoutLabel">请求超时（秒）</span>
@@ -60,7 +57,7 @@
           <label class="field full">
             <span>API Key</span>
             <div class="secret-input-row">
-              <input id="apiKeyInput" type="password" placeholder="OpenAI 类型接口可填写，LM Studio 本地可留空" autocomplete="off" />
+              <input id="apiKeyInput" type="password" placeholder="OpenAI 兼容接口可填写，本地服务可留空" autocomplete="off" />
               <button id="toggleApiKeyBtn" class="ghost-btn" type="button">显示</button>
             </div>
           </label>
@@ -74,20 +71,59 @@
             </select>
           </label>
           <button id="loadPresetBtn" class="ghost-btn" type="button" data-i18n="loadPresetBtn">载入</button>
+          <button id="copyPresetBtn" class="ghost-btn" type="button" data-i18n="copyPresetBtn">复制</button>
           <button id="deletePresetBtn" class="ghost-btn danger-ghost-btn" type="button" data-i18n="deletePresetBtn">删除</button>
+        </div>
+        <div class="preset-toolbar save-row">
+          <label class="field preset-save-field">
+            <span data-i18n="presetSaveLabel">配置名称</span>
+            <input id="presetNameInput" type="text" placeholder="输入名称以保存当前配置" />
+          </label>
+          <button id="saveConfigBtn" class="secondary-btn" type="button" data-i18n="saveConfigBtn">保存当前配置</button>
         </div>
 
         <div class="action-row compact">
           <button id="testConnectionBtn" class="primary-btn" type="button" data-i18n="testConnectionBtn">测试连接并读取模型</button>
-          <button id="saveConfigBtn" class="secondary-btn" type="button" data-i18n="saveConfigBtn">保存当前配置</button>
         </div>
-        <p class="helper-text" data-i18n="apiHelper">兼容 `/models` 与 `/chat/completions` 接口；可接 LM Studio、本地中转、OpenAI 兼容服务。</p>
+        <p class="helper-text" data-i18n="apiHelper">兼容 `/models` 与 `/chat/completions` 接口；可接本地服务、中转、OpenAI 兼容服务。</p>
+
+        <div class="prompts-section">
+          <div class="section-heading">
+            <div>
+              <h2 data-i18n="sectionPromptTitle">提示词</h2>
+            </div>
+            <div class="action-row mini">
+              <button id="fillDefaultPromptBtn" class="ghost-btn" type="button" data-i18n="fillDefaultPromptBtn">填入默认提示</button>
+              <button id="clearPromptsBtn" class="ghost-btn" type="button" data-i18n="clearPromptsBtn">清空</button>
+            </div>
+          </div>
+
+          <label class="field full">
+            <span>System Prompt</span>
+            <textarea id="systemPromptInput" rows="6" placeholder="系统提示词"></textarea>
+          </label>
+
+          <label class="field full">
+            <span>User Prompt</span>
+            <textarea id="userPromptInput" rows="4" placeholder="例如：Describe this image in one detailed English paragraph."></textarea>
+          </label>
+        </div>
+      </section>
+    </aside>
+
+    <main class="content-shell">
+      <section class="hero-card glass-card">
+        <div class="hero-actions">
+          <button id="startBtn" class="primary-btn large" type="button" data-i18n="startBtn">开始生成</button>
+          <button id="stopBtn" class="danger-btn large" type="button" disabled data-i18n="stopBtn">停止任务</button>
+          <button id="clearProgressBtn" class="secondary-btn large" type="button" data-i18n="clearProgressBtn">清除进度记录</button>
+        </div>
       </section>
 
-      <section class="panel glass-card">
+      <!-- Task Settings -->
+      <section class="panel glass-card task-panel">
         <div class="section-heading">
           <div>
-            <p class="section-kicker">02</p>
             <h2 data-i18n="sectionTaskTitle">任务设置</h2>
           </div>
         </div>
@@ -113,7 +149,7 @@
 
           <label class="field full inline-field checkbox-field">
             <input id="stripThinkingCheck" type="checkbox" checked />
-            <span data-i18n="stripThinkingLabel">自动移除 `<think>...</think>` 思考内容</span>
+            <span data-i18n="stripThinkingLabel">自动移除 ` thinking... response` 思考内容</span>
           </label>
         </div>
 
@@ -137,49 +173,10 @@
         </div>
       </section>
 
-      <section class="panel glass-card prompt-panel">
-        <div class="section-heading">
-          <div>
-            <p class="section-kicker">03</p>
-            <h2 data-i18n="sectionPromptTitle">提示词</h2>
-          </div>
-          <div class="action-row mini">
-            <button id="fillDefaultPromptBtn" class="ghost-btn" type="button" data-i18n="fillDefaultPromptBtn">填入默认提示</button>
-            <button id="clearPromptsBtn" class="ghost-btn" type="button" data-i18n="clearPromptsBtn">清空</button>
-          </div>
-        </div>
-
-        <label class="field full">
-          <span>System Prompt</span>
-          <textarea id="systemPromptInput" rows="8" placeholder="系统提示词"></textarea>
-        </label>
-
-        <label class="field full">
-          <span>User Prompt</span>
-          <textarea id="userPromptInput" rows="6" placeholder="例如：Describe this image in one detailed English paragraph."></textarea>
-        </label>
-      </section>
-    </aside>
-
-    <main class="content-shell">
-      <section class="hero-card glass-card">
-        <div>
-          <p class="eyebrow" data-i18n="heroEyebrow">批量处理 / 图像描述</p>
-          <h2 data-i18n="heroTitle">简洁高效的图片描述工作台</h2>
-          <p class="hero-desc" data-i18n="heroDesc">选择图片目录、连接模型并批量生成描述文本，过程清晰、状态直观，适合持续处理本地任务。</p>
-        </div>
-        <div class="hero-actions">
-          <button id="startBtn" class="primary-btn large" type="button" data-i18n="startBtn">开始生成</button>
-          <button id="stopBtn" class="danger-btn large" type="button" disabled data-i18n="stopBtn">停止任务</button>
-          <button id="clearProgressBtn" class="secondary-btn large" type="button" data-i18n="clearProgressBtn">清除进度记录</button>
-        </div>
-      </section>
-
       <section class="workspace-grid">
         <section class="panel glass-card preview-panel">
           <div class="section-heading">
             <div>
-              <p class="section-kicker">Preview</p>
               <h2 data-i18n="previewTitle">图片预览</h2>
             </div>
             <div class="action-row mini">
@@ -211,7 +208,6 @@
         <section class="panel glass-card output-panel">
           <div class="section-heading">
             <div>
-              <p class="section-kicker">Output</p>
               <h2 data-i18n="outputTitle">结果与日志</h2>
             </div>
             <div class="action-row mini">

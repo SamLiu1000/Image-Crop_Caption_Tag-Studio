@@ -1,13 +1,16 @@
 const STORAGE_KEYS = {
   activeTab: 'web-tools-hub-active-tab',
   language: 'web-tools-hub-language',
+  theme: 'web-tools-hub-theme',
 };
 
 const LANGUAGE_SYNC_MESSAGE = 'web-tools-hub:set-language';
+const THEME_SYNC_MESSAGE = 'web-tools-hub:set-theme';
 
 const tabButtons = [...document.querySelectorAll('[data-tab]')];
 const tabPanels = [...document.querySelectorAll('.tool-panel')];
 const langToggleBtn = document.getElementById('langToggleBtn');
+const themeToggleBtn = document.getElementById('themeToggleBtn');
 const exportConfigBtn = document.getElementById('exportConfigBtn');
 const importConfigBtn = document.getElementById('importConfigBtn');
 
@@ -22,6 +25,8 @@ const I18N = {
     frameTagtool: '标签工具',
     exportConfig: '📥 导出配置',
     importConfig: '📤 导入配置',
+    themeDark: '🌙',
+    themeLight: '☀️',
     exportSuccess: '✓ 配置已导出',
     importSuccess: '✓ 配置已导入',
     importConfirm: '导入配置将覆盖现有设置，是否继续？',
@@ -39,6 +44,8 @@ const I18N = {
     frameTagtool: 'Tag Tool',
     exportConfig: '📥 Export Config',
     importConfig: '📤 Import Config',
+    themeDark: '🌙',
+    themeLight: '☀️',
     exportSuccess: '✓ Configuration exported',
     importSuccess: '✓ Configuration imported',
     importConfirm: 'Importing configuration will overwrite existing settings. Continue?',
@@ -50,6 +57,7 @@ const I18N = {
 
 const state = {
   language: localStorage.getItem(STORAGE_KEYS.language) === 'en' ? 'en' : 'zh',
+  theme: localStorage.getItem(STORAGE_KEYS.theme) || 'dark',
 };
 
 function t(key) {
@@ -68,6 +76,33 @@ function broadcastLanguageToFrames(language) {
       // Ignore cross-frame sync errors to avoid blocking the hub UI.
     }
   }
+}
+
+function broadcastThemeToFrames(theme) {
+  for (const frame of getToolFrames()) {
+    try {
+      frame.contentWindow?.postMessage({ type: THEME_SYNC_MESSAGE, theme }, '*');
+    } catch {
+      // Ignore cross-frame sync errors.
+    }
+  }
+}
+
+function applyTheme() {
+  updateThemeBtnLabel();
+  broadcastThemeToFrames(state.theme);
+}
+
+function toggleTheme() {
+  state.theme = state.theme === 'dark' ? 'light' : 'dark';
+  localStorage.setItem(STORAGE_KEYS.theme, state.theme);
+  applyTheme();
+}
+
+function updateThemeBtnLabel() {
+  if (!themeToggleBtn) return;
+  themeToggleBtn.textContent = t(state.theme === 'light' ? 'themeLight' : 'themeDark');
+  themeToggleBtn.title = state.theme === 'light' ? '切换暗色主题' : 'Switch to light theme';
 }
 
 function applyLanguage() {
@@ -128,6 +163,7 @@ for (const button of tabButtons) {
 for (const frame of getToolFrames()) {
   frame.addEventListener('load', () => {
     broadcastLanguageToFrames(state.language);
+    broadcastThemeToFrames(state.theme);
   });
 }
 
@@ -137,6 +173,10 @@ if (langToggleBtn) {
     localStorage.setItem(STORAGE_KEYS.language, state.language);
     applyLanguage();
   });
+}
+
+if (themeToggleBtn) {
+  themeToggleBtn.addEventListener('click', toggleTheme);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -369,5 +409,6 @@ if (importConfigBtn) {
 }
 
 applyLanguage();
+applyTheme();
 const savedTab = localStorage.getItem(STORAGE_KEYS.activeTab);
 setActiveTab(savedTab || 'cropper');

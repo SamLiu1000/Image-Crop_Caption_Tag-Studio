@@ -3,6 +3,7 @@ const EDGE_TOL = 10;
 const HANDLE_SIZE = 6;
 const LANGUAGE_KEY = 'image-cropper-web-language';
 const LANGUAGE_SYNC_MESSAGE = 'web-tools-hub:set-language';
+const THEME_SYNC_MESSAGE = 'web-tools-hub:set-theme';
 const DEFAULT_SIZES = [
   [512, 512],
   [768, 512],
@@ -13,14 +14,19 @@ const DB_NAME = 'image-cropper-web';
 const DB_STORE = 'handles';
 const SAVE_DIR_KEY = 'save-directory';
 
-const COLORS = {
-  canvas: '#f9fbff',
-  mask: 'rgba(0, 0, 0, 0.42)',
-  accent: '#3b82f6',
-  success: '#16a34a',
-  textDim: '#6b7280',
-  grid: 'rgba(255, 255, 255, 0.7)',
-};
+let COLORS = readColors();
+
+function readColors() {
+  const style = getComputedStyle(document.documentElement);
+  return {
+    canvas: style.getPropertyValue('--canvas').trim() || '#f9fbff',
+    mask: 'rgba(0, 0, 0, 0.42)',
+    accent: style.getPropertyValue('--accent').trim() || '#3b82f6',
+    success: style.getPropertyValue('--success').trim() || '#16a34a',
+    textDim: style.getPropertyValue('--text-dim').trim() || '#6b7280',
+    grid: 'rgba(255, 255, 255, 0.7)',
+  };
+}
 
 const I18N = {
   zh: {
@@ -196,7 +202,6 @@ const I18N = {
 };
 
 const els = {
-  fileInput: document.getElementById('fileInput'),
   multiFileInput: document.getElementById('multiFileInput'),
   chooseSaveDirBtn: document.getElementById('chooseSaveDirBtn'),
   prevBtn: document.getElementById('prevBtn'),
@@ -223,11 +228,11 @@ const els = {
   zoomInBtn: document.getElementById('zoomInBtn'),
   zoomResetBtn: document.getElementById('zoomResetBtn'),
   zoomOutBtn: document.getElementById('zoomOutBtn'),
-  langToggleBtn: document.getElementById('langToggleBtn'),
   canvas: document.getElementById('previewCanvas'),
   imageScaleBar: document.getElementById('imageScaleBar'),
   imageScaleSlider: document.getElementById('imageScaleSlider'),
   imageScaleValue: document.getElementById('imageScaleValue'),
+  thumbnailList: document.getElementById('thumbnailList'),
 };
 
 const ctx = els.canvas.getContext('2d');
@@ -280,9 +285,7 @@ function applyI18n() {
     node.textContent = t(node.dataset.i18n);
   }
 
-  els.langToggleBtn.textContent = t('langToggle');
-  els.langToggleBtn.setAttribute('aria-label', t('langToggleLabel'));
-  els.langToggleBtn.setAttribute('title', t('langToggleLabel'));
+  els.addPresetBtn.setAttribute('aria-label', t('addPresetLabel'));
   els.addPresetBtn.setAttribute('aria-label', t('addPresetLabel'));
   els.addPresetBtn.setAttribute('title', t('addPresetLabel'));
   els.zoomInBtn.setAttribute('aria-label', t('zoomInLabel'));
@@ -834,6 +837,7 @@ async function loadImageList(files) {
   }
   state.imageItems = files.map((file) => ({ file, url: URL.createObjectURL(file) }));
   state.imageIndex = 0;
+  renderThumbnails();
   await loadCurrentImage();
 }
 
@@ -848,12 +852,50 @@ async function loadCurrentImage() {
   setNav(`${state.imageIndex + 1} / ${state.imageItems.length} - ${item.file.name}`);
   setStatus(t('loadedImage', { name: item.file.name, size: `${bitmap.width} x ${bitmap.height}` }));
   updateNavButtons();
+  updateThumbnailActive();
   syncScaleBarVisibility();
 }
 
 function updateNavButtons() {
   els.prevBtn.disabled = state.imageIndex <= 0;
   els.nextBtn.disabled = state.imageIndex >= state.imageItems.length - 1;
+}
+
+function renderThumbnails() {
+  els.thumbnailList.innerHTML = '';
+  for (let i = 0; i < state.imageItems.length; i++) {
+    const item = state.imageItems[i];
+    const thumb = document.createElement('div');
+    thumb.className = 'thumbnail-item';
+    if (i === state.imageIndex) thumb.classList.add('active');
+    thumb.title = item.file.name;
+
+    const img = document.createElement('img');
+    img.src = item.url;
+    img.alt = item.file.name;
+    img.loading = 'lazy';
+
+    thumb.appendChild(img);
+    thumb.addEventListener('click', async () => {
+      if (i === state.imageIndex) return;
+      state.imageIndex = i;
+      await loadCurrentImage();
+    });
+
+    els.thumbnailList.appendChild(thumb);
+  }
+}
+
+function updateThumbnailActive() {
+  const items = els.thumbnailList.querySelectorAll('.thumbnail-item');
+  for (let i = 0; i < items.length; i++) {
+    items[i].classList.toggle('active', i === state.imageIndex);
+  }
+  // 滚动到当前项可见
+  const activeItem = items[state.imageIndex];
+  if (activeItem) {
+    activeItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
 }
 
 function zoomPreview(factor) {
@@ -1445,12 +1487,6 @@ function nudge(dx, dy) {
 }
 
 function bindEvents() {
-  els.fileInput.addEventListener('change', async (event) => {
-    const files = [...event.target.files];
-    await loadImageList(files);
-    event.target.value = '';
-  });
-
   els.multiFileInput.addEventListener('change', async (event) => {
     const files = [...event.target.files]
       .filter((file) => file.type.startsWith('image/'))
@@ -1587,19 +1623,19 @@ function bindEvents() {
     setStatus(t('previewZoomReset'));
   });
 
-  els.langToggleBtn.addEventListener('click', () => {
-    state.language = state.language === 'zh' ? 'en' : 'zh';
-    localStorage.setItem(LANGUAGE_KEY, state.language);
-    applyI18n();
-  });
-
   window.addEventListener('message', (event) => {
-    if (event.data?.type !== LANGUAGE_SYNC_MESSAGE) return;
-    const nextLanguage = event.data?.language === 'en' ? 'en' : 'zh';
-    if (state.language === nextLanguage) return;
-    state.language = nextLanguage;
-    localStorage.setItem(LANGUAGE_KEY, state.language);
-    applyI18n();
+    if (event.data?.type === LANGUAGE_SYNC_MESSAGE) {
+      const nextLanguage = event.data?.language === 'en' ? 'en' : 'zh';
+      if (state.language === nextLanguage) return;
+      state.language = nextLanguage;
+      localStorage.setItem(LANGUAGE_KEY, state.language);
+      applyI18n();
+    }
+    if (event.data?.type === THEME_SYNC_MESSAGE) {
+      document.documentElement.setAttribute('data-theme', event.data.theme);
+      COLORS = readColors();
+      scheduleRedraw();
+    }
   });
 
   els.canvas.addEventListener('pointerdown', onPointerDown);
