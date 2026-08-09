@@ -17,6 +17,7 @@
         <button id="chooseSaveDirBtn" class="btn" type="button" data-i18n="chooseSaveDirBtn">设置保存位置</button>
         <button id="prevBtn" class="btn" type="button" data-i18n="prevBtn">上一张</button>
         <button id="nextBtn" class="btn" type="button" data-i18n="nextBtn">下一张</button>
+        <button id="doodleModeBtn" class="btn" type="button" data-i18n="doodleModeBtn">涂鸦</button>
         <button id="saveBtn" class="btn success" type="button" data-i18n="saveBtn">裁切并保存</button>
       </div>
       <div class="status-group">
@@ -28,7 +29,7 @@
 
     <main class="main-layout">
       <aside class="sidebar">
-        <section class="card">
+        <section class="card crop-only">
           <h2 data-i18n="sizeTitle">尺寸</h2>
           <div class="field-row compact">
             <label>
@@ -55,12 +56,12 @@
           <p class="hint" data-i18n="sizeHint">未勾选时按比例裁切；勾选后输入尺寸会直接控制实际输出尺寸。</p>
         </section>
 
-        <section class="card">
+        <section class="card crop-only">
           <h2 data-i18n="presetTitle">常用尺寸</h2>
           <div id="presetList" class="preset-grid"></div>
         </section>
 
-        <section class="card">
+        <section class="card crop-only">
           <h2 data-i18n="optionsTitle">选项</h2>
           <label class="check-row">
             <input id="freeTransformCheck" type="checkbox" />
@@ -85,6 +86,23 @@
             </label>
           </div>
           <p class="hint" data-i18n="optionsHint">自由变换：裁切框固定为输出尺寸，拖动/滚轮操作图片，Shift + 滚轮旋转图片。勾选背景填充后，裁切框超出原图范围的区域可填充为指定颜色或透明。</p>
+        </section>
+
+        <section class="card" id="doodlePanel" style="display:none;">
+          <h2 data-i18n="doodleTitle">涂鸦</h2>
+          <div class="field-row">
+            <label>
+              <span data-i18n="brushSizeLabel">画笔大小</span>
+              <input id="brushSizeSlider" type="range" min="1" max="50" value="5" step="1" />
+            </label>
+            <span id="brushSizeValue" class="brush-size-value">5px</span>
+          </div>
+          <div class="color-palette" id="colorPalette"></div>
+          <label class="color-field" style="margin-top:8px;">
+            <span data-i18n="customColorLabel">自定义</span>
+            <input id="doodleColorInput" type="color" value="#ff0000" />
+          </label>
+          <button id="undoStrokeBtn" class="btn small" type="button" data-i18n="undoStrokeBtn" style="margin-top:8px;width:100%;">撤销上一笔</button>
         </section>
 
         <section class="card">

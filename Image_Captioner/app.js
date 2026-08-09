@@ -96,6 +96,8 @@ const I18N = {
     heroDesc: '选择图片目录、连接模型并批量生成描述文本，过程清晰、状态直观，适合持续处理本地任务。',
     startBtn: '开始生成',
     stopBtn: '停止任务',
+    prependBtn: '生成（前置）',
+    appendBtn: '生成（追加）',
     clearProgressBtn: '清除进度记录',
     previewTitle: '图片预览',
     prevPreviewBtn: '上一张',
@@ -215,6 +217,8 @@ const I18N = {
     heroDesc: 'Pick an image directory, connect a model, and generate captions in batch with clear progress and intuitive status updates for continuous local workflows.',
     startBtn: 'Start Generation',
     stopBtn: 'Stop Task',
+    prependBtn: 'Generate (Prepend)',
+    appendBtn: 'Generate (Append)',
     clearProgressBtn: 'Clear Progress',
     previewTitle: 'Image Preview',
     prevPreviewBtn: 'Previous',
@@ -310,6 +314,8 @@ const els = {
   systemPromptInput: document.getElementById('systemPromptInput'),
   userPromptInput: document.getElementById('userPromptInput'),
   startBtn: document.getElementById('startBtn'),
+  prependBtn: document.getElementById('prependBtn'),
+  appendBtn: document.getElementById('appendBtn'),
   stopBtn: document.getElementById('stopBtn'),
   clearProgressBtn: document.getElementById('clearProgressBtn'),
   prevPreviewBtn: document.getElementById('prevPreviewBtn'),
@@ -1082,7 +1088,25 @@ async function hasExistingCaption(item) {
   }
 }
 
-async function processAll() {
+async function readExistingCaption(item) {
+  if (state.singleFileMode || !state.directoryHandle) return '';
+  try {
+    const relativePath = item.relativePath.replace(/\.[^.]+$/, '.txt');
+    const parts = relativePath.split('/');
+    const fileName = parts.pop();
+    let dir = state.directoryHandle;
+    for (const part of parts) {
+      dir = await dir.getDirectoryHandle(part);
+    }
+    const fileHandle = await dir.getFileHandle(fileName);
+    const file = await fileHandle.getFile();
+    return (await file.text()).trim();
+  } catch {
+    return '';
+  }
+}
+
+async function processAll(combineMode = 'none') {
   if (state.isRunning) return;
 
   const shouldRestoreSingleFile = state.singleFileMode
@@ -1125,6 +1149,8 @@ async function processAll() {
   setRuntimeStatus('runtimeRunning');
   setConnectionBadgeByKey('taskRunning');
   els.startBtn.disabled = true;
+  els.prependBtn.disabled = true;
+  els.appendBtn.disabled = true;
   els.stopBtn.disabled = false;
 
   const progressSet = state.singleFileMode ? new Set() : loadProgressRecord();
@@ -1149,7 +1175,7 @@ async function processAll() {
         continue;
       }
 
-      if (!state.singleFileMode && config.skipExisting && await hasExistingCaption(item)) {
+      if (combineMode === 'none' && !state.singleFileMode && config.skipExisting && await hasExistingCaption(item)) {
         progressSet.add(progressName);
         saveProgressRecord(progressSet);
         state.stats.skipped += 1;
@@ -1161,11 +1187,20 @@ async function processAll() {
       try {
         const file = await item.handle.getFile();
         log('processingStarted', { name: progressName });
-        const caption = await requestCaption(config, item, file);
-        if (!state.singleFileMode) {
-          await writeCaptionFile(item, caption);
+        const newCaption = await requestCaption(config, item, file);
+        let finalCaption = newCaption;
+        if (combineMode !== 'none' && !state.singleFileMode) {
+          const existing = await readExistingCaption(item);
+          if (existing) {
+            finalCaption = combineMode === 'prepend'
+              ? `${newCaption}, ${existing}`
+              : `${existing}, ${newCaption}`;
+          }
         }
-        els.resultOutput.value = caption;
+        if (!state.singleFileMode) {
+          await writeCaptionFile(item, finalCaption);
+        }
+        els.resultOutput.value = finalCaption;
         if (!state.singleFileMode) {
           progressSet.add(progressName);
           saveProgressRecord(progressSet);
@@ -1195,6 +1230,8 @@ async function processAll() {
     state.isRunning = false;
     state.stopRequested = false;
     els.startBtn.disabled = false;
+    els.prependBtn.disabled = false;
+    els.appendBtn.disabled = false;
     els.stopBtn.disabled = true;
     setRuntimeStatus('runtimeIdle');
   }
@@ -1205,6 +1242,8 @@ function stopProcessing() {
   state.stopRequested = true;
   state.isRunning = false;
   els.startBtn.disabled = false;
+  els.prependBtn.disabled = false;
+  els.appendBtn.disabled = false;
   els.stopBtn.disabled = true;
   log('stopRequested');
 }
@@ -1284,7 +1323,9 @@ function bindEvents() {
     }
   });
   els.chooseFolderBtn.addEventListener('click', chooseFolder);
-  els.startBtn.addEventListener('click', processAll);
+  els.startBtn.addEventListener('click', () => processAll('none'));
+  els.prependBtn.addEventListener('click', () => processAll('prepend'));
+  els.appendBtn.addEventListener('click', () => processAll('append'));
   els.stopBtn.addEventListener('click', stopProcessing);
   els.previewStage.addEventListener('dragenter', (event) => {
     event.preventDefault();

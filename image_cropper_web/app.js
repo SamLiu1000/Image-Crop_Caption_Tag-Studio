@@ -113,6 +113,17 @@ const I18N = {
     addedPreset: '已添加预设：{size}',
     modeSwitched: '模式已切换',
     previewZoomReset: '预览缩放已重置为 100%',
+    doodleModeBtn: '涂鸦',
+    doodleTitle: '涂鸦',
+    brushSizeLabel: '画笔大小',
+    customColorLabel: '自定义',
+    undoStrokeBtn: '撤销上一笔',
+    doodleActive: '涂鸦模式已激活',
+    cropActive: '裁切模式已激活',
+    doodleSaved: '已保存涂鸦：{name}',
+    doodleNoStrokes: '无涂鸦笔画，保存原图',
+    doodleSaveBtn: '涂鸦并保存',
+    doodleTips: '涂鸦模式：\n• 在图片上拖动鼠标/触控笔进行涂鸦\n• 涂鸦不会超出图片范围\n• Ctrl+Z 撤销上一笔\n• 点击涂鸦并保存输出结果',
   },
   en: {
     pageTitle: 'Image Cropper Web',
@@ -198,6 +209,17 @@ const I18N = {
     addedPreset: 'Added preset: {size}',
     modeSwitched: 'Mode switched',
     previewZoomReset: 'Preview zoom reset to 100%',
+    doodleModeBtn: 'Doodle',
+    doodleTitle: 'Doodle',
+    brushSizeLabel: 'Brush size',
+    customColorLabel: 'Custom',
+    undoStrokeBtn: 'Undo stroke',
+    doodleActive: 'Doodle mode activated',
+    cropActive: 'Crop mode activated',
+    doodleSaved: 'Doodle saved: {name}',
+    doodleNoStrokes: 'No doodle strokes, saved original',
+    doodleSaveBtn: 'Doodle & Save',
+    doodleTips: 'Doodle mode:\n• Drag on the image to draw\n• Drawing is confined within image bounds\n• Ctrl+Z to undo last stroke\n• Click Doodle & Save to export',
   },
 };
 
@@ -233,6 +255,13 @@ const els = {
   imageScaleSlider: document.getElementById('imageScaleSlider'),
   imageScaleValue: document.getElementById('imageScaleValue'),
   thumbnailList: document.getElementById('thumbnailList'),
+  doodleModeBtn: document.getElementById('doodleModeBtn'),
+  doodlePanel: document.getElementById('doodlePanel'),
+  brushSizeSlider: document.getElementById('brushSizeSlider'),
+  brushSizeValue: document.getElementById('brushSizeValue'),
+  colorPalette: document.getElementById('colorPalette'),
+  doodleColorInput: document.getElementById('doodleColorInput'),
+  undoStrokeBtn: document.getElementById('undoStrokeBtn'),
 };
 
 const ctx = els.canvas.getContext('2d');
@@ -269,6 +298,13 @@ const state = {
   saveDirectoryName: '',
   supportsDirectoryPicker: typeof window.showDirectoryPicker === 'function',
   language: localStorage.getItem(LANGUAGE_KEY) === 'en' ? 'en' : 'zh',
+  doodleMode: false,
+  doodleStrokes: [],
+  doodleColor: '#ff0000',
+  doodleBrushSize: 5,
+  doodleDrawing: false,
+  doodleCurrentStroke: null,
+  doodleCursorPos: null,
 };
 
 function t(key, params = {}) {
@@ -693,6 +729,46 @@ function drawImageLayer() {
   ctx.drawImage(state.currentBitmap, state.basePreviewOffset.x, state.basePreviewOffset.y, dispW, dispH);
 }
 
+function getImageDisplayBounds() {
+  if (!state.currentBitmap) {
+    const { width: cw, height: ch } = getCanvasSize();
+    return { x: 0, y: 0, w: cw, h: ch };
+  }
+  const dispW = state.currentBitmap.width * state.basePreviewScale;
+  const dispH = state.currentBitmap.height * state.basePreviewScale;
+  return {
+    x: state.basePreviewOffset.x,
+    y: state.basePreviewOffset.y,
+    w: dispW,
+    h: dispH,
+  };
+}
+
+function drawSingleStroke(stroke) {
+  if (!stroke || stroke.points.length < 2) return;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = stroke.color;
+  ctx.lineWidth = stroke.size;
+  ctx.beginPath();
+  ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+  for (let i = 1; i < stroke.points.length; i++) {
+    const midX = (stroke.points[i - 1].x + stroke.points[i].x) / 2;
+    const midY = (stroke.points[i - 1].y + stroke.points[i].y) / 2;
+    ctx.quadraticCurveTo(stroke.points[i - 1].x, stroke.points[i - 1].y, midX, midY);
+  }
+  ctx.lineTo(stroke.points[stroke.points.length - 1].x, stroke.points[stroke.points.length - 1].y);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawDoodleStrokes() {
+  for (const stroke of state.doodleStrokes) {
+    drawSingleStroke(stroke);
+  }
+}
+
 function displayToBaseImageCoords(dx, dy) {
   return {
     x: (dx - state.basePreviewOffset.x) / state.basePreviewScale,
@@ -719,6 +795,15 @@ function getFillDescription() {
 function updateInfo() {
   if (!state.currentBitmap) {
     els.infoText.textContent = t('waitingForImage');
+    return;
+  }
+  if (state.doodleMode) {
+    els.infoText.textContent = [
+      t('doodleActive'),
+      t('infoOutputSize', { size: state.currentBitmap ? `${state.currentBitmap.width} x ${state.currentBitmap.height}` : '--' }),
+      `画笔：${state.doodleBrushSize}px  ${state.doodleColor}`,
+      `笔画数：${state.doodleStrokes.length}`,
+    ].join('\n');
     return;
   }
   if (state.freeTransform) {
@@ -772,6 +857,56 @@ function redraw() {
   }
 
   drawImageLayer();
+
+  // Draw doodle strokes in doodle mode
+  if (state.doodleMode) {
+    const bounds = getImageDisplayBounds();
+
+    // Clip all doodle drawing to the image area
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(bounds.x, bounds.y, bounds.w, bounds.h);
+    ctx.clip();
+
+    // Draw a subtle border around the image area (drawn after clip to be visible)
+    drawDoodleStrokes();
+
+    // Draw current in-progress stroke
+    if (state.doodleDrawing && state.doodleCurrentStroke) {
+      drawSingleStroke(state.doodleCurrentStroke);
+    }
+
+    ctx.restore();
+
+    // Image boundary indicator (drawn outside clip)
+    ctx.save();
+    ctx.strokeStyle = 'rgba(59,130,246,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(bounds.x, bounds.y, bounds.w, bounds.h);
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // Draw brush cursor circle at pointer if hovering
+    if (state.doodleCursorPos) {
+      const p = state.doodleCursorPos;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, state.doodleBrushSize / 2, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([2, 2]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    updateInfo();
+    return;
+  }
 
   const { x1, y1, x2, y2 } = state.crop;
   const borderColor = state.freeTransform ? COLORS.accent : COLORS.success;
@@ -848,6 +983,10 @@ async function loadCurrentImage() {
   state.currentBitmap = bitmap;
   state.currentImage = item;
   resetTransformState();
+  state.doodleStrokes = [];
+  state.doodleDrawing = false;
+  state.doodleCurrentStroke = null;
+  state.doodleCursorPos = null;
   fitImageToCanvas(true);
   setNav(`${state.imageIndex + 1} / ${state.imageItems.length} - ${item.file.name}`);
   setStatus(t('loadedImage', { name: item.file.name, size: `${bitmap.width} x ${bitmap.height}` }));
@@ -909,6 +1048,19 @@ function onPointerDown(event) {
   if (!state.currentBitmap) return;
   const { x, y } = getPointerPos(event);
   els.canvas.setPointerCapture(event.pointerId);
+
+  if (state.doodleMode) {
+    const bounds = getImageDisplayBounds();
+    const clamped = { x: clamp(x, bounds.x, bounds.x + bounds.w), y: clamp(y, bounds.y, bounds.y + bounds.h) };
+    state.doodleDrawing = true;
+    state.doodleCurrentStroke = {
+      color: state.doodleColor,
+      size: state.doodleBrushSize,
+      points: [clamped],
+    };
+    scheduleRedraw();
+    return;
+  }
   if (state.freeTransform) {
     state.dragMode = 'image_move';
     state.dragStart = { x, y, tx: state.imageTx, ty: state.imageTy };
@@ -928,6 +1080,18 @@ function onPointerDown(event) {
 
 function onPointerMove(event) {
   const { x, y } = getPointerPos(event);
+
+  if (state.doodleMode) {
+    const bounds = getImageDisplayBounds();
+    state.doodleCursorPos = { x: clamp(x, bounds.x, bounds.x + bounds.w), y: clamp(y, bounds.y, bounds.y + bounds.h) };
+    if (state.doodleDrawing && state.doodleCurrentStroke) {
+      state.doodleCurrentStroke.points.push(state.doodleCursorPos);
+    }
+    scheduleRedraw();
+    els.canvas.style.cursor = 'none';
+    return;
+  }
+
   if (!state.dragMode || !state.dragStart) {
     const mode = state.freeTransform ? 'move' : hitTest(x, y);
     els.canvas.style.cursor = cursorForMode(mode);
@@ -1098,8 +1262,16 @@ function onPointerUp(event) {
   if (event && els.canvas.hasPointerCapture(event.pointerId)) {
     els.canvas.releasePointerCapture(event.pointerId);
   }
+  if (state.doodleDrawing && state.doodleCurrentStroke && state.doodleCurrentStroke.points.length > 0) {
+    state.doodleStrokes.push(state.doodleCurrentStroke);
+  }
+  state.doodleDrawing = false;
+  state.doodleCurrentStroke = null;
+  state.doodleCursorPos = null;
   state.dragMode = null;
   state.dragStart = null;
+  els.canvas.style.cursor = state.doodleMode ? 'crosshair' : '';
+  if (state.doodleMode) scheduleRedraw();
 }
 
 function cursorForMode(mode) {
@@ -1150,6 +1322,7 @@ function syncScaleBarVisibility() {
 
 function onWheel(event) {
   if (!state.currentBitmap) return;
+  if (state.doodleMode) return;
   event.preventDefault();
   if (state.freeTransform) {
     if (event.shiftKey) {
@@ -1418,13 +1591,58 @@ async function writeBlobToDirectory(filename, blob) {
   return true;
 }
 
+function buildDoodleExportCanvas() {
+  // Render the full image + doodle strokes, keeping the aspect ratio
+  const imgW = state.currentBitmap.width;
+  const imgH = state.currentBitmap.height;
+  const outCanvas = document.createElement('canvas');
+  outCanvas.width = imgW;
+  outCanvas.height = imgH;
+  const outCtx = outCanvas.getContext('2d');
+
+  // Draw the image at its natural size
+  outCtx.drawImage(state.currentBitmap, 0, 0);
+
+  if (!state.doodleStrokes.length) return outCanvas;
+
+  // Scale strokes from canvas display coords to image pixel coords
+  const scale = 1 / state.basePreviewScale;
+  const ox = state.basePreviewOffset.x;
+  const oy = state.basePreviewOffset.y;
+
+  for (const stroke of state.doodleStrokes) {
+    if (stroke.points.length < 2) continue;
+    outCtx.strokeStyle = stroke.color;
+    outCtx.lineWidth = stroke.size * scale;
+    outCtx.lineCap = 'round';
+    outCtx.lineJoin = 'round';
+    outCtx.beginPath();
+    const toImg = (p) => ({ x: (p.x - ox) * scale, y: (p.y - oy) * scale });
+    const p0 = toImg(stroke.points[0]);
+    outCtx.moveTo(p0.x, p0.y);
+    for (let i = 1; i < stroke.points.length; i++) {
+      const p = toImg(stroke.points[i]);
+      const pm = toImg({ x: (stroke.points[i - 1].x + stroke.points[i].x) / 2, y: (stroke.points[i - 1].y + stroke.points[i].y) / 2 });
+      outCtx.quadraticCurveTo(p.x, p.y, pm.x, pm.y);
+    }
+    const plast = toImg(stroke.points[stroke.points.length - 1]);
+    outCtx.lineTo(plast.x, plast.y);
+    outCtx.stroke();
+  }
+  return outCanvas;
+}
+
 async function saveCrop() {
   if (!state.currentBitmap || !state.currentImage) return;
   let outCanvas;
   let actualW;
   let actualH;
 
-  if (state.freeTransform) {
+  if (state.doodleMode) {
+    outCanvas = buildDoodleExportCanvas();
+    actualW = outCanvas.width;
+    actualH = outCanvas.height;
+  } else if (state.freeTransform) {
     outCanvas = buildTransformExportCanvas();
     actualW = outCanvas.width;
     actualH = outCanvas.height;
@@ -1449,16 +1667,17 @@ async function saveCrop() {
   }
 
   const rawName = state.currentImage.file.name.replace(/\.[^.]+$/, '');
-  const filename = `${rawName}_crop_${actualW}x${actualH}.png`;
+  const prefix = state.doodleMode ? 'doodle' : 'crop';
+  const filename = `${rawName}_${prefix}_${actualW}x${actualH}.png`;
 
   try {
     const blob = await canvasToBlob(outCanvas);
     if (state.saveDirectoryHandle) {
       await writeBlobToDirectory(filename, blob);
-      setStatus(t('savedToFolder', { name: filename }));
+      setStatus(state.doodleMode ? t('doodleSaved', { name: filename }) : t('savedToFolder', { name: filename }));
     } else {
       downloadCanvas(outCanvas, filename);
-      setStatus(t('downloadedFile', { name: filename }));
+      setStatus(state.doodleMode ? t('doodleSaved', { name: filename }) : t('downloadedFile', { name: filename }));
     }
   } catch (error) {
     downloadCanvas(outCanvas, filename);
@@ -1645,17 +1864,47 @@ function bindEvents() {
   els.canvas.addEventListener('pointerleave', onPointerUp);
   els.canvas.addEventListener('wheel', onWheel, { passive: false });
 
+  // Doodle mode
+  els.doodleModeBtn.addEventListener('click', toggleDoodleMode);
+
+  els.brushSizeSlider.addEventListener('input', () => {
+    state.doodleBrushSize = Number(els.brushSizeSlider.value);
+    els.brushSizeValue.textContent = `${state.doodleBrushSize}px`;
+    updateBrushSliderBg();
+  });
+
+  els.doodleColorInput.addEventListener('input', () => {
+    state.doodleColor = els.doodleColorInput.value;
+    updateColorSwatchActive();
+  });
+
+  els.undoStrokeBtn.addEventListener('click', () => {
+    if (state.doodleStrokes.length > 0) {
+      state.doodleStrokes.pop();
+      scheduleRedraw();
+    }
+  });
+
   window.addEventListener('keydown', (event) => {
     if (!state.currentBitmap) return;
-    if (event.key === 'ArrowLeft') nudge(-1, 0);
-    if (event.key === 'ArrowRight') nudge(1, 0);
-    if (event.key === 'ArrowUp') nudge(0, -1);
-    if (event.key === 'ArrowDown') nudge(0, 1);
+    if (!state.doodleMode) {
+      if (event.key === 'ArrowLeft') nudge(-1, 0);
+      if (event.key === 'ArrowRight') nudge(1, 0);
+      if (event.key === 'ArrowUp') nudge(0, -1);
+      if (event.key === 'ArrowDown') nudge(0, 1);
+    }
     if (event.key === 'a' || event.key === 'A') els.prevBtn.click();
     if (event.key === 'd' || event.key === 'D') els.nextBtn.click();
     if (event.key.toLowerCase() === 's' && event.ctrlKey) {
       event.preventDefault();
       saveCrop();
+    }
+    if (event.key.toLowerCase() === 'z' && event.ctrlKey && state.doodleMode) {
+      event.preventDefault();
+      if (state.doodleStrokes.length > 0) {
+        state.doodleStrokes.pop();
+        scheduleRedraw();
+      }
     }
   });
 
@@ -1664,6 +1913,75 @@ function bindEvents() {
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', handleViewportResize);
   }
+}
+
+const DOODLE_PALETTE = [
+  '#ff0000', '#ff4500', '#ff8c00', '#ffd700', '#ffff00', '#9acd32',
+  '#32cd32', '#00ced1', '#1e90ff', '#4169e1', '#8a2be2', '#ff69b4',
+  '#ffffff', '#808080', '#000000', '#8b4513',
+];
+
+function updateBrushSliderBg() {
+  const pct = ((state.doodleBrushSize - 1) / 49) * 100;
+  els.brushSizeSlider.style.background =
+    `linear-gradient(to right, var(--accent) 0%, var(--accent) ${pct}%, var(--border) ${pct}%, var(--border) 100%)`;
+}
+
+function updateColorSwatchActive() {
+  for (const swatch of els.colorPalette.querySelectorAll('.color-swatch')) {
+    swatch.classList.toggle('active', swatch.dataset.color === state.doodleColor);
+  }
+}
+
+function initColorPalette() {
+  els.colorPalette.innerHTML = '';
+  for (const color of DOODLE_PALETTE) {
+    const swatch = document.createElement('div');
+    swatch.className = 'color-swatch';
+    swatch.dataset.color = color;
+    swatch.style.backgroundColor = color;
+    if (color === state.doodleColor) swatch.classList.add('active');
+    swatch.title = color;
+    swatch.addEventListener('click', () => {
+      state.doodleColor = color;
+      els.doodleColorInput.value = color;
+      updateColorSwatchActive();
+    });
+    els.colorPalette.appendChild(swatch);
+  }
+}
+
+function toggleDoodleMode() {
+  state.doodleMode = !state.doodleMode;
+  els.doodleModeBtn.classList.toggle('active', state.doodleMode);
+  els.doodlePanel.style.display = state.doodleMode ? '' : 'none';
+
+  if (state.doodleMode) {
+    state.freeTransform = false;
+    els.freeTransformCheck.checked = false;
+    els.saveBtn.textContent = t('doodleSaveBtn');
+    document.querySelector('.app-shell').classList.add('doodle-mode');
+    setStatus(t('doodleActive'));
+  } else {
+    els.saveBtn.textContent = t('saveBtn');
+    document.querySelector('.app-shell').classList.remove('doodle-mode');
+    setStatus(t('cropActive'));
+  }
+
+  // Reset strokes when switching
+  state.doodleStrokes = [];
+  state.doodleDrawing = false;
+  state.doodleCurrentStroke = null;
+  state.doodleCursorPos = null;
+  state.dragMode = null;
+  state.dragStart = null;
+
+  if (state.currentBitmap) {
+    fitImageToCanvas(true);
+  }
+  els.tipsText.textContent = state.doodleMode ? t('doodleTips') : t('tipsText');
+  syncScaleBarVisibility();
+  scheduleRedraw();
 }
 
 async function init() {
@@ -1675,6 +1993,8 @@ async function init() {
     els.fixedOutputSizeCheck.disabled = false;
   }
   bindEvents();
+  initColorPalette();
+  updateBrushSliderBg();
   updateNavButtons();
   updateSaveDirInfo();
   applyI18n();

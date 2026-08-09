@@ -1,0 +1,155 @@
+:root {
+  --tab-text: rgba(255, 255, 255, 0.62);
+  --tab-text-hover: rgba(255, 255, 255, 0.86);
+  --tab-active-bg: rgba(255, 255, 255, 0.12);
+  --tab-active-text: #ffffff;
+  --tab-hover-bg: rgba(255, 255, 255, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  min-height: 100vh;
+  background: #000;
+  font: 14px/1.5 "Microsoft YaHei UI", "Segoe UI", sans-serif;
+}
+
+button {
+  font: inherit;
+}
+
+.hub-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: 28px 1fr;
+}
+
+.hub-header {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  height: 28px;
+  padding: 2px 6px;
+  overflow: hidden;
+}
+
+.tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+
+.tool-tab,
+.lang-toggle {
+  border: 0;
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--tab-text);
+  padding: 2px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1.1;
+  transition: background 0.18s ease, color 0.18s ease, opacity 0.18s ease;
+  backdrop-filter: blur(6px);
+  opacity: 0.78;
+}
+
+.tool-tab:hover,
+.lang-toggle:hover {
+  background: var(--tab-hover-bg);
+  color: var(--tab-text-hover);
+  opacity: 1;
+}
+
+.tool-tab.active {
+  background: var(--tab-active-bg);
+  color: var(--tab-active-text);
+  opacity: 1;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lang-toggle {
+  color: var(--tab-active-text);
+  opacity: 0.92;
+  white-space: nowrap;
+}
+
+.config-btn {
+  border: 0;
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--tab-text);
+  padding: 2px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1.1;
+  transition: background 0.18s ease, color 0.18s ease, opacity 0.18s ease;
+  backdrop-filter: blur(6px);
+  opacity: 0.78;
+  white-space: nowrap;
+}
+
+.config-btn:hover {
+  background: var(--tab-hover-bg);
+  color: var(--tab-text-hover);
+  opacity: 1;
+}
+
+.panel-stack {
+  min-height: 0;
+}
+
+.tool-panel {
+  min-height: calc(100vh - 28px);
+}
+
+.tool-panel[hidden] {
+  display: none;
+}
+
+.tool-frame {
+  width: 100%;
+  height: calc(100vh - 28px);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+@media (max-width: 900px) {
+  .hub-shell {
+    grid-template-rows: 26px 1fr;
+  }
+
+  .hub-header {
+    height: 26px;
+    padding: 2px 4px;
+  }
+
+  .tab-bar {
+    gap: 3px;
+  }
+
+  .tool-tab,
+  .lang-toggle {
+    flex: 0 1 auto;
+    padding: 2px 7px;
+    font-size: 10px;
+  }
+}

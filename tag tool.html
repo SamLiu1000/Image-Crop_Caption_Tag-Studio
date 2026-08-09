@@ -161,6 +161,15 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
   display:flex;align-items:center;justify-content:space-between;flex-shrink:0
 }
 .tag-col-filename{color:var(--c4);font-size:10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.insert-mode-toggle{display:inline-flex;gap:0;border:1px solid var(--border);border-radius:4px;overflow:hidden;flex-shrink:0}
+.insert-mode-btn{
+  padding:2px 7px;background:var(--surface);border:none;color:var(--muted);
+  font-family:'IBM Plex Mono',monospace;font-size:9px;cursor:pointer;transition:all .15s;
+  white-space:nowrap;line-height:1.4
+}
+.insert-mode-btn:hover{color:var(--text)}
+.insert-mode-btn.active{background:var(--c4);color:var(--white)}
+.insert-mode-btn + .insert-mode-btn{border-left:1px solid var(--border)}
 
 /* Manual input */
 .tag-input-row{display:flex;gap:5px;padding:6px 8px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--tag-input-bg)}
@@ -221,6 +230,14 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
   margin:2px 2px 2px 0;font-size:9px;color:var(--text)
 }
 .ctag.highlight{background:var(--added-bg);border-color:var(--added-border);color:var(--added-color)}
+.ctag-text{cursor:text;outline-offset:2px}
+.ctag-text:hover{text-decoration:underline dotted var(--muted);text-underline-offset:2px}
+.ctag-edit-input{
+  background:var(--input-bg);border:1px solid var(--c4);border-radius:3px;
+  color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:9px;
+  padding:1px 4px;outline:none;min-width:60px;max-width:320px;
+  width:auto;flex:0 1 auto;margin:0;box-sizing:border-box
+}
 .ctag-del{cursor:pointer;color:var(--muted);font-size:11px;font-weight:700;transition:color .1s;line-height:1}
 .ctag-del:hover{color:var(--danger)}
 .no-tags{font-size:10px;color:var(--muted);font-style:italic;padding:2px 0}
@@ -521,7 +538,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 /* ════════════════════════════════════════════════
    MODALS & OVERLAYS
 ════════════════════════════════════════════════ */
-.tg-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
+.tg-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:500;display:flex;align-items:center;justify-content:center}
 .tg-modal-overlay.hidden{display:none}
 .tg-modal{background:var(--modal-bg);border:1px solid var(--border);border-radius:10px;width:min(720px,95vw);max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.25)}
 .tg-modal-head{padding:14px 20px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0}
@@ -611,7 +628,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 #confirm-overlay{
   position:fixed;inset:0;z-index:1000;
   background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;
-  opacity:0;pointer-events:none;transition:opacity .2s
+  opacity:0;pointer-events:none;transition:opacity .15s;will-change:opacity;transform:translateZ(0)
 }
 #confirm-overlay.show{opacity:1;pointer-events:auto}
 #confirm-dialog{
@@ -702,6 +719,10 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
     <div class="tag-col">
       <div class="tag-col-header">
         <span data-i18n="tag.col.header">当前 Tags</span>
+        <div class="insert-mode-toggle" id="insertModeToggle">
+          <button type="button" class="insert-mode-btn active" id="insertModeAppend" onclick="setInsertMode('append')" data-i18n="tag.insert.mode.append" data-i18n-title="tag.insert.mode.label" title="追加">追加</button>
+          <button type="button" class="insert-mode-btn" id="insertModePrepend" onclick="setInsertMode('prepend')" data-i18n="tag.insert.mode.prepend" data-i18n-title="tag.insert.mode.label" title="前置">前置</button>
+        </div>
         <span class="tag-col-filename" id="detailFilename">—</span>
       </div>
 
@@ -715,7 +736,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
       <!-- Search / replace -->
       <div class="tag-search-row">
         <input class="tag-search-input" id="tagSearchInput" type="text"
-          data-i18n-placeholder="tag.search.placeholder" placeholder="搜索…" autocomplete="off" spellcheck="false" oninput="renderCurrentTags()">
+          data-i18n-placeholder="tag.search.placeholder" placeholder="搜索…" autocomplete="off" spellcheck="false" oninput="renderCurrentTagsDebounced()">
         <span class="search-sep">→</span>
         <input class="tag-replace-input" id="tagReplaceInput" type="text"
           data-i18n-placeholder="tag.replace.placeholder" placeholder="替换为…" autocomplete="off" spellcheck="false">
@@ -771,7 +792,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
     <div class="tag-sidebar-title" data-i18n="tag.sidebar.title"></div>
     <div class="tag-sidebar-search-wrap">
       <input class="tag-sidebar-search" id="tagSidebarSearch" type="text"
-        data-i18n-placeholder="tag.sidebar.search.placeholder" placeholder="搜索标签…" autocomplete="off" spellcheck="false" oninput="onTagSidebarSearch()">
+        data-i18n-placeholder="tag.sidebar.search.placeholder" placeholder="搜索标签…" autocomplete="off" spellcheck="false" oninput="onTagSidebarSearchDebounced()">
     </div>
   </div>
   <div class="tag-sidebar-body" id="tagSidebarBody">
@@ -851,7 +872,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
     </div>
     <div class="tg-modal-search-row">
       <input class="tg-modal-search" id="tgModalSearch" type="text"
-        data-i18n-placeholder="tg.modal.search.placeholder" placeholder="搜索标签…" autocomplete="off" spellcheck="false" oninput="renderTgModalTags()">
+        data-i18n-placeholder="tg.modal.search.placeholder" placeholder="搜索标签…" autocomplete="off" spellcheck="false" oninput="renderTgModalTagsDebounced()">
     </div>
     <div class="tg-selected-summary" id="tgSelectedSummary">
       <div class="tg-selected-summary-title" data-i18n="tg.modal.selected.summary">已选标签</div>
@@ -904,7 +925,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
     </div>
     <div class="tg-modal-search-row">
       <input class="tg-modal-search" id="catTagSearch" type="text"
-        data-i18n-placeholder="cat.tags.modal.search.placeholder" placeholder="搜索标签…" autocomplete="off" spellcheck="false" oninput="renderCatTags()">
+        data-i18n-placeholder="cat.tags.modal.search.placeholder" placeholder="搜索标签…" autocomplete="off" spellcheck="false" oninput="renderCatTagsDebounced()">
     </div>
     <div class="tg-modal-body" id="catTagsModalBody"></div>
     <div class="tg-modal-foot">
@@ -935,6 +956,9 @@ const I18N = {
     'tag.col.header': '当前 Tags',
     'tag.input.placeholder': '输入 tag，多个用逗号分隔…',
     'tag.add.btn': '＋ 添加',
+    'tag.insert.mode.label': '插入模式',
+    'tag.insert.mode.append': '追加',
+    'tag.insert.mode.prepend': '前置',
     'tag.search.placeholder': '搜索…',
     'tag.replace.placeholder': '替换为…',
     'tag.replace.btn': '替换',
@@ -946,7 +970,8 @@ const I18N = {
     'kbd.hint': '<span class="kbd">A</span> 上一张 &nbsp; <span class="kbd">D</span> 下一张 &nbsp; <span class="kbd">←</span><span class="kbd">→</span> 同上',
     'suffix.label': '后缀',
     'suffix.input.placeholder': '输入后缀（可留空）…',
-    'suffix.preview': '示例：tag_name',
+    'suffix.preview': '示例：tagname',
+    'suffix.preview.prefix': '示例：tag',
     'gallery.title': '图片画廊 Gallery',
     'gallery.stats.per': '每页',
     'gallery.stats.perUnit': '张',
@@ -1015,6 +1040,9 @@ const I18N = {
     'toast.tag.exists': '⚠ 已存在：',
     'toast.tag.write': '✓ 已写入：',
     'toast.tag.copy': '✓ 已复制：',
+    'toast.tag.edit.success': '✓ 已修改 tag',
+    'toast.tag.edit.empty': '⚠ 内容为空，未修改',
+    'toast.tag.edit.hint': '点击编辑，× 删除',
     'toast.batch.warn': '⚠ 请先导入文件夹',
     'toast.batch.prompt': '请输入要添加到【全部图片】的 tag（多个用英文逗号分隔）：',
     'toast.batch.noinput': '⚠ 未输入任何 tag',
@@ -1059,6 +1087,9 @@ const I18N = {
     'tag.col.header': 'Current Tags',
     'tag.input.placeholder': 'Enter tags, separated by commas…',
     'tag.add.btn': '＋ Add',
+    'tag.insert.mode.label': 'Insert Mode',
+    'tag.insert.mode.append': 'Append',
+    'tag.insert.mode.prepend': 'Prepend',
     'tag.search.placeholder': 'Search…',
     'tag.replace.placeholder': 'Replace with…',
     'tag.replace.btn': 'Replace',
@@ -1070,7 +1101,8 @@ const I18N = {
     'kbd.hint': '<span class="kbd">A</span> Prev &nbsp; <span class="kbd">D</span> Next &nbsp; <span class="kbd">←</span><span class="kbd">→</span> Same',
     'suffix.label': 'Suffix',
     'suffix.input.placeholder': 'Enter suffix (optional)…',
-    'suffix.preview': 'Example: tag_name',
+    'suffix.preview': 'Example: tagname',
+    'suffix.preview.prefix': 'Example: tag',
     'gallery.title': 'Image Gallery',
     'gallery.stats.per': 'Per page',
     'gallery.stats.perUnit': 'items',
@@ -1139,6 +1171,9 @@ const I18N = {
     'toast.tag.exists': '⚠ Already exists:',
     'toast.tag.write': '✓ Written:',
     'toast.tag.copy': '✓ Copied:',
+    'toast.tag.edit.success': '✓ Tag updated',
+    'toast.tag.edit.empty': '⚠ Empty input, no change',
+    'toast.tag.edit.hint': 'Click to edit, × to delete',
     'toast.batch.warn': '⚠ Please import folder first',
     'toast.batch.prompt': 'Enter tags to add to all images (comma separated):',
     'toast.batch.noinput': '⚠ No tags entered',
@@ -1233,22 +1268,78 @@ let galleryPage     = 1;
 let galleryRowsPage = 50;
 
 const IMG_EXTS = ['jpg','jpeg','png','webp','gif','bmp','avif'];
+const VIDEO_EXTS = ['mp4','webm','mov','avi','wmv','rmvb','mkv','flv','m4v','3gp','mpg','mpeg','ts'];
 
 const $ = id => document.getElementById(id);
 
+const INSERT_MODE_KEY = 'tag_tool_insert_mode';
+const INPUTS_STATE_KEY = 'tag_tool_inputs_state';
+let tagInsertMode = localStorage.getItem(INSERT_MODE_KEY) === 'prepend' ? 'prepend' : 'append';
+
+function setInsertMode(mode) {
+  if (mode !== 'append' && mode !== 'prepend') return;
+  tagInsertMode = mode;
+  localStorage.setItem(INSERT_MODE_KEY, mode);
+  $('insertModeAppend').classList.toggle('active', mode === 'append');
+  $('insertModePrepend').classList.toggle('active', mode === 'prepend');
+}
+
+function insertTag(item, tag) {
+  if (tagInsertMode === 'prepend') item.tags.unshift(tag);
+  else item.tags.push(tag);
+}
+
+function insertTags(item, tags) {
+  if (tagInsertMode === 'prepend') item.tags.unshift(...tags);
+  else item.tags.push(...tags);
+}
+
 // ─── Suffix ────────────────────────────────────────────────
 function getSuffix() {
-  const v = $('charidInput').value.trim();
-  return v ? '_' + v : '';
+  return $('charidInput').value.trim();
 }
 
 // ─── Init ──────────────────────────────────────────────────
+const PERSISTED_INPUT_IDS = ['tagManualInput', 'tagSearchInput', 'tagReplaceInput', 'charidInput'];
+
+function loadInputsState() {
+  try {
+    const raw = localStorage.getItem(INPUTS_STATE_KEY);
+    if (!raw) return;
+    const map = JSON.parse(raw);
+    for (const id of PERSISTED_INPUT_IDS) {
+      if (typeof map[id] === 'string' && $(id)) $(id).value = map[id];
+    }
+  } catch {}
+}
+
+function saveInputsState() {
+  try {
+    const map = {};
+    for (const id of PERSISTED_INPUT_IDS) {
+      if ($(id)) map[id] = $(id).value;
+    }
+    localStorage.setItem(INPUTS_STATE_KEY, JSON.stringify(map));
+  } catch {}
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   tgLoad();
   catLoad();
   renderTagGroups();
   renderTagSidebar();
-  
+
+  // Restore insert mode toggle UI
+  setInsertMode(tagInsertMode);
+
+  // Restore persisted input values
+  loadInputsState();
+  // Refresh suffix preview if charidInput was restored
+  const restoredSuffix = $('charidInput').value.trim();
+  if (restoredSuffix) {
+    $('charidPreview').innerHTML = `${t('suffix.preview.prefix')}<em>${restoredSuffix}</em>`;
+  }
+
   // Initialize language
   switchLanguage(currentLang);
 
@@ -1269,9 +1360,14 @@ document.addEventListener('DOMContentLoaded', () => {
   $('charidInput').addEventListener('input', () => {
     const v = $('charidInput').value.trim();
     $('charidPreview').innerHTML = v
-      ? `${t('suffix.preview')}<em>_${v}</em>`
-      : `${t('suffix.preview')}`;
+      ? `${t('suffix.preview.prefix')}<em>${v}</em>`
+      : t('suffix.preview');
+    saveInputsState();
   });
+
+  for (const id of ['tagManualInput', 'tagSearchInput', 'tagReplaceInput']) {
+    $(id).addEventListener('input', saveInputsState);
+  }
 
   $('tagManualInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); addManualTags(); }
@@ -1447,7 +1543,7 @@ async function importFolder() {
   for await (const [name, handle] of folderHandle.entries()) {
     if (handle.kind !== 'file') continue;
     const ext = name.split('.').pop().toLowerCase();
-    if (!IMG_EXTS.includes(ext)) continue;
+    if (!IMG_EXTS.includes(ext) && !VIDEO_EXTS.includes(ext)) continue;
     const base = name.slice(0, -(ext.length+1));
     imageFiles.push({ name, base, imgHandle: handle, txtHandle: txtMap[base] || null, tags: [], objUrl: null });
   }
@@ -1513,6 +1609,16 @@ async function renderPreview() {
   const wrap = $('bigImageWrap');
   wrap.classList.remove('empty-wrap');
   wrap.innerHTML = '';
+
+  const ext = item.name.split('.').pop().toLowerCase();
+  if (VIDEO_EXTS.includes(ext)) {
+    wrap.innerHTML = '<div class="big-img-placeholder">🎬</div><div class="big-img-hint">视频文件</div>';
+    wrap.classList.add('empty-wrap');
+    $('detailFilename').textContent = item.base + '.txt';
+    renderCurrentTags();
+    return;
+  }
+
   const img = document.createElement('img');
   img.className = 'big-img';
   img.alt = item.name;
@@ -1550,7 +1656,7 @@ function renderCurrentTags() {
     const matched = keyword && tag.toLowerCase().includes(keyword);
     const span = document.createElement('span');
     span.className = 'ctag' + (matched ? ' highlight' : '');
-    span.innerHTML = `${escHtml(tag)}<span class="ctag-del" data-i18n-title="toast.remove.success" title="${t('toast.remove.success')}" onclick="removeTag(${ti})">×</span>`;
+    span.innerHTML = `<span class="ctag-text" onclick="editTag(${ti}, event)" title="${t('toast.tag.edit.hint')}">${escHtml(tag)}</span><span class="ctag-del" data-i18n-title="toast.remove.success" title="${t('toast.remove.success')}" onclick="removeTag(${ti})">×</span>`;
     container.appendChild(span);
   });
 }
@@ -1580,13 +1686,17 @@ function renderGallery() {
     const globalIdx = start + localIdx;
     const row = document.createElement('div');
     row.className = 'gallery-row' + (globalIdx === selectedIdx ? ' active' : '');
+    row.dataset.idx = globalIdx;
     row.onclick = () => {
       selectImage(globalIdx);
     };
 
     // Thumbnail
     let thumbHtml;
-    if (item.objUrl) {
+    const ext = item.name.split('.').pop().toLowerCase();
+    if (VIDEO_EXTS.includes(ext)) {
+      thumbHtml = `<div class="gallery-thumb-placeholder">🎬</div>`;
+    } else if (item.objUrl) {
       thumbHtml = `<img class="gallery-thumb" src="${item.objUrl}" alt="${escHtml(item.name)}" loading="lazy">`;
     } else {
       thumbHtml = `<div class="gallery-thumb-placeholder">🖼</div>`;
@@ -1627,6 +1737,24 @@ function renderGallery() {
   updateGalleryPagination(galleryPage, totalPages);
 }
 
+function updateGalleryRow(idx) {
+  if (idx < 0 || idx >= imageFiles.length) return;
+  const row = $('galleryGrid').querySelector(`.gallery-row[data-idx="${idx}"]`);
+  if (!row) return;
+  const item = imageFiles[idx];
+  const tagsEl = row.querySelector('.gallery-tags');
+  const countEl = row.querySelector('.gallery-tag-count');
+  if (tagsEl) {
+    if (item.tags.length === 0) {
+      tagsEl.innerHTML = `<span style="color:var(--muted);font-style:italic">${t('gallery.tags.empty')}</span>`;
+    } else {
+      tagsEl.innerHTML = item.tags.slice(0, 6).map(tg => `<em>${escHtml(tg)}</em>`).join(', ')
+        + (item.tags.length > 6 ? ` <span class="gallery-tags-more">+${item.tags.length - 6}</span>` : '');
+    }
+  }
+  if (countEl) countEl.textContent = `${item.tags.length} tags`;
+}
+
 function updateGalleryPagination(current, total) {
   $('gpCurrent').textContent = current || 1;
   $('gpTotal').textContent   = total  || 1;
@@ -1663,14 +1791,13 @@ async function addManualTags() {
   for (const t of newTags) {
     const fullTag = t + suffix;
     if (item.tags.includes(fullTag)) { skipped++; }
-    else { item.tags.push(fullTag); added++; }
+    else { insertTag(item, fullTag); added++; }
   }
   if (added > 0) {
     try {
       await saveTags(item);
       renderCurrentTags();
-      renderGallery();
-      $('tagManualInput').value = '';
+      updateGalleryRow(selectedIdx);
       const skipText = skipped > 0 ? t('toast.add.skip', {skipped}) : '';
       showToast(t('toast.add.success', {added, skipped: skipText}), 'info', 2200);
     } catch {}
@@ -1699,7 +1826,7 @@ async function replaceTag() {
   if (!replaceVal) item.tags = item.tags.filter(Boolean);
 
   if (count > 0) {
-    try { await saveTags(item); renderCurrentTags(); renderGallery(); showToast(t('toast.replace.success', {count}),'info',2200); }
+    try { await saveTags(item); renderCurrentTags(); updateGalleryRow(selectedIdx); showToast(t('toast.replace.success', {count}),'info',2200); }
     catch {}
   } else {
     showToast(t('toast.replace.notfound'),'warn',2000);
@@ -1776,8 +1903,76 @@ async function removeTag(tagIdx) {
   item.tags.splice(tagIdx, 1);
   await saveTags(item);
   renderCurrentTags();
-  renderGallery();
+  updateGalleryRow(selectedIdx);
   showToast(t('toast.remove.success'),'info',1500);
+}
+
+async function editTag(tagIdx, event) {
+  if (selectedIdx < 0) return;
+  const item = imageFiles[selectedIdx];
+  const oldTag = item.tags[tagIdx];
+  if (oldTag === undefined) return;
+
+  const ctag = event.currentTarget.closest('.ctag');
+  if (!ctag) return;
+
+  ctag.innerHTML = '';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = oldTag;
+  input.className = 'ctag-edit-input';
+  input.spellcheck = false;
+  input.autocomplete = 'off';
+  ctag.appendChild(input);
+
+  const resize = () => {
+    const len = Math.max(input.value.length, oldTag.length);
+    input.style.width = (len + 3) + 'ch';
+  };
+  input.addEventListener('input', resize);
+  resize();
+
+  let done = false;
+  const finish = async (commit) => {
+    if (done) return;
+    done = true;
+    if (commit) {
+      const newTag = input.value.trim();
+      if (!newTag) {
+        renderCurrentTags();
+        showToast(t('toast.tag.edit.empty'), 'warn', 1500);
+        return;
+      }
+      if (newTag === oldTag) { renderCurrentTags(); return; }
+      if (item.tags.includes(newTag)) {
+        renderCurrentTags();
+        showToast(t('toast.tag.exists') + ' ' + newTag, 'warn', 1800);
+        return;
+      }
+      item.tags[tagIdx] = newTag;
+      try {
+        await saveTags(item);
+        renderCurrentTags();
+        updateGalleryRow(selectedIdx);
+        showToast(t('toast.tag.edit.success'), 'info', 1500);
+      } catch {
+        item.tags[tagIdx] = oldTag;
+        renderCurrentTags();
+      }
+    } else {
+      renderCurrentTags();
+    }
+  };
+
+  input.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  });
+  input.addEventListener('blur', () => finish(true));
+
+  input.focus();
+  input.select();
 }
 
 // ─── Save tags ─────────────────────────────────────────────
@@ -1804,11 +1999,11 @@ async function handleTagClick(tagName) {
       showToast(t('toast.tag.exists') + ' ' + fullTag, 'warn', 1800);
       return;
     }
-    item.tags.push(fullTag);
+    insertTag(item, fullTag);
     try {
       await saveTags(item);
       renderCurrentTags();
-      renderGallery();
+      updateGalleryRow(selectedIdx);
       showToast(t('toast.tag.write') + ' ' + fullTag, 'info', 1800);
     } catch { item.tags.pop(); }
   } else {
@@ -1835,7 +2030,7 @@ async function batchAddTagsToAll() {
   let successCount = 0, errorCount = 0;
   for (const item of imageFiles) {
     let added = 0;
-    for (const t of newTags) { if (!item.tags.includes(t)) { item.tags.push(t); added++; } }
+    for (const t of newTags) { if (!item.tags.includes(t)) { insertTag(item, t); added++; } }
     if (added > 0) {
       try { await saveTags(item); successCount++; } catch { errorCount++; }
     }
@@ -1896,6 +2091,18 @@ function escHtml(s) {
 let tagGroups  = [];
 let tgEditId   = null;
 let tgSelected = new Set();
+
+function debounce(fn, ms) {
+  let timer = null;
+  return function (...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), ms);
+  };
+}
+var renderTgModalTagsDebounced = debounce(renderTgModalTags, 120);
+var renderCatTagsDebounced = debounce(renderCatTags, 120);
+var onTagSidebarSearchDebounced = debounce(onTagSidebarSearch, 120);
+var renderCurrentTagsDebounced = debounce(renderCurrentTags, 120);
 const TG_STORAGE_KEY = 'anatomy_tag_groups_v1';
 
 // ═══════════════════ CATEGORIES MANAGEMENT ═══════════════════
@@ -2082,11 +2289,11 @@ async function addTagFromSidebar(tagName, tagEl) {
       showToast(t('toast.tag.exists') + ' ' + fullTag, 'warn', 1500);
       return;
     }
-    item.tags.push(fullTag);
+    insertTag(item, fullTag);
     try {
       await saveTags(item);
       renderCurrentTags();
-      renderGallery();
+      updateGalleryRow(selectedIdx);
       tagEl.classList.add('added');
       setTimeout(() => tagEl.classList.remove('added'), 500);
       showToast(t('toast.tag.write') + ' ' + fullTag, 'info', 1500);
@@ -2112,13 +2319,13 @@ async function applyTagGroup(id, chipEl) {
     let added = 0, skipped = 0;
     for (const t of tagsToAdd) {
       if (item.tags.includes(t)) { skipped++; }
-      else { item.tags.push(t); added++; }
+      else { insertTag(item, t); added++; }
     }
     if (added > 0) {
       try {
         await saveTags(item);
         renderCurrentTags();
-        renderGallery();
+        updateGalleryRow(selectedIdx);
         chipEl && chipEl.classList.add('applying');
         setTimeout(() => chipEl && chipEl.classList.remove('applying'), 700);
         const skipText = skipped > 0 ? t('toast.tg.apply.skip', {skipped}) : '';
@@ -2170,6 +2377,7 @@ function openTgModal(editId) {
   search.value = '';
   overlay.classList.remove('hidden');
   renderTgModalTags();
+  updateTgSelectedSummary();
   updateTgSelCount();
   setTimeout(() => nameInput.focus(), 60);
 }
@@ -2209,8 +2417,8 @@ function renderTgModalTags() {
       el.dataset.en = tag;
       el.innerHTML = `<span class="tg-sel-tag-cn">${escHtml(tag)}</span>`;
       el.addEventListener('click', () => {
-        if (tgSelected.has(tag)) { tgSelected.delete(tag); el.classList.remove('selected'); }
-        else { tgSelected.add(tag); el.classList.add('selected'); }
+        if (tgSelected.has(tag)) { tgSelected.delete(tag); el.classList.remove('selected'); tgSummaryRemove(tag); }
+        else { tgSelected.add(tag); el.classList.add('selected'); tgSummaryAdd(tag); }
         updateTgSelCount();
       });
       tagsDiv.appendChild(el);
@@ -2219,48 +2427,64 @@ function renderTgModalTags() {
     body.appendChild(section);
   });
 
-  // 显示已选的自定义标签
-  const filteredCustomTags = customTags.filter(t => !kw || t.toLowerCase().includes(kw));
-  if (filteredCustomTags.length > 0) {
-    const section = document.createElement('div');
-    section.className = 'tg-modal-section';
-    section.innerHTML = `<div class="tg-modal-sec-title" style="color:var(--c4)">已选自定义标签</div>`;
-    const tagsDiv = document.createElement('div');
-    tagsDiv.className = 'tg-modal-tags';
+  renderTgModalCustomTags(body, kw, customTags);
+}
 
-    filteredCustomTags.forEach(tag => {
-      const el = document.createElement('div');
-      el.className = 'tg-sel-tag selected';
-      el.dataset.en = tag;
-
-      const label = document.createElement('span');
-      label.className = 'tg-sel-tag-cn';
-      label.textContent = tag;
-      label.addEventListener('click', () => {
-        tgSelected.delete(tag);
-        renderTgModalTags();
-        updateTgSelCount();
-      });
-
-      const deleteBtn = document.createElement('span');
-      deleteBtn.className = 'ctag-del';
-      deleteBtn.style.marginLeft = '6px';
-      deleteBtn.textContent = '×';
-      deleteBtn.addEventListener('click', (event) => removeCustomTagFromGroup(tag, event));
-
-      el.appendChild(label);
-      el.appendChild(deleteBtn);
-      tagsDiv.appendChild(el);
-    });
-    section.appendChild(tagsDiv);
-    body.appendChild(section);
+function renderTgModalCustomTags(body, kw, customTags) {
+  if (!body) body = $('tgModalBody');
+  if (typeof kw !== 'string') kw = $('tgModalSearch').value.trim().toLowerCase();
+  if (!customTags) {
+    const allCatTags = new Set();
+    categories.forEach(cat => cat.tags.forEach(t => allCatTags.add(t)));
+    customTags = [...tgSelected].filter(t => !allCatTags.has(t));
   }
+
+  const existing = body.querySelector('.tg-modal-custom-section');
+  if (existing) existing.remove();
+
+  const filteredCustomTags = customTags.filter(t => !kw || t.toLowerCase().includes(kw));
+  if (filteredCustomTags.length === 0) return;
+
+  const section = document.createElement('div');
+  section.className = 'tg-modal-section tg-modal-custom-section';
+  section.innerHTML = `<div class="tg-modal-sec-title" style="color:var(--c4)">已选自定义标签</div>`;
+  const tagsDiv = document.createElement('div');
+  tagsDiv.className = 'tg-modal-tags';
+
+  filteredCustomTags.forEach(tag => {
+    const el = document.createElement('div');
+    el.className = 'tg-sel-tag selected';
+    el.dataset.en = tag;
+
+    const label = document.createElement('span');
+    label.className = 'tg-sel-tag-cn';
+    label.textContent = tag;
+    label.addEventListener('click', () => {
+      tgSelected.delete(tag);
+      tgSummaryRemove(tag);
+      renderTgModalCustomTags();
+      updateTgSelCount();
+    });
+
+    const deleteBtn = document.createElement('span');
+    deleteBtn.className = 'ctag-del';
+    deleteBtn.style.marginLeft = '6px';
+    deleteBtn.textContent = '×';
+    deleteBtn.addEventListener('click', (event) => removeCustomTagFromGroup(tag, event));
+
+    el.appendChild(label);
+    el.appendChild(deleteBtn);
+    tagsDiv.appendChild(el);
+  });
+  section.appendChild(tagsDiv);
+  body.appendChild(section);
 }
 
 function removeCustomTagFromGroup(tag, event) {
   if (event) event.stopPropagation();
   tgSelected.delete(tag);
-  renderTgModalTags();
+  tgSummaryRemove(tag);
+  renderTgModalCustomTags();
   updateTgSelCount();
 }
 
@@ -2274,48 +2498,92 @@ function tgToggleSelectAll() {
   });
   $('tgSelAllBtn').textContent = allSel ? t('tg.modal.select.none') : t('tg.modal.select.all');
   updateTgSelCount();
+  updateTgSelectedSummary();
 }
 
 function updateTgSelCount() {
   const n = tgSelected.size;
   $('tgSelCount').textContent = n;
   $('tgModalSave').disabled = (n === 0);
-  updateTgSelectedSummary();
 }
 
 function updateTgSelectedSummary() {
   const container = $('tgSelectedSummaryTags');
   container.innerHTML = '';
-  
+
   if (tgSelected.size === 0) {
     container.innerHTML = `<span style="font-size:9px;color:var(--muted);font-style:italic">${t('tg.modal.selected.empty')}</span>`;
     return;
   }
-  
+
   const sortedTags = [...tgSelected].sort();
-  sortedTags.forEach(tag => {
-    const el = document.createElement('div');
-    el.className = 'tg-summary-tag';
+  sortedTags.forEach(tag => tgSummaryAppendTag(container, tag));
+}
 
-    const label = document.createElement('span');
-    label.textContent = tag;
+function tgSummaryAppendTag(container, tag) {
+  const el = document.createElement('div');
+  el.className = 'tg-summary-tag';
+  el.dataset.tag = tag;
 
-    const deleteBtn = document.createElement('span');
-    deleteBtn.className = 'ctag-del';
-    deleteBtn.textContent = '×';
-    deleteBtn.addEventListener('click', (event) => removeTagFromSummary(tag, event));
+  const label = document.createElement('span');
+  label.textContent = tag;
 
-    el.appendChild(label);
-    el.appendChild(deleteBtn);
-    container.appendChild(el);
-  });
+  const deleteBtn = document.createElement('span');
+  deleteBtn.className = 'ctag-del';
+  deleteBtn.textContent = '×';
+  deleteBtn.addEventListener('click', (event) => removeTagFromSummary(tag, event));
+
+  el.appendChild(label);
+  el.appendChild(deleteBtn);
+  container.appendChild(el);
+  return el;
+}
+
+function tgSummaryAdd(tag) {
+  const container = $('tgSelectedSummaryTags');
+  if (tgSelected.size === 1) container.innerHTML = '';
+
+  const els = [...container.querySelectorAll('.tg-summary-tag')];
+  let insertBefore = null;
+  for (const e of els) {
+    if (e.dataset.tag === tag) return;
+    if (e.dataset.tag > tag && !insertBefore) insertBefore = e;
+  }
+  const el = tgSummaryAppendTag(container, tag);
+  if (insertBefore) container.insertBefore(el, insertBefore);
+}
+
+function tgSummaryRemove(tag) {
+  const container = $('tgSelectedSummaryTags');
+  const els = container.querySelectorAll('.tg-summary-tag');
+  for (const el of els) {
+    if (el.dataset.tag === tag) { el.remove(); break; }
+  }
+  if (tgSelected.size === 0) {
+    container.innerHTML = `<span style="font-size:9px;color:var(--muted);font-style:italic">${t('tg.modal.selected.empty')}</span>`;
+  }
 }
 
 function removeTagFromSummary(tag, event) {
   if (event) event.stopPropagation();
   tgSelected.delete(tag);
+  tgSummaryRemove(tag);
   updateTgSelCount();
-  renderTgModalTags();
+
+  // 判断是栏目标签还是自定义标签
+  const allCatTags = new Set();
+  categories.forEach(cat => cat.tags.forEach(t => allCatTags.add(t)));
+
+  if (allCatTags.has(tag)) {
+    // 栏目标签 — 仅取消该元素选中态
+    const modalTags = document.querySelectorAll('#tgModalBody .tg-sel-tag');
+    for (const el of modalTags) {
+      if (el.dataset.en === tag) { el.classList.remove('selected'); break; }
+    }
+  } else {
+    // 自定义标签 — 仅重建自定义区
+    renderTgModalCustomTags();
+  }
 }
 
 function closeInlinePopup() {
@@ -2393,20 +2661,21 @@ function addCustomTagToGroup(tag) {
   if (!tag || !tag.trim()) return;
 
   const trimmedTag = tag.trim();
-  
+
   // 检查是否已存在于已选标签中
   if (tgSelected.has(trimmedTag)) {
     showToast(t('toast.tg.custom.exists'), 'warn', 1800);
     return;
   }
-  
+
   // 添加到已选标签集合
   tgSelected.add(trimmedTag);
-  
-  // 更新UI
+
+  // 更新UI（仅增量更新，不重建整个模态）
+  tgSummaryAdd(trimmedTag);
+  renderTgModalCustomTags();
   updateTgSelCount();
-  renderTgModalTags();
-  
+
   showToast(t('toast.tg.custom.success', {tag: trimmedTag}), 'info', 1800);
 }
 
@@ -2422,7 +2691,7 @@ function saveTgGroup() {
     tagGroups.push({ id: 'tg_' + Date.now(), name, tags: [...tgSelected] });
   }
 
-  tgSave(); renderTagGroups(); renderTagSidebar(); closeTgModal();
+  tgSave(); renderTagGroups(); closeTgModal();
   showToast(t('toast.tg.save.success', {name, count: tgSelected.size}), 'info', 2500);
 }
 
@@ -2510,16 +2779,16 @@ function renderCatList() {
 function addNewCategory(name) {
   if (typeof name !== 'string') name = prompt(t('toast.cat.add.prompt'));
   if (!name || !name.trim()) return;
-  
+
   categories.push({
     id: 'cat_' + Date.now(),
     name: name.trim(),
     tags: []
   });
-  
+
   catSave();
   renderCatList();
-  renderTagSidebar();
+  setTimeout(() => renderTagSidebar(), 0);
   showToast(t('toast.cat.add.success', {name: name.trim()}), 'info', 2000);
 }
 
@@ -2528,11 +2797,11 @@ async function deleteCategory(id) {
   if (!cat) return;
 
   if (!await showConfirm(t('toast.cat.delete.confirm', {name: cat.name}))) return;
-  
+
   categories = categories.filter(c => c.id !== id);
   catSave();
   renderCatList();
-  renderTagSidebar();
+  setTimeout(() => renderTagSidebar(), 0);
   showToast(t('toast.cat.delete.success', {name: cat.name}), 'info', 1800);
 }
 
@@ -2571,7 +2840,7 @@ function saveCategoryName() {
   catSave();
   $('catTagsModalTitle').textContent = t('cat.tags.modal.title.prefix') + name + t('cat.tags.modal.title.suffix');
   renderCatList();
-  renderTagSidebar();
+  setTimeout(() => renderTagSidebar(), 0);
   showToast(t('toast.cat.name.success'), 'info', 1800);
 }
 
@@ -2627,37 +2896,94 @@ function renderCatTags() {
 function addNewTagToCategory(tag) {
   if (typeof tag !== 'string') tag = prompt(t('toast.cat.tag.add.prompt'));
   if (!tag || !tag.trim()) return;
-  
+
   const cat = categories.find(c => c.id === catTagEditId);
   if (!cat) return;
-  
+
   const trimmedTag = tag.trim();
   if (cat.tags.includes(trimmedTag)) {
     showToast(t('toast.cat.tag.exists'), 'warn', 1800);
     return;
   }
-  
+
   cat.tags.push(trimmedTag);
   catSave();
-  renderCatTags();
-  renderCatList();
-  renderTagSidebar();
+
+  // 增量追加 — 仅当无搜索关键词或匹配当前搜索时
+  const kw = $('catTagSearch').value.trim().toLowerCase();
+  if (!kw || trimmedTag.toLowerCase().includes(kw)) {
+    appendCatTagElement(trimmedTag);
+  }
+  $('catTagsCount').innerHTML = t('cat.tags.modal.count', {count: cat.tags.length});
+
+  // 延迟重建较重的列表
+  setTimeout(() => {
+    renderCatList();
+    renderTagSidebar();
+  }, 0);
+
   showToast(t('toast.cat.tag.add.success', {tag: trimmedTag}), 'info', 1800);
+}
+
+function appendCatTagElement(tag) {
+  const body = $('catTagsModalBody');
+  let tagsDiv = body.querySelector('.tg-modal-tags');
+  if (!tagsDiv) {
+    body.innerHTML = '';
+    tagsDiv = document.createElement('div');
+    tagsDiv.className = 'tg-modal-tags';
+    body.appendChild(tagsDiv);
+  }
+
+  const el = document.createElement('div');
+  el.className = 'tg-sel-tag';
+  el.style.position = 'relative';
+
+  const label = document.createElement('span');
+  label.className = 'tg-sel-tag-cn';
+  label.textContent = tag;
+
+  const deleteBtn = document.createElement('span');
+  deleteBtn.className = 'ctag-del';
+  deleteBtn.style.position = 'absolute';
+  deleteBtn.style.top = '2px';
+  deleteBtn.style.right = '2px';
+  deleteBtn.style.fontSize = '10px';
+  deleteBtn.style.padding = '0 4px';
+  deleteBtn.textContent = '×';
+  deleteBtn.addEventListener('click', (event) => deleteCatTag(tag, event));
+
+  el.appendChild(label);
+  el.appendChild(deleteBtn);
+  tagsDiv.appendChild(el);
 }
 
 async function deleteCatTag(tag, event) {
   if (event) event.stopPropagation();
-  
+
   const cat = categories.find(c => c.id === catTagEditId);
   if (!cat) return;
-  
+
   if (!await showConfirm(t('toast.cat.tag.delete.confirm', {tag}))) return;
-  
+
   cat.tags = cat.tags.filter(tagItem => tagItem !== tag);
   catSave();
-  renderCatTags();
-  renderCatList();
-  renderTagSidebar();
+
+  // 增量更新 — 仅移除该标签元素，避免重建整个列表
+  const body = $('catTagsModalBody');
+  const tagEls = body.querySelectorAll('.tg-sel-tag');
+  for (const el of tagEls) {
+    const label = el.querySelector('.tg-sel-tag-cn');
+    if (label && label.textContent === tag) { el.remove(); break; }
+  }
+  $('catTagsCount').innerHTML = t('cat.tags.modal.count', {count: cat.tags.length});
+
+  // 延迟重建较重的列表（栏目管理列表 + 侧边栏）
+  setTimeout(() => {
+    renderCatList();
+    renderTagSidebar();
+  }, 0);
+
   showToast(t('toast.cat.tag.delete.success', {tag}), 'info', 1500);
 }
 </script>
