@@ -511,8 +511,35 @@ function scheduleRedraw() {
   state.redrawPending = true;
   requestAnimationFrame(() => {
     state.redrawPending = false;
+    refitBoxToAspect();
     redraw();
   });
+}
+
+// 按定义尺寸输出/自由变换模式下，裁切框必须始终保持目标宽高比。
+// 参考线、图片边界等钳制可能会单独压缩某一边导致比例跑偏，
+// 这里把框重新校正为目标比例，保证导出时不会把画面拉伸变形。
+function refitBoxToAspect() {
+  if (!state.currentBitmap || state.doodleMode) return;
+  if (!state.freeTransform && !state.useActualSize) return;
+  const asp = aspect();
+  if (!Number.isFinite(asp) || asp <= 0) return;
+  const w = state.crop.x2 - state.crop.x1;
+  const h = state.crop.y2 - state.crop.y1;
+  if (w < 1 || h < 1) return;
+  if (Math.abs(w / h - asp) <= 0.001) return;
+  const cx = (state.crop.x1 + state.crop.x2) / 2;
+  const cy = (state.crop.y1 + state.crop.y2) / 2;
+  let hw;
+  let hh;
+  if (w / h > asp) {
+    hh = h / 2;
+    hw = hh * asp;
+  } else {
+    hw = w / 2;
+    hh = hw / asp;
+  }
+  state.crop = { x1: cx - hw, y1: cy - hh, x2: cx + hw, y2: cy + hh };
 }
 
 function applySizeInputs() {
@@ -2130,6 +2157,7 @@ async function saveCanvasAs(outCanvas, filename, subfolder = null) {
 
 async function saveCrop() {
   if (!state.currentBitmap || !state.currentImage) return;
+  refitBoxToAspect();
 
   // 涂鸦模式：按"输出"选项保存 涂鸦图片 / 蒙版 / 图片+蒙版
   if (state.doodleMode) {
