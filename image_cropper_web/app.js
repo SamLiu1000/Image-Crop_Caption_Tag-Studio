@@ -68,7 +68,7 @@ const I18N = {
     cropInfoTitle: '裁切信息',
     cropInfoWaiting: '等待加载图片',
     tipsTitle: '操作提示',
-    tipsText: '裁切框模式：\n• 拖动框内移动裁切框\n• 拖动边或角调整裁切框\n• Ctrl + 拖动可锁定比例\n• 滚轮缩放裁切框\n• 拖动底部缩放条调整预览缩放（双击恢复 100%）\n• 图片放大超出画布时，拖动遮罩区域平移取景\n\n参考线：\n• 点击"竖边界 / 横边界"添加参考线\n• 拖动参考线调整位置\n• 右键点击参考线可删除\n• 裁切框不会越过参考线\n• 参考线会保留到切换后的图片\n\n图片自由变换模式：\n• 裁切框可自由拖动、拉伸，与普通模式一致\n• 框外拖动图片移动取景\n• Shift + 滚轮旋转图片\n• 拖动底部缩放条缩放图片（双击恢复 100%）\n• 导出结果与框内内容保持一致',
+    tipsText: '裁切框模式：\n• 拖动框内移动裁切框\n• 拖动边或角调整裁切框\n• Ctrl + 拖动可锁定比例\n• 滚轮缩放裁切框\n• 拖动底部缩放条调整预览缩放（双击恢复 100%）\n• 图片放大超出画布时，拖动遮罩区域平移取景\n\n快捷键：\n• WASD 切换上一张 / 下一张\n• 方向键微调裁切框位置\n• R 交换宽高\n• Q 勾选固定导出尺寸\n• E 保存\n\n参考线：\n• 点击"竖边界 / 横边界"添加参考线\n• 拖动参考线调整位置\n• 右键点击参考线可删除\n• 裁切框不会越过参考线\n• 参考线会保留到切换后的图片\n\n图片自由变换模式：\n• 裁切框可自由拖动、拉伸，与普通模式一致\n• 框外拖动图片移动取景\n• Shift + 滚轮旋转图片\n• 拖动底部缩放条缩放图片（双击恢复 100%）\n• 导出结果与框内内容保持一致',
     zoomInLabel: '放大',
     zoomResetLabel: '重置缩放',
     zoomOutLabel: '缩小',
@@ -138,6 +138,7 @@ const I18N = {
     addVLineTitle: '竖边界',
     addHLineTitle: '横边界',
     clearGuidesTitle: '清除所有参考线',
+    githubLinkTitle: 'GitHub 项目主页',
     guideAdded: '已添加参考线',
     guideDeleted: '已删除参考线',
     guidesCleared: '已清除参考线',
@@ -179,7 +180,7 @@ const I18N = {
     cropInfoTitle: 'Crop Info',
     cropInfoWaiting: 'Waiting for image',
     tipsTitle: 'Tips',
-    tipsText: 'Crop box mode:\n• Drag inside the box to move it\n• Drag edges or corners to resize it\n• Hold Ctrl while dragging to lock aspect ratio\n• Use the mouse wheel to scale the crop box\n• Drag the bottom zoom slider to adjust preview zoom (double-click to reset to 100%)\n• When zoomed beyond the canvas, drag the masked area to pan the view\n\nGuides:\n• Click "Vertical / Horizontal Boundary" to place a guide\n• Drag a guide to move it\n• Right-click a guide to remove it\n• The crop box will not cross guide lines\n• Guides persist when switching images\n\nFree transform mode:\n• The crop box can be freely dragged and resized, same as crop mode\n• Drag outside the box to move the image\n• Shift + mouse wheel rotates the image\n• Drag the bottom zoom slider to scale the image (double-click to reset to 100%)\n• Exported output matches the framed content',
+    tipsText: 'Crop box mode:\n• Drag inside the box to move it\n• Drag edges or corners to resize it\n• Hold Ctrl while dragging to lock aspect ratio\n• Use the mouse wheel to scale the crop box\n• Drag the bottom zoom slider to adjust preview zoom (double-click to reset to 100%)\n• When zoomed beyond the canvas, drag the masked area to pan the view\n\nShortcuts:\n• WASD to switch previous / next image\n• Arrow keys to nudge the crop box\n• R to swap width / height\n• Q to toggle fixed output size\n• E to save\n\nGuides:\n• Click "Vertical / Horizontal Boundary" to place a guide\n• Drag a guide to move it\n• Right-click a guide to remove it\n• The crop box will not cross guide lines\n• Guides persist when switching images\n\nFree transform mode:\n• The crop box can be freely dragged and resized, same as crop mode\n• Drag outside the box to move the image\n• Shift + mouse wheel rotates the image\n• Drag the bottom zoom slider to scale the image (double-click to reset to 100%)\n• Exported output matches the framed content',
     zoomInLabel: 'Zoom in',
     zoomResetLabel: 'Reset zoom',
     zoomOutLabel: 'Zoom out',
@@ -249,6 +250,7 @@ const I18N = {
     addVLineTitle: 'Vertical boundary',
     addHLineTitle: 'Horizontal boundary',
     clearGuidesTitle: 'Clear all guides',
+    githubLinkTitle: 'GitHub project page',
     guideAdded: 'Guide added',
     guideDeleted: 'Guide removed',
     guidesCleared: 'Guides cleared',
@@ -303,6 +305,7 @@ const els = {
   addVLineBtn: document.getElementById('addVLineBtn'),
   addHLineBtn: document.getElementById('addHLineBtn'),
   clearGuidesBtn: document.getElementById('clearGuidesBtn'),
+  githubLink: document.getElementById('githubLink'),
 };
 
 const ctx = els.canvas.getContext('2d');
@@ -377,6 +380,8 @@ function applyI18n() {
   els.addHLineBtn.setAttribute('title', t('addHLineTitle'));
   els.clearGuidesBtn.setAttribute('aria-label', t('clearGuidesTitle'));
   els.clearGuidesBtn.setAttribute('title', t('clearGuidesTitle'));
+  els.githubLink.setAttribute('aria-label', t('githubLinkTitle'));
+  els.githubLink.setAttribute('title', t('githubLinkTitle'));
   els.imageScaleValue.setAttribute('title', t('zoomResetHint'));
   els.tipsText.textContent = t('tipsText');
 
@@ -2367,13 +2372,34 @@ function bindEvents() {
     }
   });
 
-  // 双击缩放条或点击右侧倍率文字，恢复 100%
+  // 双击缩放条或点击右侧倍率文字，恢复 100% 并让图片居中
   const resetZoom = () => {
     if (!state.currentBitmap) return;
     if (state.freeTransform) {
       state.imageUserScale = 1;
+      state.imageTx = 0;
+      state.imageTy = 0;
+      state.previewZoom = 1;
+      fitImageToCanvas(true);
     } else {
-      setPreviewZoom(1);
+      // 恢复 100% 并重新居中图片（裁切框跟随图片移动，保持与图片内容的相对位置不变）
+      state.previewZoom = 1;
+      const { width: cw, height: ch } = getCanvasSize();
+      const baseScale = Math.min((cw * 0.9) / state.currentBitmap.width, (ch * 0.9) / state.currentBitmap.height);
+      const newScale = Math.max(0.02, baseScale);
+      const dispW = state.currentBitmap.width * newScale;
+      const dispH = state.currentBitmap.height * newScale;
+      const newX = (cw - dispW) / 2;
+      const newY = (ch - dispH) / 2;
+      const dx = newX - state.basePreviewOffset.x;
+      const dy = newY - state.basePreviewOffset.y;
+      state.basePreviewScale = newScale;
+      state.basePreviewOffset = { x: newX, y: newY };
+      state.crop.x1 += dx;
+      state.crop.x2 += dx;
+      state.crop.y1 += dy;
+      state.crop.y2 += dy;
+      constrainBox();
     }
     syncScaleSlider();
     scheduleRedraw();
@@ -2470,6 +2496,15 @@ function bindEvents() {
       const key = event.key.toLowerCase();
       if (key === 'w' || key === 'a') els.prevBtn.click();
       if (key === 's' || key === 'd') els.nextBtn.click();
+      // R/Q/E：交换宽高 / 勾选固定导出尺寸 / 保存（一次性操作，长按不重复）
+      if (!event.repeat) {
+        if (key === 'e') {
+          saveCrop();
+        } else if (!state.doodleMode) {
+          if (key === 'r') els.swapSizeBtn.click();
+          else if (key === 'q') els.fixedOutputSizeCheck.click();
+        }
+      }
     }
 
     // 按住空格：涂鸦模式下平移取景

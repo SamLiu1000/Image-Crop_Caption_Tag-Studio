@@ -388,6 +388,37 @@ input[type="color"] {
   box-shadow: none;
 }
 
+/* GitHub 项目链接（工具栏最底部） */
+.gh-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-top: auto;
+  padding: 0;
+  border-radius: 10px;
+  color: var(--text-dim);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+}
+
+.gh-link svg {
+  width: 18px;
+  height: 18px;
+}
+
+.gh-link:hover {
+  background: var(--panel-2);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+
+.gh-link:active {
+  transform: scale(0.9);
+}
+
 .canvas-area {
   display: flex;
   flex-direction: column;
