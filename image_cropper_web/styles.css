@@ -15,6 +15,8 @@
   --input-bg: #fff;
   --input-color: #1f2937;
   --btn-text: #fff;
+  --guide: #f59e0b;
+  --guide-soft: rgba(245, 158, 11, 0.16);
 }
 [data-theme="dark"] {
   --bg: #0d0f14;
@@ -33,6 +35,8 @@
   --input-bg: #111520;
   --input-color: #c8cdd8;
   --btn-text: #0d0f14;
+  --guide: #fbbf24;
+  --guide-soft: rgba(245, 158, 11, 0.2);
 }
 
 * {
@@ -202,6 +206,13 @@ input[type="number"] {
   transform: translateY(-1px);
 }
 
+.btn:disabled,
+.icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .btn.primary:hover {
   background: var(--accent-hover);
 }
@@ -281,7 +292,9 @@ input[type="color"] {
 }
 
 .preset-main.active {
-  background: #bfdbfe;
+  background: var(--accent);
+  color: var(--btn-text);
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.25);
 }
 
 .preset-remove {
@@ -289,7 +302,7 @@ input[type="color"] {
   min-width: 32px;
   padding: 8px 0;
   font-size: 12px;
-  background: #f8fafc;
+  background: var(--panel-2);
   color: var(--text-dim);
 }
 
@@ -322,6 +335,59 @@ input[type="color"] {
   align-items: center;
 }
 
+.tool-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  width: 100%;
+  padding: 7px 5px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+/* 参考线工具按钮（纯图形按钮） */
+.guide-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+}
+
+.guide-btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+.guide-btn:hover {
+  background: var(--guide-soft);
+  color: var(--guide);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.18);
+}
+
+.guide-btn:active {
+  transform: scale(0.9);
+}
+
+.guide-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  background: transparent;
+  color: var(--text-dim);
+  box-shadow: none;
+}
+
 .canvas-area {
   display: flex;
   flex-direction: column;
@@ -337,13 +403,14 @@ input[type="color"] {
   min-width: 0;
   min-height: 0;
   display: block;
-  border-radius: 14px;
+  /* 无圆角：圆角会裁掉贴边的裁切框角落 */
   background: var(--canvas);
 }
 
 .image-scale-bar {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   padding: 6px 10px;
   background: var(--panel-2);
@@ -371,11 +438,22 @@ input[type="color"] {
   white-space: nowrap;
   min-width: 44px;
   text-align: right;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 8px;
+  user-select: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.scale-bar-value:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 #imageScaleSlider {
-  flex: 1;
-  min-width: 0;
+  flex: 0 1 240px;
+  width: 240px;
+  min-width: 80px;
   height: 4px;
   appearance: none;
   -webkit-appearance: none;
@@ -495,6 +573,11 @@ input[type="color"] {
   .canvas-toolbar {
     flex-direction: row;
     justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .canvas-toolbar .tool-group {
+    flex-direction: row;
   }
 }
 
@@ -520,6 +603,16 @@ input[type="color"] {
 
 #doodlePanel {
   overflow: visible;
+}
+
+.doodle-output {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+
+.doodle-output .check-row {
+  margin: 6px 0;
 }
 
 #brushSizeSlider {

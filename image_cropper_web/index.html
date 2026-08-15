@@ -46,7 +46,7 @@
             <button id="swapSizeBtn" class="btn small" type="button" data-i18n="swapSizeBtn">交换宽高</button>
             <label class="check-row">
               <input id="actualSizeCheck" type="checkbox" checked />
-              <span data-i18n="actualSizeLabel">按实际尺寸预览</span>
+              <span data-i18n="actualSizeLabel">按定义尺寸输出</span>
             </label>
           </div>
           <label class="check-row">
@@ -97,12 +97,34 @@
             </label>
             <span id="brushSizeValue" class="brush-size-value">5px</span>
           </div>
+          <div class="field-row">
+            <label>
+              <span data-i18n="brushOpacityLabel">画笔透明度（仅用于预览）</span>
+              <input id="brushOpacitySlider" type="range" min="5" max="100" value="100" step="1" />
+            </label>
+            <span id="brushOpacityValue" class="brush-size-value">100%</span>
+          </div>
           <div class="color-palette" id="colorPalette"></div>
           <label class="color-field" style="margin-top:8px;">
             <span data-i18n="customColorLabel">自定义</span>
             <input id="doodleColorInput" type="color" value="#ff0000" />
           </label>
           <button id="undoStrokeBtn" class="btn small" type="button" data-i18n="undoStrokeBtn" style="margin-top:8px;width:100%;">撤销上一笔</button>
+          <div class="doodle-output">
+            <p class="hint" style="margin:12px 0 6px;" data-i18n="doodleOutputTitle">输出</p>
+            <label class="check-row">
+              <input type="radio" name="doodleOutput" value="image" checked />
+              <span data-i18n="doodleOutImage">涂鸦图片</span>
+            </label>
+            <label class="check-row">
+              <input type="radio" name="doodleOutput" value="mask" />
+              <span data-i18n="doodleOutMask">蒙版</span>
+            </label>
+            <label class="check-row">
+              <input type="radio" name="doodleOutput" value="both" />
+              <span data-i18n="doodleOutBoth">涂鸦图片+蒙版</span>
+            </label>
+          </div>
         </section>
 
         <section class="card">
@@ -133,9 +155,24 @@
 
       <section class="canvas-panel">
         <div class="canvas-toolbar">
-          <button id="zoomInBtn" class="icon-btn" type="button" aria-label="放大" title="放大">⊕</button>
-          <button id="zoomResetBtn" class="icon-btn" type="button" aria-label="重置缩放" title="重置缩放">○</button>
-          <button id="zoomOutBtn" class="icon-btn" type="button" aria-label="缩小" title="缩小">⊖</button>
+          <div class="tool-group">
+            <button id="addVLineBtn" class="guide-btn" type="button" aria-label="竖边界" title="竖边界">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="12" y1="3.5" x2="12" y2="20.5" stroke-dasharray="3 2.5" />
+              </svg>
+            </button>
+            <button id="addHLineBtn" class="guide-btn" type="button" aria-label="横边界" title="横边界">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="3.5" y1="12" x2="20.5" y2="12" stroke-dasharray="3 2.5" />
+              </svg>
+            </button>
+            <button id="clearGuidesBtn" class="guide-btn" type="button" aria-label="清除参考线" title="清除参考线">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="6" y1="6" x2="18" y2="18" />
+                <line x1="18" y1="6" x2="6" y2="18" />
+              </svg>
+            </button>
+          </div>
         </div>
         <div class="canvas-area">
           <canvas id="previewCanvas"></canvas>
@@ -144,7 +181,7 @@
             <input id="imageScaleSlider" type="range" min="0" max="1000" step="1" value="500"
               aria-label="图片缩放" title="图片缩放" />
             <span class="scale-bar-label" id="imageScaleMaxLabel">20×</span>
-            <span class="scale-bar-value" id="imageScaleValue">1.00×</span>
+            <span class="scale-bar-value" id="imageScaleValue" title="点击恢复 100%">1.00×</span>
           </div>
         </div>
       </section>
