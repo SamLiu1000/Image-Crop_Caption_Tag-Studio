@@ -79,9 +79,9 @@ const I18N = {
     folderLabel: '图片文件夹',
     folderPlaceholder: '使用浏览器目录选择器选择图片文件夹',
     chooseFolderBtn: '选择目录',
-    recursiveLabel: '递归扫描子目录中的图片',
-    skipExistingLabel: '跳过已存在同名 `.txt` 描述文件的图片',
-    stripThinkingLabel: '自动移除 `<think>...</think>` 思考内容',
+    recursiveLabel: '递归子目录',
+    skipExistingLabel: '跳过已有 .txt',
+    stripThinkingLabel: '去除思考内容',
     statSelected: '已选图片',
     statProcessed: '已完成',
     statSkipped: '已跳过',
@@ -91,10 +91,8 @@ const I18N = {
     clearPromptsBtn: '清空',
     systemPromptPlaceholder: '系统提示词',
     userPromptPlaceholder: '例如：Describe this image in one detailed English paragraph。',
-    heroEyebrow: '批量处理 / 图像描述',
-    heroTitle: '简洁高效的图片描述工作台',
-    heroDesc: '选择图片目录、连接模型并批量生成描述文本，过程清晰、状态直观，适合持续处理本地任务。',
     startBtn: '开始生成',
+    generateCurrentBtn: '单图生成（文件夹）',
     stopBtn: '停止任务',
     prependBtn: '生成（前置）',
     appendBtn: '生成（追加）',
@@ -110,9 +108,12 @@ const I18N = {
     progressLabel: '进度',
     outputTitle: '结果与日志',
     copyCaptionBtn: '复制结果',
+    clearResultsBtn: '清除生成结果',
     clearLogBtn: '清空日志',
-    resultLabel: '当前生成结果',
-    resultPlaceholder: '当前图片的描述结果会显示在这里',
+    resultLabel: '生成结果（图片 + 字幕，点选后复制）',
+    resultsEmptyHint: '生成结果将以图片 + 字幕的形式显示在这里，最新在最上方；点选条目后点击“复制结果”可单独复制该条。',
+    resultsCleared: '已清除生成结果。',
+    noResultToClear: '当前没有可清除的生成结果。',
     runtimeLogLabel: '运行日志',
     runtimeIdle: '待命中',
     runtimeRunning: '运行中',
@@ -154,8 +155,11 @@ const I18N = {
     taskCompleted: '所有任务处理完成。',
     taskException: '任务异常：{error}',
     stopRequested: '已请求停止，当前图片处理完成后结束。',
+    taskStarted: '开始新的生成任务。',
+    dropRejectedWhileRunning: '任务运行中，请等待完成或先停止任务，再拖入新图片。',
     noResultToCopy: '当前没有可复制的结果。',
-    resultCopied: '当前结果已复制到剪贴板。',
+    resultCopied: '已复制选中的结果到剪贴板。',
+    allResultsCopied: '已复制全部 {count} 条结果（每条一行）。',
     copyFailed: '复制失败，浏览器可能拒绝了剪贴板访问。',
     logCleared: '日志已清空。',
     directoryRescanned: '已重新扫描目录，当前图片数量：{count}',
@@ -200,9 +204,9 @@ const I18N = {
     folderLabel: 'Image Folder',
     folderPlaceholder: 'Use the browser directory picker to select an image folder',
     chooseFolderBtn: 'Choose Folder',
-    recursiveLabel: 'Scan images in subfolders recursively',
-    skipExistingLabel: 'Skip images that already have a matching `.txt` caption file',
-    stripThinkingLabel: 'Automatically remove `<think>...</think>` content',
+    recursiveLabel: 'Recursive subfolders',
+    skipExistingLabel: 'Skip existing .txt',
+    stripThinkingLabel: 'Strip thinking',
     statSelected: 'Selected',
     statProcessed: 'Processed',
     statSkipped: 'Skipped',
@@ -212,10 +216,8 @@ const I18N = {
     clearPromptsBtn: 'Clear',
     systemPromptPlaceholder: 'System prompt',
     userPromptPlaceholder: 'Example: Describe this image in one detailed English paragraph.',
-    heroEyebrow: 'Batch Processing / Image Captioning',
-    heroTitle: 'A clean and efficient image caption workspace',
-    heroDesc: 'Pick an image directory, connect a model, and generate captions in batch with clear progress and intuitive status updates for continuous local workflows.',
     startBtn: 'Start Generation',
+    generateCurrentBtn: 'Generate Current (Folder)',
     stopBtn: 'Stop Task',
     prependBtn: 'Generate (Prepend)',
     appendBtn: 'Generate (Append)',
@@ -231,9 +233,13 @@ const I18N = {
     progressLabel: 'Progress',
     outputTitle: 'Results & Logs',
     copyCaptionBtn: 'Copy Result',
+    clearResultsBtn: 'Clear Results',
     clearLogBtn: 'Clear Log',
-    resultLabel: 'Current Result',
-    resultPlaceholder: 'The generated caption for the current image will appear here',
+    resultLabel: 'Results (Image + Caption, click to select)',
+    resultsEmptyHint: 'Results appear here as image + caption pairs, newest on top. Click an entry, then click "Copy Result" to copy that one.',
+    resultsCleared: 'Generated results cleared.',
+    noResultToClear: 'There are no generated results to clear yet.',
+    allResultsCopied: 'Copied all {count} result(s), one per line.',
     runtimeLogLabel: 'Runtime Log',
     runtimeIdle: 'Idle',
     runtimeRunning: 'Running',
@@ -275,8 +281,10 @@ const I18N = {
     taskCompleted: 'All tasks have been completed.',
     taskException: 'Task exception: {error}',
     stopRequested: 'Stop requested. The task will end after the current image finishes processing.',
+    taskStarted: 'Starting a new generation task.',
+    dropRejectedWhileRunning: 'A task is running. Wait for it to finish or stop it before dragging in a new image.',
     noResultToCopy: 'There is no result to copy right now.',
-    resultCopied: 'The current result has been copied to the clipboard.',
+    resultCopied: 'The selected result has been copied to the clipboard.',
     copyFailed: 'Copy failed. The browser may have blocked clipboard access.',
     logCleared: 'Log cleared.',
     directoryRescanned: 'Directory rescanned. Current image count: {count}',
@@ -314,6 +322,7 @@ const els = {
   systemPromptInput: document.getElementById('systemPromptInput'),
   userPromptInput: document.getElementById('userPromptInput'),
   startBtn: document.getElementById('startBtn'),
+  generateCurrentBtn: document.getElementById('generateCurrentBtn'),
   prependBtn: document.getElementById('prependBtn'),
   appendBtn: document.getElementById('appendBtn'),
   stopBtn: document.getElementById('stopBtn'),
@@ -323,11 +332,13 @@ const els = {
   previewStage: document.getElementById('previewStage'),
   previewImage: document.getElementById('previewImage'),
   previewPlaceholder: document.getElementById('previewPlaceholder'),
+  thumbStrip: document.getElementById('thumbStrip'),
   currentFileText: document.getElementById('currentFileText'),
   progressText: document.getElementById('progressText'),
   copyCaptionBtn: document.getElementById('copyCaptionBtn'),
+  clearResultsBtn: document.getElementById('clearResultsBtn'),
   clearLogBtn: document.getElementById('clearLogBtn'),
-  resultOutput: document.getElementById('resultOutput'),
+  resultList: document.getElementById('resultList'),
   runtimeStatusText: document.getElementById('runtimeStatusText'),
   logOutput: document.getElementById('logOutput'),
 };
@@ -346,6 +357,10 @@ const state = {
   connectionBadgeType: 'idle',
   runtimeStatusKey: 'runtimeIdle',
   lastLogLines: [],
+  results: [],
+  selectedResultId: null,
+  resultSeq: 0,
+  thumbToken: 0,
   presets: [],
   activePresetName: '',
   stats: {
@@ -371,6 +386,87 @@ function renderLogs() {
   els.logOutput.textContent = state.lastLogLines.map(formatLogEntry).join('\n');
 }
 
+function buildResultItem(entry) {
+  const item = document.createElement('div');
+  item.className = 'result-item';
+  item.dataset.resultId = String(entry.id);
+
+  const thumb = document.createElement('img');
+  if (entry.thumbUrl) {
+    thumb.src = entry.thumbUrl;
+  } else {
+    thumb.className = 'result-thumb-missing';
+  }
+  thumb.alt = entry.name;
+
+  const textColumn = document.createElement('div');
+  textColumn.className = 'result-text';
+
+  const fileName = document.createElement('div');
+  fileName.className = 'result-file-name';
+  fileName.textContent = entry.name;
+
+  const caption = document.createElement('div');
+  caption.className = 'result-caption';
+  caption.textContent = entry.caption;
+
+  textColumn.appendChild(fileName);
+  textColumn.appendChild(caption);
+  item.appendChild(thumb);
+  item.appendChild(textColumn);
+
+  item.addEventListener('click', () => {
+    state.selectedResultId = state.selectedResultId === entry.id ? null : entry.id;
+    updateResultSelection();
+  });
+  return item;
+}
+
+function updateResultSelection() {
+  for (const node of els.resultList.querySelectorAll('.result-item')) {
+    node.classList.toggle('selected', Number(node.dataset.resultId) === state.selectedResultId);
+  }
+}
+
+function appendResultItem(entry) {
+  const list = els.resultList;
+  const placeholder = list.querySelector('.result-empty');
+  if (placeholder) placeholder.remove();
+  const nearTop = list.scrollTop < 80;
+  const item = buildResultItem(entry);
+  list.prepend(item); // 最新的在最上方
+  if (nearTop) {
+    list.scrollTop = 0;
+  } else {
+    // 用户正在下方查看旧结果时，补偿新条目占用的空间，保持视口不动（列表 gap 为 10px）
+    list.scrollTop += item.offsetHeight + 10;
+  }
+  state.selectedResultId = entry.id;
+  updateResultSelection();
+}
+
+function renderResults() {
+  els.resultList.innerHTML = '';
+  if (!state.results.length) {
+    const hint = document.createElement('p');
+    hint.className = 'result-empty';
+    hint.textContent = t('resultsEmptyHint');
+    els.resultList.appendChild(hint);
+    return;
+  }
+  for (let i = state.results.length - 1; i >= 0; i -= 1) {
+    els.resultList.appendChild(buildResultItem(state.results[i]));
+  }
+  els.resultList.scrollTop = 0;
+}
+
+function addResultEntry(name, caption, thumbUrl) {
+  state.resultSeq += 1;
+  const entry = { id: state.resultSeq, name, caption, thumbUrl };
+  state.results.push(entry);
+  appendResultItem(entry);
+}
+
 function applyI18n() {
   document.documentElement.lang = state.language === 'zh' ? 'zh-CN' : 'en';
   document.title = t('pageTitle');
@@ -384,7 +480,6 @@ function applyI18n() {
   els.folderPathInput.placeholder = t('folderPlaceholder');
   els.systemPromptInput.placeholder = t('systemPromptPlaceholder');
   els.userPromptInput.placeholder = t('userPromptPlaceholder');
-  els.resultOutput.placeholder = t('resultPlaceholder');
   els.previewImage.alt = t('previewImageAlt');
   updatePresetSelectOptions();
 
@@ -398,6 +493,7 @@ function applyI18n() {
   }
 
   renderLogs();
+  renderResults();
 }
 
 function getConfig() {
@@ -798,6 +894,11 @@ async function loadSingleFile(file) {
     return;
   }
 
+  if (state.isRunning) {
+    log('dropRejectedWhileRunning');
+    return;
+  }
+
   state.singleFileMode = true;
   state.singleFileSource = file;
   state.directoryHandle = null;
@@ -808,11 +909,10 @@ async function loadSingleFile(file) {
   state.isRunning = false;
   state.stopRequested = false;
   resetCounters();
-  els.resultOutput.value = '';
-  els.startBtn.disabled = false;
-  els.stopBtn.disabled = true;
+  setTaskButtonsDisabled(false);
   setRuntimeStatus('runtimeIdle');
   setConnectionBadgeByKey('idle');
+  renderThumbStrip();
   await renderPreview();
 }
 
@@ -838,6 +938,7 @@ async function chooseFolder() {
     state.currentIndex = state.files.length ? 0 : -1;
     resetCounters();
     syncStats();
+    renderThumbStrip();
     renderPreview();
     log('directoryLoaded', { name: state.directoryLabel, count: state.files.length });
   } catch (error) {
@@ -855,6 +956,76 @@ async function ensureDirectoryPermission(handle, mode = 'readwrite') {
   return false;
 }
 
+function buildThumbImage(thumbUrl, name) {
+  const img = document.createElement('img');
+  img.src = thumbUrl;
+  img.alt = name;
+  return img;
+}
+
+function renderThumbStrip() {
+  state.thumbToken += 1;
+  els.thumbStrip.innerHTML = '';
+  els.thumbStrip.hidden = !state.files.length;
+  state.files.forEach((item, index) => {
+    const cell = document.createElement('button');
+    cell.type = 'button';
+    cell.className = 'thumb-cell';
+    cell.dataset.index = String(index);
+    cell.title = item.relativePath;
+    if (item.thumbUrl) {
+      cell.appendChild(buildThumbImage(item.thumbUrl, item.name));
+    } else {
+      const pending = document.createElement('span');
+      pending.className = 'thumb-pending';
+      pending.textContent = '…';
+      cell.appendChild(pending);
+    }
+    cell.addEventListener('click', () => {
+      state.currentIndex = index;
+      renderPreview();
+    });
+    els.thumbStrip.appendChild(cell);
+  });
+  updateThumbStripCurrent();
+  generateThumbnailsInBackground();
+}
+
+function updateThumbStripCurrent() {
+  for (const cell of els.thumbStrip.querySelectorAll('.thumb-cell')) {
+    const index = Number(cell.dataset.index);
+    cell.classList.toggle('current', index === state.currentIndex);
+    if (index === state.currentIndex) {
+      cell.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  }
+}
+
+async function generateThumbnailsInBackground() {
+  const token = state.thumbToken;
+  for (let index = 0; index < state.files.length; index += 1) {
+    if (token !== state.thumbToken) return; // 文件列表已更换，中止旧任务
+    const item = state.files[index];
+    if (item.thumbUrl !== undefined) continue;
+    try {
+      const file = await item.handle.getFile();
+      item.thumbUrl = await makeThumbnail(file);
+    } catch {
+      item.thumbUrl = '';
+    }
+    if (token !== state.thumbToken) return;
+    const cell = els.thumbStrip.querySelector(`.thumb-cell[data-index="${index}"]`);
+    if (cell) {
+      const pending = cell.querySelector('.thumb-pending');
+      if (pending) pending.remove();
+      if (item.thumbUrl) {
+        cell.appendChild(buildThumbImage(item.thumbUrl, item.name));
+      }
+    }
+    await sleep(0); // 让出主线程，避免大目录时卡顿
+  }
+}
+
 async function renderPreview() {
   if (state.currentObjectUrl) {
     URL.revokeObjectURL(state.currentObjectUrl);
@@ -864,6 +1035,7 @@ async function renderPreview() {
     els.previewImage.removeAttribute('src');
     els.previewImage.hidden = true;
     els.previewPlaceholder.hidden = false;
+    els.thumbStrip.hidden = true;
     els.currentFileText.textContent = t('currentFileNone');
     els.progressText.textContent = '0 / 0';
     syncStats();
@@ -875,8 +1047,10 @@ async function renderPreview() {
   els.previewImage.src = state.currentObjectUrl;
   els.previewImage.hidden = false;
   els.previewPlaceholder.hidden = true;
+  els.thumbStrip.hidden = false;
   els.currentFileText.textContent = item.relativePath;
   syncStats();
+  updateThumbStripCurrent();
 }
 
 function stripThinking(text) {
@@ -954,6 +1128,19 @@ function loadImage(src) {
 
 async function imageFileToPayloadUrl(file) {
   return compressImage(file);
+}
+
+async function makeThumbnail(file, maxDimension = 160) {
+  const imageUrl = await fileToDataUrl(file);
+  const image = await loadImage(imageUrl);
+  const ratio = Math.min(1, maxDimension / image.width, maxDimension / image.height);
+  const width = Math.max(1, Math.round(image.width * ratio));
+  const height = Math.max(1, Math.round(image.height * ratio));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  canvas.getContext('2d').drawImage(image, 0, 0, width, height);
+  return canvas.toDataURL('image/jpeg', 0.8);
 }
 
 function buildAbortSignal(timeoutSeconds) {
@@ -1106,6 +1293,47 @@ async function readExistingCaption(item) {
   }
 }
 
+function setTaskButtonsDisabled(disabled) {
+  els.startBtn.disabled = disabled;
+  els.generateCurrentBtn.disabled = disabled;
+  els.prependBtn.disabled = disabled;
+  els.appendBtn.disabled = disabled;
+  els.stopBtn.disabled = !disabled;
+}
+
+async function processItem(item, config, combineMode, progressSet) {
+  const progressName = item.relativePath;
+  const file = await item.handle.getFile();
+  log('processingStarted', { name: progressName });
+  const newCaption = await requestCaption(config, item, file);
+  let finalCaption = newCaption;
+  if (combineMode !== 'none' && !state.singleFileMode) {
+    const existing = await readExistingCaption(item);
+    if (existing) {
+      finalCaption = combineMode === 'prepend'
+        ? `${newCaption}, ${existing}`
+        : `${existing}, ${newCaption}`;
+    }
+  }
+  if (!state.singleFileMode) {
+    await writeCaptionFile(item, finalCaption);
+  }
+  let thumbUrl = '';
+  try {
+    thumbUrl = await makeThumbnail(file);
+  } catch {
+    thumbUrl = '';
+  }
+  addResultEntry(progressName, finalCaption, thumbUrl);
+  if (!state.singleFileMode && progressSet) {
+    progressSet.add(progressName);
+    saveProgressRecord(progressSet);
+  }
+  state.stats.processed += 1;
+  syncStats();
+  log('processingFinished', { name: progressName });
+}
+
 async function processAll(combineMode = 'none') {
   if (state.isRunning) return;
 
@@ -1146,12 +1374,16 @@ async function processAll(combineMode = 'none') {
   state.isRunning = true;
   state.stopRequested = false;
   resetCounters();
+  state.lastLogLines = [];
+  log('taskStarted');
+  if (!state.singleFileMode) {
+    state.results = [];
+    state.selectedResultId = null;
+    renderResults();
+  }
   setRuntimeStatus('runtimeRunning');
   setConnectionBadgeByKey('taskRunning');
-  els.startBtn.disabled = true;
-  els.prependBtn.disabled = true;
-  els.appendBtn.disabled = true;
-  els.stopBtn.disabled = false;
+  setTaskButtonsDisabled(true);
 
   const progressSet = state.singleFileMode ? new Set() : loadProgressRecord();
   if (progressSet.size) {
@@ -1185,29 +1417,7 @@ async function processAll(combineMode = 'none') {
       }
 
       try {
-        const file = await item.handle.getFile();
-        log('processingStarted', { name: progressName });
-        const newCaption = await requestCaption(config, item, file);
-        let finalCaption = newCaption;
-        if (combineMode !== 'none' && !state.singleFileMode) {
-          const existing = await readExistingCaption(item);
-          if (existing) {
-            finalCaption = combineMode === 'prepend'
-              ? `${newCaption}, ${existing}`
-              : `${existing}, ${newCaption}`;
-          }
-        }
-        if (!state.singleFileMode) {
-          await writeCaptionFile(item, finalCaption);
-        }
-        els.resultOutput.value = finalCaption;
-        if (!state.singleFileMode) {
-          progressSet.add(progressName);
-          saveProgressRecord(progressSet);
-        }
-        state.stats.processed += 1;
-        syncStats();
-        log('processingFinished', { name: progressName });
+        await processItem(item, config, combineMode, progressSet);
       } catch (error) {
         state.stats.failed += 1;
         syncStats();
@@ -1229,10 +1439,62 @@ async function processAll(combineMode = 'none') {
   } finally {
     state.isRunning = false;
     state.stopRequested = false;
-    els.startBtn.disabled = false;
-    els.prependBtn.disabled = false;
-    els.appendBtn.disabled = false;
-    els.stopBtn.disabled = true;
+    setTaskButtonsDisabled(false);
+    setRuntimeStatus('runtimeIdle');
+  }
+}
+
+async function processCurrent() {
+  if (state.isRunning) return;
+
+  const hasCurrent = state.currentIndex >= 0 && state.currentIndex < state.files.length;
+  if (!hasCurrent) {
+    log('chooseDirectoryFirst');
+    return;
+  }
+
+  if (!state.singleFileMode && !state.directoryHandle) {
+    log('chooseDirectoryFirst');
+    return;
+  }
+
+  if (!state.singleFileMode) {
+    const hasPermission = await ensureDirectoryPermission(state.directoryHandle, 'readwrite');
+    if (!hasPermission) {
+      log('directoryPermissionDenied');
+      return;
+    }
+  }
+
+  const config = getConfig();
+  config.serverUrl = sanitizeBaseUrl(config.serverUrl) || LM_STUDIO_DEFAULT_URL;
+  if (!config.userPrompt) config.userPrompt = DEFAULT_USER_PROMPT;
+  persistCurrentConfig(config, false);
+
+  state.isRunning = true;
+  state.stopRequested = false;
+  state.lastLogLines = [];
+  log('taskStarted');
+  setRuntimeStatus('runtimeRunning');
+  setConnectionBadgeByKey('taskRunning');
+  setTaskButtonsDisabled(true);
+
+  const targetItem = state.files[state.currentIndex];
+  const itemName = targetItem.relativePath;
+  try {
+    await detectModelIfNeeded(config);
+    const progressSet = state.singleFileMode ? null : loadProgressRecord();
+    await processItem(targetItem, config, 'none', progressSet);
+    setConnectionBadgeByKey('taskFinished');
+  } catch (error) {
+    state.stats.failed += 1;
+    syncStats();
+    log('processingFailed', { name: itemName, error: error.message || error });
+    setConnectionBadgeByKey('taskError');
+  } finally {
+    state.isRunning = false;
+    state.stopRequested = false;
+    setTaskButtonsDisabled(false);
     setRuntimeStatus('runtimeIdle');
   }
 }
@@ -1241,25 +1503,47 @@ function stopProcessing() {
   if (!state.isRunning) return;
   state.stopRequested = true;
   state.isRunning = false;
-  els.startBtn.disabled = false;
-  els.prependBtn.disabled = false;
-  els.appendBtn.disabled = false;
-  els.stopBtn.disabled = true;
+  setTaskButtonsDisabled(false);
   log('stopRequested');
 }
 
+async function copyTextToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    log('copyFailed');
+    return false;
+  }
+}
+
 async function copyCurrentCaption() {
-  const text = els.resultOutput.value.trim();
-  if (!text) {
+  const selected = state.results.find((entry) => entry.id === state.selectedResultId);
+  if (selected) {
+    if (await copyTextToClipboard(selected.caption)) {
+      log('resultCopied');
+    }
+    return;
+  }
+  const text = state.results.map((entry) => entry.caption).join('\n');
+  if (!text.trim()) {
     log('noResultToCopy');
     return;
   }
-  try {
-    await navigator.clipboard.writeText(text);
-    log('resultCopied');
-  } catch {
-    log('copyFailed');
+  if (await copyTextToClipboard(text)) {
+    log('allResultsCopied', { count: state.results.length });
   }
+}
+
+function clearResults() {
+  if (!state.results.length) {
+    log('noResultToClear');
+    return;
+  }
+  state.results = [];
+  state.selectedResultId = null;
+  renderResults();
+  log('resultsCleared');
 }
 
 function clearPrompts() {
@@ -1324,6 +1608,7 @@ function bindEvents() {
   });
   els.chooseFolderBtn.addEventListener('click', chooseFolder);
   els.startBtn.addEventListener('click', () => processAll('none'));
+  els.generateCurrentBtn.addEventListener('click', processCurrent);
   els.prependBtn.addEventListener('click', () => processAll('prepend'));
   els.appendBtn.addEventListener('click', () => processAll('append'));
   els.stopBtn.addEventListener('click', stopProcessing);
@@ -1345,6 +1630,7 @@ function bindEvents() {
   els.clearPromptsBtn.addEventListener('click', clearPrompts);
   els.fillDefaultPromptBtn.addEventListener('click', fillDefaultPrompts);
   els.copyCaptionBtn.addEventListener('click', copyCurrentCaption);
+  els.clearResultsBtn.addEventListener('click', clearResults);
   els.clearLogBtn.addEventListener('click', () => {
     state.lastLogLines = [{ time: new Date().toLocaleTimeString(state.language === 'zh' ? 'zh-CN' : 'en-US', { hour12: false }), message: t('logCleared') }];
     renderLogs();
@@ -1369,6 +1655,7 @@ function bindEvents() {
     state.files = await collectImageFiles(state.directoryHandle, els.recursiveCheck.checked);
     state.currentIndex = state.files.length ? 0 : -1;
     resetCounters();
+    renderThumbStrip();
     await renderPreview();
     log('directoryRescanned', { count: state.files.length });
   });
@@ -1379,6 +1666,7 @@ function init() {
   loadConfig();
   resetCounters();
   renderPreview();
+  renderResults();
   bindEvents();
   applyI18n();
   updatePresetSelectOptions();

@@ -94,7 +94,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 .batch-btn{
   padding:6px 11px;background:var(--surface);border:1px solid var(--border);
   border-radius:5px;color:var(--c3);font-family:'IBM Plex Mono',monospace;font-size:10px;
-  letter-spacing:.07em;cursor:pointer;transition:all .15s;display:none;align-items:center;gap:6px;white-space:nowrap
+  letter-spacing:.07em;cursor:pointer;transition:all .15s;display:none;align-items:center;gap:6px;white-space:nowrap;position:relative
 }
 .batch-btn:hover{background:var(--batch-hover-bg);border-color:var(--c3)}
 .batch-btn:disabled{opacity:.4;cursor:default;pointer-events:none}
@@ -151,6 +151,18 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 .big-img-placeholder{font-size:40px;opacity:.2}
 .big-img-hint{font-size:10px;color:var(--muted);letter-spacing:.08em}
 
+/* Big image zoom controls */
+.img-zoom-bar{
+  position:absolute;right:14px;bottom:12px;z-index:10;
+  display:flex;gap:6px;align-items:center
+}
+.img-zoom-btn{
+  padding:3px 10px;background:var(--surface);border:1px solid var(--border);border-radius:5px;
+  color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:9px;cursor:pointer;
+  transition:all .15s;box-shadow:0 2px 8px rgba(0,0,0,.35);white-space:nowrap
+}
+.img-zoom-btn:hover{border-color:var(--c4);color:var(--c4)}
+
 /* Tag editing column */
 .tag-col{
   flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--tag-col-bg)
@@ -170,6 +182,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 .insert-mode-btn:hover{color:var(--text)}
 .insert-mode-btn.active{background:var(--c4);color:var(--white)}
 .insert-mode-btn + .insert-mode-btn{border-left:1px solid var(--border)}
+#ctagSelectToggle.active{background:var(--c5)}
 
 /* Manual input */
 .tag-input-row{display:flex;gap:5px;padding:6px 8px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--tag-input-bg)}
@@ -227,17 +240,36 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 .ctag{
   display:inline-flex;align-items:center;gap:3px;background:var(--ctag-bg);
   border:1px solid var(--ctag-border);border-radius:3px;padding:2px 5px 2px 5px;
-  margin:2px 2px 2px 0;font-size:9px;color:var(--text)
+  margin:2px 2px 2px 0;font-size:9px;color:var(--text);
+  -webkit-user-select:none;user-select:none
 }
 .ctag.highlight{background:var(--added-bg);border-color:var(--added-border);color:var(--added-color)}
-.ctag-text{cursor:text;outline-offset:2px}
+.ctag.selected{background:var(--tg-chip-bg);border-color:var(--c5);color:var(--c5)}
+.ctag.selectable{cursor:pointer}
+.ctag.selectable .ctag-text{cursor:pointer}
+.ctag-text{cursor:default;outline-offset:2px}
 .ctag-text:hover{text-decoration:underline dotted var(--muted);text-underline-offset:2px}
-.ctag-edit-input{
-  background:var(--input-bg);border:1px solid var(--c4);border-radius:3px;
-  color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:9px;
-  padding:1px 4px;outline:none;min-width:60px;max-width:320px;
-  width:auto;flex:0 1 auto;margin:0;box-sizing:border-box
+/* Floating sticky-note tag editor (long-press edit) */
+.tag-edit-pop{
+  position:fixed;z-index:600;width:320px;max-width:92vw;
+  background:var(--modal-bg);border:1px solid var(--c5);border-radius:10px;
+  box-shadow:0 14px 44px rgba(0,0,0,.55);padding:10px
 }
+.tag-edit-area{
+  width:100%;min-height:92px;resize:vertical;background:var(--modal-input-bg);
+  border:1px solid var(--border);border-radius:6px;color:var(--white);
+  font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.6;
+  padding:9px 11px;outline:none;box-sizing:border-box;transition:border-color .15s
+}
+.tag-edit-area:focus{border-color:var(--c5);box-shadow:0 0 0 2px rgba(176,166,204,.15)}
+.tag-edit-pop-foot{display:flex;align-items:center;gap:6px;margin-top:8px}
+.tag-edit-pop-hint{flex:1;font-size:9px;color:var(--muted);letter-spacing:.04em}
+.tag-edit-pop-foot button{
+  padding:4px 12px;border:none;border-radius:4px;color:#fff;font-size:10px;
+  cursor:pointer;font-family:'IBM Plex Mono',monospace;white-space:nowrap
+}
+.tag-edit-pop-foot .ip-confirm{background:var(--c5)}
+.tag-edit-pop-foot .ip-cancel{background:var(--c4)}
 .ctag-del{cursor:pointer;color:var(--muted);font-size:11px;font-weight:700;transition:color .1s;line-height:1}
 .ctag-del:hover{color:var(--danger)}
 .no-tags{font-size:10px;color:var(--muted);font-style:italic;padding:2px 0}
@@ -258,7 +290,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 /* Gallery header */
 .gallery-header{
   padding:9px 16px;border-bottom:1px solid var(--border);
-  display:flex;align-items:center;gap:12px;flex-shrink:0;background:var(--gallery-header-bg)
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;flex-shrink:0;background:var(--gallery-header-bg)
 }
 .gallery-title{font-size:11px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;gap:6px}
 .gallery-title::before{content:'▤';color:var(--c1);font-size:13px}
@@ -271,6 +303,32 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
   padding:3px 6px;outline:none;cursor:pointer
 }
 .rows-select:focus{border-color:var(--c1)}
+
+/* Gallery tag search */
+.gallery-search-wrap{display:flex;align-items:center;flex:1 1 150px;max-width:280px;min-width:130px;position:relative}
+.gallery-search-input{
+  width:100%;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;
+  color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:10px;
+  padding:4px 58px 4px 9px;outline:none;transition:border-color .15s
+}
+.gallery-search-input:focus{border-color:var(--c1)}
+.gallery-search-input::placeholder{color:var(--muted)}
+.gallery-search-clear{
+  position:absolute;right:3px;top:50%;transform:translateY(-50%);
+  background:transparent;border:none;color:var(--muted);font-size:13px;font-weight:700;
+  cursor:pointer;padding:2px 5px;line-height:1;display:none
+}
+.gallery-search-clear:hover{color:var(--danger)}
+
+/* Exact / fuzzy search mode toggle (inside search inputs) */
+.search-mode-toggle{
+  position:absolute;right:4px;top:50%;transform:translateY(-50%);
+  padding:2px 6px;background:var(--surface);border:1px solid var(--border);border-radius:3px;
+  color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:8px;cursor:pointer;
+  transition:all .15s;white-space:nowrap;line-height:1.4
+}
+.search-mode-toggle:hover{border-color:var(--c4);color:var(--c4)}
+.search-mode-toggle.active{background:var(--c4);border-color:var(--c4);color:var(--white)}
 
 /* Tag Groups Bar (Gallery - removed) */
 .tag-groups-bar{
@@ -307,13 +365,13 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
   color:var(--c5);font-family:'IBM Plex Mono',monospace;font-size:9px;
   cursor:pointer;transition:all .15s;letter-spacing:.05em;white-space:nowrap
 }
-.tag-groups-bar-sidebar .tg-add-btn:hover{background:rgba(176,136,249,.1)}
+.tag-groups-bar-sidebar .tg-add-btn:hover{background:rgba(176,166,204,.1)}
 .tag-groups-bar-sidebar .tg-chip{
   display:inline-flex;align-items:center;gap:0;background:var(--tg-chip-bg);
   border:1px solid var(--tg-chip-border);border-radius:5px;overflow:hidden;cursor:pointer;
   transition:all .15s;user-select:none;font-size:9px
 }
-.tag-groups-bar-sidebar .tg-chip:hover{border-color:var(--c5);box-shadow:0 2px 8px rgba(176,136,249,.2)}
+.tag-groups-bar-sidebar .tg-chip:hover{border-color:var(--c5);box-shadow:0 2px 8px rgba(176,166,204,.2)}
 .tag-groups-bar-sidebar .tg-chip-body{display:flex;align-items:center;gap:4px;padding:3px 7px 3px 7px}
 .tag-groups-bar-sidebar .tg-chip-name{font-weight:600;color:var(--c5);white-space:nowrap}
 .tag-groups-bar-sidebar .tg-chip-count{color:var(--muted);font-size:8px}
@@ -334,7 +392,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
   border:1px solid var(--tg-chip-border);border-radius:5px;overflow:hidden;cursor:pointer;
   transition:all .15s;user-select:none
 }
-.tg-chip:hover{border-color:var(--c5);box-shadow:0 2px 8px rgba(176,136,249,.2)}
+.tg-chip:hover{border-color:var(--c5);box-shadow:0 2px 8px rgba(176,166,204,.2)}
 .tg-chip-body{display:flex;align-items:center;gap:5px;padding:3px 8px 3px 8px}
 .tg-chip-name{font-size:10px;font-weight:600;color:var(--c5);letter-spacing:.03em;white-space:nowrap}
 .tg-chip-count{font-size:9px;color:var(--muted)}
@@ -346,14 +404,14 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 .tg-chip-edit:hover{color:var(--c3)}
 .tg-chip-del:hover{color:var(--danger)}
 .tg-chip.applying{border-color:var(--added-color);background:var(--added-bg);animation:tg-flash .5s ease}
-@keyframes tg-flash{0%{box-shadow:0 0 0 0 rgba(92,184,92,.5)}100%{box-shadow:0 0 0 8px rgba(92,184,92,0)}}
+@keyframes tg-flash{0%{box-shadow:0 0 0 0 rgba(163,191,157,.5)}100%{box-shadow:0 0 0 8px rgba(163,191,157,0)}}
 .tg-add-btn{
   flex-shrink:0;display:flex;align-items:center;gap:4px;padding:3px 10px;
   background:transparent;border:1px solid var(--c5);border-radius:4px;
   color:var(--c5);font-family:'IBM Plex Mono',monospace;font-size:10px;
-  cursor:pointer;transition:all .15s;letter-spacing:.05em;white-space:nowrap
+  cursor:pointer;transition:all .15s;letter-spacing:.05em;white-space:nowrap;position:relative
 }
-.tg-add-btn:hover{background:rgba(176,136,249,.1)}
+.tg-add-btn:hover{background:rgba(176,166,204,.1)}
 
 /* Gallery Grid */
 .gallery-grid{
@@ -365,7 +423,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 
 .gallery-row{
   display:flex;align-items:center;gap:10px;
-  padding:6px 12px;border-bottom:1px solid rgba(37,42,53,.6);
+  padding:6px 12px;border-bottom:1px solid rgba(120,112,100,.28);
   cursor:pointer;transition:background .1s;height:92px
 }
 .gallery-row:hover{background:var(--gallery-hover)}
@@ -440,12 +498,12 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 .tag-sidebar-title{font-size:10px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;gap:5px;white-space:nowrap}
 .tag-sidebar-title::before{content:'⊞';color:var(--c5);font-size:11px}
 .tag-sidebar-search-wrap{
-  flex:1;display:flex;align-items:center;min-width:0
+  flex:1;display:flex;align-items:center;min-width:0;position:relative
 }
 .tag-sidebar-search{
   width:100%;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;
   color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:10px;
-  padding:4px 8px;outline:none;transition:border-color .15s
+  padding:4px 44px 4px 8px;outline:none;transition:border-color .15s
 }
 .tag-sidebar-search:focus{border-color:var(--c4)}
 .tag-sidebar-search::placeholder{color:var(--muted)}
@@ -516,6 +574,14 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 .ts-tag-item:active{transform:scale(.95)}
 .ts-tag-item.added{background:var(--added-bg);border-color:var(--added-border);color:var(--added-color)}
 
+/* Sidebar tag inline edit input (long-press rename) — superseded by tag edit modal */
+
+/* Quick-add chip (＋) at the tail of each category's tags */
+.ts-tag-add{position:relative;border-style:dashed;border-color:var(--c3);color:var(--c3);font-weight:600;padding:3px 9px}
+.ts-tag-add:hover{background:var(--batch-hover-bg);border-color:var(--c3);color:var(--c3)}
+.ts-tag-add .inline-input-popup{bottom:auto;top:calc(100% + 4px)}
+.ts-tag-add .inline-input-popup input{width:150px}
+
 /* Gallery Resizer removed */
 
 /* Tag Sidebar Resizer */
@@ -580,6 +646,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 .tg-modal-tags{display:flex;flex-wrap:wrap;gap:6px}
 .tg-sel-tag{display:inline-flex;flex-direction:column;gap:1px;padding:5px 9px;background:var(--tag-bg);border:1px solid var(--border);border-radius:4px;cursor:pointer;transition:all .12s;user-select:none}
 .tg-sel-tag:hover{background:var(--tag-hover);border-color:var(--c5)}
+.tg-sel-tag:active{border-color:var(--c3);background:var(--batch-hover-bg)}
 .tg-sel-tag.selected{background:var(--tg-chip-bg);border-color:var(--c5);box-shadow:0 0 0 1px var(--c5)}
 .tg-sel-tag-cn{font-family:'Noto Serif SC',serif;font-size:11px;color:var(--white)}
 .tg-sel-tag-en{font-size:9px;color:var(--muted);font-family:'IBM Plex Mono',monospace}
@@ -590,8 +657,8 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 .tg-modal-selected-count em{color:var(--c5);font-style:normal;font-weight:600}
 .tg-modal-cancel{padding:6px 14px;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:11px;cursor:pointer;transition:all .15s}
 .tg-modal-cancel:hover{border-color:var(--text);color:var(--text)}
-.tg-modal-save{padding:6px 18px;background:rgba(176,136,249,.15);border:1px solid var(--c5);border-radius:5px;color:var(--c5);font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;letter-spacing:.06em}
-.tg-modal-save:hover{background:rgba(176,136,249,.25)}
+.tg-modal-save{padding:6px 18px;background:rgba(176,166,204,.15);border:1px solid var(--c5);border-radius:5px;color:var(--c5);font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;letter-spacing:.06em}
+.tg-modal-save:hover{background:rgba(176,166,204,.25)}
 .tg-modal-save:disabled{opacity:.35;cursor:default;pointer-events:none}
 .tg-sel-all-btn{padding:3px 10px;background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:9px;cursor:pointer;transition:all .12s;white-space:nowrap}
 .tg-sel-all-btn:hover{border-color:var(--c5);color:var(--c5)}
@@ -668,7 +735,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
   cursor:pointer;padding:3px 10px;border-radius:4px;
   transition:all .15s;font-weight:600;letter-spacing:.05em;white-space:nowrap
 }
-.lang-btn:hover{background:rgba(176,136,249,.1)}
+.lang-btn:hover{background:rgba(176,166,204,.1)}
 .lang-btn.active{color:var(--c4);border-color:var(--c4);background:rgba(78,158,255,.15)}
 </style>
 </head>
@@ -682,7 +749,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
   <div class="panel-header">
     <div class="panel-title" data-i18n="panel.title">图片文件夹</div>
     <button class="import-btn" onclick="importFolder()" data-i18n="import.btn">📂 导入文件夹</button>
-    <button class="batch-btn" id="batchBtn" onclick="batchAddTagsToAll()" data-i18n="batch.btn">⚡ 批量添加标签</button>
+    <button class="batch-btn" id="batchBtn" onclick="showBatchPopup(event)" data-i18n="batch.btn">⚡ 批量添加标签</button>
     <div class="panel-stats" id="panelStats" style="display:none">
       <span data-i18n="panel.stats" data-i18n-params='{"count":"<span class=\"stat-val\" id=\"imgCount\">0</span>"}'>共 <span class="stat-val" id="imgCount">0</span> 张</span>
     </div>
@@ -711,6 +778,11 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
         <div class="big-img-hint" data-i18n="big.img.hint">导入文件夹后显示图片</div>
       </div>
 
+      <!-- Zoom controls -->
+      <div class="img-zoom-bar" id="imgZoomBar" style="display:none">
+        <button type="button" class="img-zoom-btn" id="imgZoomResetBtn" onclick="resetImgZoom()" data-i18n-title="img.zoom.reset.title" title="重置缩放（双击图片也可）">⟲ 100%</button>
+      </div>
+
       <!-- Column resizer -->
       <div class="col-resizer" id="colResizer" title="拖拽调整宽度"></div>
     </div>
@@ -723,6 +795,10 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
           <button type="button" class="insert-mode-btn active" id="insertModeAppend" onclick="setInsertMode('append')" data-i18n="tag.insert.mode.append" data-i18n-title="tag.insert.mode.label" title="追加">追加</button>
           <button type="button" class="insert-mode-btn" id="insertModePrepend" onclick="setInsertMode('prepend')" data-i18n="tag.insert.mode.prepend" data-i18n-title="tag.insert.mode.label" title="前置">前置</button>
         </div>
+        <div class="insert-mode-toggle">
+          <button type="button" class="insert-mode-btn" id="ctagSelectToggle" onclick="toggleCtagSelectMode()" data-i18n="tag.select.mode" data-i18n-title="tag.select.hint" title="点击选择 / 取消选择">选择</button>
+        </div>
+        <button class="tag-add-btn" id="saveGroupBtn" onclick="showSaveGroupPopup(event)" style="display:none;border-color:var(--c5);color:var(--c5);padding:3px 8px;font-size:9px;position:relative">＋ 存为标签组</button>
         <span class="tag-col-filename" id="detailFilename">—</span>
       </div>
 
@@ -782,17 +858,18 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
     </div>
     <div class="tg-actions-row">
       <button class="tg-add-btn" onclick="openTgModal(null)" data-i18n="tg.add.btn">＋ 新建</button>
-      <button class="tg-add-btn" style="border-color:var(--c3);color:var(--c3)" onclick="openCatModal()" data-i18n="tg.cat.btn">⚙ 管理栏目</button>
     </div>
     <div class="tg-chips-wrap" id="tagGroupsList">
       <span style="font-size:9px;color:var(--muted);font-style:italic" data-i18n="tag.groups.empty">暂无标签组</span>
     </div>
   </div>
   <div class="tag-sidebar-header">
+    <button class="ts-action-btn" id="manageCatsBtn" style="border-color:var(--c3);color:var(--c3)" onclick="openCatModal()" data-i18n="tg.cat.btn">⚙ 管理栏目</button>
     <div class="tag-sidebar-title" data-i18n="tag.sidebar.title"></div>
     <div class="tag-sidebar-search-wrap">
       <input class="tag-sidebar-search" id="tagSidebarSearch" type="text"
         data-i18n-placeholder="tag.sidebar.search.placeholder" placeholder="搜索标签…" autocomplete="off" spellcheck="false" oninput="onTagSidebarSearchDebounced()">
+      <button type="button" class="search-mode-toggle" id="tagSidebarSearchModeBtn" onclick="onToggleSidebarSearchMode()"></button>
     </div>
   </div>
   <div class="tag-sidebar-body" id="tagSidebarBody">
@@ -815,6 +892,12 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
   <!-- Gallery header -->
   <div class="gallery-header">
     <div class="gallery-title" data-i18n="gallery.title">图片画廊 Gallery</div>
+    <div class="gallery-search-wrap">
+      <input class="gallery-search-input" id="gallerySearchInput" type="text"
+        data-i18n-placeholder="gallery.search.placeholder" placeholder="搜索标签，筛选图片…" autocomplete="off" spellcheck="false" oninput="onGallerySearchDebounced()">
+      <button type="button" class="search-mode-toggle" id="gallerySearchModeBtn" style="right:26px" onclick="onToggleGallerySearchMode()"></button>
+      <button class="gallery-search-clear" id="gallerySearchClear" type="button" onclick="clearGallerySearch()" data-i18n-title="gallery.search.clear" title="清空">×</button>
+    </div>
     <div class="gallery-stats">
       <div class="gstat"><span data-i18n="gallery.stats.per">每页</span> <select class="rows-select" id="rowsSelect" onchange="onRowsChange()">
         <option value="20">20</option>
@@ -936,6 +1019,17 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
   </div>
 </div>
 
+<!-- Tag Edit Floating Sticky (long-press edit, shared) -->
+<div id="tagEditPop" class="tag-edit-pop" style="display:none">
+  <textarea id="tagEditArea" class="tag-edit-area" maxlength="200" spellcheck="false"
+    onkeydown="event.stopPropagation();if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();closeTagEdit(true)}else if(event.key==='Escape'){event.preventDefault();closeTagEdit(false)}"></textarea>
+  <div class="tag-edit-pop-foot">
+    <span class="tag-edit-pop-hint" data-i18n="tag.edit.pop.hint">Enter 保存 · Esc 取消 · Shift+Enter 换行</span>
+    <button type="button" class="ip-cancel" onclick="closeTagEdit(false)" data-i18n="tg.modal.cancel">取消</button>
+    <button type="button" class="ip-confirm" onclick="closeTagEdit(true)" data-i18n="cat.tags.modal.save.name">保存名称</button>
+  </div>
+</div>
+
 <!-- ═══════════════════ DATA ═══════════════════ -->
 <script>
 // ═══════════════════ SCRIPTS ═══════════════════
@@ -967,7 +1061,6 @@ const I18N = {
     'tag.replace.all.title': '对全部图片执行',
     'tag.delete.all.title': '在全部图片中删除',
     'no.tags': '导入文件夹后选择图片',
-    'kbd.hint': '<span class="kbd">A</span> 上一张 &nbsp; <span class="kbd">D</span> 下一张 &nbsp; <span class="kbd">←</span><span class="kbd">→</span> 同上',
     'suffix.label': '后缀',
     'suffix.input.placeholder': '输入后缀（可留空）…',
     'suffix.preview': '示例：tagname',
@@ -976,6 +1069,15 @@ const I18N = {
     'gallery.stats.per': '每页',
     'gallery.stats.perUnit': '张',
     'gallery.stats.total': '共 {count} 张',
+    'gallery.search.placeholder': '搜索标签，筛选图片…',
+    'gallery.search.noresults': '未找到匹配标签的图片',
+    'gallery.search.clear': '清空',
+    'search.mode.exact': '精确',
+    'search.mode.fuzzy': '模糊',
+    'search.mode.exact.title': '精确匹配：标签需完全一致（点击切换为模糊）',
+    'search.mode.fuzzy.title': '模糊匹配：包含关键词即命中（点击切换为精确）',
+    'img.zoom.reset.title': '重置缩放（双击图片也可）',
+    'kbd.hint': '<span class="kbd">A</span> 上一张 &nbsp; <span class="kbd">D</span> 下一张 &nbsp; <span class="kbd">滚轮</span> 缩放 &nbsp; <span class="kbd">双击</span> 重置',
     'tag.groups.label': '标签组',
     'tag.groups.empty': '暂无标签组',
     'tag.sidebar.title': '快速标签',
@@ -984,6 +1086,10 @@ const I18N = {
     'tag.sidebar.search.noresults': '未找到匹配的标签',
     'tg.add.btn': '＋ 新建',
     'tg.cat.btn': '⚙ 管理栏目',
+    'tag.select.mode': '选择',
+    'tag.select.hint': '点击选择 / 取消选择',
+    'tag.save.group.btn': '＋ 存为标签组',
+    'toast.savegroup.prompt': '请输入标签组名称：',
     'gallery.empty': '点击左侧「导入文件夹」加载图片',
     'tg.modal.title.new': '新建标签组',
     'tg.modal.title.edit': '编辑标签组',
@@ -1018,6 +1124,10 @@ const I18N = {
     'cat.tags.modal.cancel': '关闭',
     'cat.tags.modal.add': '＋ 添加标签',
     'cat.tags.modal.manage': '管理标签',
+    'cat.tags.modal.edit.hint': '长按编辑标签',
+    'tag.sidebar.item.hint': '点击写入 · 长按编辑',
+    'tag.edit.modal.title': '编辑标签',
+    'tag.edit.pop.hint': 'Enter 保存 · Esc 取消 · Shift+Enter 换行',
     'cat.tags.modal.delete': '删除',
     'toast.import.warn': '⚠ 浏览器不支持 File System Access API，请使用 Chrome/Edge 110+',
     'toast.import.success': '✓ 已加载 {count} 张图片',
@@ -1042,7 +1152,7 @@ const I18N = {
     'toast.tag.copy': '✓ 已复制：',
     'toast.tag.edit.success': '✓ 已修改 tag',
     'toast.tag.edit.empty': '⚠ 内容为空，未修改',
-    'toast.tag.edit.hint': '点击编辑，× 删除',
+    'toast.tag.edit.hint': '长按编辑，× 删除',
     'toast.batch.warn': '⚠ 请先导入文件夹',
     'toast.batch.prompt': '请输入要添加到【全部图片】的 tag（多个用英文逗号分隔）：',
     'toast.batch.noinput': '⚠ 未输入任何 tag',
@@ -1098,7 +1208,6 @@ const I18N = {
     'tag.replace.all.title': 'Apply to all images',
     'tag.delete.all.title': 'Delete from all images',
     'no.tags': 'Import folder and select image',
-    'kbd.hint': '<span class="kbd">A</span> Prev &nbsp; <span class="kbd">D</span> Next &nbsp; <span class="kbd">←</span><span class="kbd">→</span> Same',
     'suffix.label': 'Suffix',
     'suffix.input.placeholder': 'Enter suffix (optional)…',
     'suffix.preview': 'Example: tagname',
@@ -1107,6 +1216,15 @@ const I18N = {
     'gallery.stats.per': 'Per page',
     'gallery.stats.perUnit': 'items',
     'gallery.stats.total': '{count} total',
+    'gallery.search.placeholder': 'Search tags to filter images…',
+    'gallery.search.noresults': 'No images match the tags',
+    'gallery.search.clear': 'Clear',
+    'search.mode.exact': 'Exact',
+    'search.mode.fuzzy': 'Fuzzy',
+    'search.mode.exact.title': 'Exact match: tag must equal the keyword (click to switch to fuzzy)',
+    'search.mode.fuzzy.title': 'Fuzzy match: substring hits (click to switch to exact)',
+    'img.zoom.reset.title': 'Reset zoom (double-click also works)',
+    'kbd.hint': '<span class="kbd">A</span> Prev &nbsp; <span class="kbd">D</span> Next &nbsp; <span class="kbd">Wheel</span> Zoom &nbsp; <span class="kbd">Dbl</span> Reset',
     'tag.groups.label': 'Tag Groups',
     'tag.groups.empty': 'No tag groups',
     'tag.sidebar.title': 'Quick Tags',
@@ -1115,6 +1233,10 @@ const I18N = {
     'tag.sidebar.search.noresults': 'No matching tags found',
     'tg.add.btn': '＋ New',
     'tg.cat.btn': '⚙ Manage Categories',
+    'tag.select.mode': 'Select',
+    'tag.select.hint': 'Click to select / deselect',
+    'tag.save.group.btn': '＋ Save as Group',
+    'toast.savegroup.prompt': 'Enter tag group name:',
     'gallery.empty': 'Click "Import Folder" on the left to load images',
     'tg.modal.title.new': 'New Tag Group',
     'tg.modal.title.edit': 'Edit Tag Group',
@@ -1149,6 +1271,10 @@ const I18N = {
     'cat.tags.modal.cancel': 'Close',
     'cat.tags.modal.add': '＋ Add Tag',
     'cat.tags.modal.manage': 'Manage Tags',
+    'cat.tags.modal.edit.hint': 'Long-press to edit tag',
+    'tag.sidebar.item.hint': 'Click to write · Long-press to edit',
+    'tag.edit.modal.title': 'Edit Tag',
+    'tag.edit.pop.hint': 'Enter to save · Esc to cancel · Shift+Enter for newline',
     'cat.tags.modal.delete': 'Delete',
     'toast.import.warn': '⚠ Browser does not support File System Access API, please use Chrome/Edge 110+',
     'toast.import.success': '✓ Loaded {count} images',
@@ -1173,7 +1299,7 @@ const I18N = {
     'toast.tag.copy': '✓ Copied:',
     'toast.tag.edit.success': '✓ Tag updated',
     'toast.tag.edit.empty': '⚠ Empty input, no change',
-    'toast.tag.edit.hint': 'Click to edit, × to delete',
+    'toast.tag.edit.hint': 'Long-press to edit, × to delete',
     'toast.batch.warn': '⚠ Please import folder first',
     'toast.batch.prompt': 'Enter tags to add to all images (comma separated):',
     'toast.batch.noinput': '⚠ No tags entered',
@@ -1253,6 +1379,11 @@ function updateI18n() {
     const key = el.dataset.i18nTitle;
     el.title = t(key);
   });
+
+  updateSaveGroupBtn();
+
+  syncSearchModeBtn('tagSidebarSearchModeBtn', SIDEBAR_SEARCH_MODE_KEY);
+  syncSearchModeBtn('gallerySearchModeBtn', GALLERY_SEARCH_MODE_KEY);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1343,6 +1474,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize language
   switchLanguage(currentLang);
 
+  // Initialize search mode toggle buttons
+  syncSearchModeBtn('tagSidebarSearchModeBtn', SIDEBAR_SEARCH_MODE_KEY);
+  syncSearchModeBtn('gallerySearchModeBtn', GALLERY_SEARCH_MODE_KEY);
+
   // Initialize theme
   applyTheme();
 
@@ -1373,6 +1508,46 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter') { e.preventDefault(); addManualTags(); }
   });
 
+  // Enter in gallery search: select the first matching image
+  $('gallerySearchInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const list = getGalleryFilteredList();
+      if (list.length > 0) selectImage(imageFiles.indexOf(list[0]));
+    }
+  });
+
+  // Big image zoom: wheel anchored at cursor
+  $('bigImageWrap').addEventListener('wheel', e => {
+    if (!imgZoom.img) return;
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    const newScale = Math.min(12, Math.max(0.2, imgZoom.scale * factor));
+    if (newScale === imgZoom.scale) return;
+    const wrapRect = $('bigImageWrap').getBoundingClientRect();
+    // 鼠标相对图片未变换左上角的偏移
+    const bx = (e.clientX - wrapRect.left) - imgZoom.img.offsetLeft;
+    const by = (e.clientY - wrapRect.top) - imgZoom.img.offsetTop;
+    const k = newScale / imgZoom.scale;
+    // 以鼠标为锚点:鼠标处的图像点在缩放前后保持不动
+    imgZoom.tx = bx * (1 - k) + imgZoom.tx * k;
+    imgZoom.ty = by * (1 - k) + imgZoom.ty * k;
+    imgZoom.scale = newScale;
+    applyImgZoom();
+  }, { passive: false });
+
+  // Big image zoom: drag to pan
+  document.addEventListener('mousemove', e => {
+    if (!imgDrag || !imgZoom.img) return;
+    imgZoom.tx = imgDrag.tx + (e.clientX - imgDrag.sx);
+    imgZoom.ty = imgDrag.ty + (e.clientY - imgDrag.sy);
+    applyImgZoom();
+  });
+  document.addEventListener('mouseup', () => {
+    if (imgDrag && imgZoom.img && imgZoom.scale !== 1) imgZoom.img.style.cursor = 'grab';
+    imgDrag = null;
+  });
+
   document.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     if (imageFiles.length === 0) return;
@@ -1380,17 +1555,25 @@ document.addEventListener('DOMContentLoaded', () => {
     else if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') { e.preventDefault(); navigateImage(1); }
   });
 
-  // Close inline popup on click outside
-  document.addEventListener('click', e => {
+  // Close inline popup on click outside.
+  // Uses capture-phase mousedown so clicks inside modals (which stop
+  // click propagation) still close the popup, and goes through
+  // closeInlinePopup() so the opener button's onclick is restored —
+  // plain popup.remove() left the button dead after cancelling.
+  document.addEventListener('mousedown', e => {
     const popup = document.querySelector('.inline-input-popup');
-    if (popup && !popup.contains(e.target)) popup.remove();
-  });
+    if (popup && !popup.contains(e.target)) closeInlinePopup();
+    // 点击便利贴编辑框外部时取消
+    const pop = $('tagEditPop');
+    if (pop && pop.style.display !== 'none' && !pop.contains(e.target)) closeTagEdit(false);
+  }, true);
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
       const overlay = $('tgModalOverlay');
       if (!overlay.classList.contains('hidden')) { e.stopPropagation(); closeTgModal(); }
       closeInlinePopup();
+      closeTagEdit(false);
     }
   });
 
@@ -1580,24 +1763,110 @@ async function readTags(handle) {
 function navigateImage(delta) {
   if (imageFiles.length === 0) return;
   selectedIdx = ((selectedIdx < 0 ? 0 : selectedIdx) + delta + imageFiles.length) % imageFiles.length;
-  // also jump gallery page
+  // also jump gallery page (based on position in the filtered list)
   const rowsPP = galleryRowsPage;
-  const targetPage = Math.floor(selectedIdx / rowsPP) + 1;
-  if (targetPage !== galleryPage) { galleryPage = targetPage; }
+  const pos = getGalleryFilteredList().indexOf(imageFiles[selectedIdx]);
+  if (pos >= 0) {
+    const targetPage = Math.floor(pos / rowsPP) + 1;
+    if (targetPage !== galleryPage) {
+      galleryPage = targetPage;
+      renderGallery();
+    } else {
+      updateGalleryActive();
+    }
+  } else {
+    updateGalleryActive();
+  }
   renderPreview();
-  renderGallery();
+}
+
+// 仅更新画廊行的选中高亮(避免整页重建带来的迟缓)
+function updateGalleryActive() {
+  $('galleryGrid').querySelectorAll('.gallery-row').forEach(r => {
+    r.classList.toggle('active', Number(r.dataset.idx) === selectedIdx);
+  });
 }
 
 function selectImage(idx) {
   selectedIdx = idx;
   renderPreview();
-  renderGallery();
+  // 性能:仅切换高亮行,不重建整个画廊
+  updateGalleryActive();
+}
+
+// ─── Big image zoom (wheel anchored at cursor) ─────────────
+let imgZoom = { scale: 1, tx: 0, ty: 0, img: null };
+let imgDrag = null;
+
+function applyImgZoom() {
+  const img = imgZoom.img;
+  if (!img) return;
+  img.style.transformOrigin = '0 0';
+  img.style.transform = `translate(${imgZoom.tx}px, ${imgZoom.ty}px) scale(${imgZoom.scale})`;
+  img.style.cursor = (imgZoom.scale !== 1) ? 'grab' : '';
+  const btn = $('imgZoomResetBtn');
+  if (btn) btn.textContent = `⟲ ${Math.round(imgZoom.scale * 100)}%`;
+}
+
+function resetImgZoom() {
+  imgZoom.scale = 1; imgZoom.tx = 0; imgZoom.ty = 0;
+  applyImgZoom();
+}
+
+function initImgZoom(img) {
+  imgZoom = { scale: 1, tx: 0, ty: 0, img };
+  applyImgZoom();
+  // 双击重置
+  img.addEventListener('dblclick', () => resetImgZoom());
+  // 拖拽平移
+  img.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    imgDrag = { sx: e.clientX, sy: e.clientY, tx: imgZoom.tx, ty: imgZoom.ty };
+    img.style.cursor = 'grabbing';
+    e.preventDefault();
+  });
+}
+
+// ─── Tag edit floating sticky (shared by all long-press edits) ──
+let tagEditSubmit = null;
+
+function openTagEditModal(value, onSubmit, anchorEl) {
+  tagEditSubmit = onSubmit;
+  const pop = $('tagEditPop');
+  const area = $('tagEditArea');
+  area.value = value;
+  pop.style.display = 'block';
+
+  // 锚定在长按的标签附近（便利贴浮框，自动防溢出）
+  if (anchorEl && anchorEl.getBoundingClientRect) {
+    const r = anchorEl.getBoundingClientRect();
+    const w = Math.min(320, window.innerWidth * 0.92);
+    const h = 190; // 浮框预估高度
+    let left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
+    let top = r.bottom + 6;
+    if (top + h > window.innerHeight) top = Math.max(8, r.top - h - 6);
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+  }
+
+  setTimeout(() => { area.focus(); area.select(); }, 30);
+}
+
+function closeTagEdit(commit) {
+  const pop = $('tagEditPop');
+  if (pop.style.display === 'none') return;
+  pop.style.display = 'none';
+  const fn = tagEditSubmit;
+  tagEditSubmit = null;
+  if (commit && fn) fn($('tagEditArea').value.replace(/\s*\n\s*/g, ' ').trim());
 }
 
 // ─── Render preview ────────────────────────────────────────
 async function renderPreview() {
   if (selectedIdx < 0 || imageFiles.length === 0) return;
   const item = imageFiles[selectedIdx];
+  // 切换图片时清空标签选择
+  ctagSelected.clear();
 
   $('pageNav').classList.remove('hidden');
   $('pageCurrentNum').textContent = selectedIdx + 1;
@@ -1614,6 +1883,8 @@ async function renderPreview() {
   if (VIDEO_EXTS.includes(ext)) {
     wrap.innerHTML = '<div class="big-img-placeholder">🎬</div><div class="big-img-hint">视频文件</div>';
     wrap.classList.add('empty-wrap');
+    imgZoom.img = null;
+    $('imgZoomBar').style.display = 'none';
     $('detailFilename').textContent = item.base + '.txt';
     renderCurrentTags();
     return;
@@ -1624,6 +1895,8 @@ async function renderPreview() {
   img.alt = item.name;
   img.style.opacity = '0';
   wrap.appendChild(img);
+  initImgZoom(img);
+  $('imgZoomBar').style.display = 'flex';
   try {
     if (!item.objUrl) {
       const file = await item.imgHandle.getFile();
@@ -1634,6 +1907,8 @@ async function renderPreview() {
   } catch {
     wrap.innerHTML = '<div class="big-img-placeholder">⚠️</div><div class="big-img-hint">图片加载失败</div>';
     wrap.classList.add('empty-wrap');
+    imgZoom.img = null;
+    $('imgZoomBar').style.display = 'none';
   }
 
   $('detailFilename').textContent = item.base + '.txt';
@@ -1650,40 +1925,147 @@ function renderCurrentTags() {
 
   if (item.tags.length === 0) {
     container.innerHTML = `<span class="no-tags">${t('current.tags.empty')}</span>`;
+    updateSaveGroupBtn();
     return;
   }
   item.tags.forEach((tag, ti) => {
     const matched = keyword && tag.toLowerCase().includes(keyword);
+    const selected = ctagSelectMode && ctagSelected.has(tag);
     const span = document.createElement('span');
-    span.className = 'ctag' + (matched ? ' highlight' : '');
-    span.innerHTML = `<span class="ctag-text" onclick="editTag(${ti}, event)" title="${t('toast.tag.edit.hint')}">${escHtml(tag)}</span><span class="ctag-del" data-i18n-title="toast.remove.success" title="${t('toast.remove.success')}" onclick="removeTag(${ti})">×</span>`;
+    span.className = 'ctag' + (matched ? ' highlight' : '') + (selected ? ' selected' : '') + (ctagSelectMode ? ' selectable' : '');
+    if (ctagSelectMode) {
+      // 选择模式：点击标签切换选中，用于保存为标签组
+      span.title = t('tag.select.hint');
+      span.innerHTML = `<span class="ctag-text">${escHtml(tag)}</span><span class="ctag-del" title="${t('toast.remove.success')}" onclick="event.stopPropagation();removeTag(${ti})">×</span>`;
+      span.onclick = () => toggleCtagSelected(tag);
+    } else {
+      span.innerHTML = `<span class="ctag-text" title="${t('toast.tag.edit.hint')}">${escHtml(tag)}</span><span class="ctag-del" data-i18n-title="toast.remove.success" title="${t('toast.remove.success')}" onclick="removeTag(${ti})">×</span>`;
+      // 长按编辑（标签旁浮出便利贴输入框）
+      const textEl = span.querySelector('.ctag-text');
+      bindLongPress(textEl, () => editTag(ti, textEl));
+    }
     container.appendChild(span);
   });
+  updateSaveGroupBtn();
+}
+
+// ─── Current tags selection → save as tag group ───────────
+let ctagSelectMode = false;
+const ctagSelected = new Set();
+
+function toggleCtagSelectMode(force) {
+  ctagSelectMode = (typeof force === 'boolean') ? force : !ctagSelectMode;
+  if (!ctagSelectMode) ctagSelected.clear();
+  $('ctagSelectToggle').classList.toggle('active', ctagSelectMode);
+  renderCurrentTags();
+}
+
+function toggleCtagSelected(tag) {
+  if (ctagSelected.has(tag)) ctagSelected.delete(tag);
+  else ctagSelected.add(tag);
+  renderCurrentTags();
+}
+
+function updateSaveGroupBtn() {
+  const btn = $('saveGroupBtn');
+  if (!btn) return;
+  const show = ctagSelectMode && ctagSelected.size > 0;
+  btn.style.display = show ? 'inline-flex' : 'none';
+  btn.textContent = `${t('tag.save.group.btn')} (${ctagSelected.size})`;
+}
+
+// ─── Tag search mode (exact / fuzzy) ───────────────────────
+const SIDEBAR_SEARCH_MODE_KEY = 'tag_tool_search_mode_sidebar';
+const GALLERY_SEARCH_MODE_KEY = 'tag_tool_search_mode_gallery';
+
+// 默认精确匹配（localStorage 存 'fuzzy' 时为模糊）
+function isExactSearchMode(key) { return localStorage.getItem(key) !== 'fuzzy'; }
+
+function syncSearchModeBtn(btnId, key) {
+  const btn = $(btnId);
+  if (!btn) return;
+  const exact = isExactSearchMode(key);
+  btn.textContent = exact ? t('search.mode.exact') : t('search.mode.fuzzy');
+  btn.title = exact ? t('search.mode.exact.title') : t('search.mode.fuzzy.title');
+  btn.classList.toggle('active', exact);
+}
+
+function onToggleSidebarSearchMode() {
+  localStorage.setItem(SIDEBAR_SEARCH_MODE_KEY, isExactSearchMode(SIDEBAR_SEARCH_MODE_KEY) ? 'fuzzy' : 'exact');
+  syncSearchModeBtn('tagSidebarSearchModeBtn', SIDEBAR_SEARCH_MODE_KEY);
+  onTagSidebarSearch();
+}
+
+function onToggleGallerySearchMode() {
+  localStorage.setItem(GALLERY_SEARCH_MODE_KEY, isExactSearchMode(GALLERY_SEARCH_MODE_KEY) ? 'fuzzy' : 'exact');
+  syncSearchModeBtn('gallerySearchModeBtn', GALLERY_SEARCH_MODE_KEY);
+  onGallerySearch();
 }
 
 // ─── Gallery rendering ─────────────────────────────────────
+function getGalleryFilteredList() {
+  const input = $('gallerySearchInput');
+  const raw = input ? input.value.trim().toLowerCase() : '';
+  if (!raw) return imageFiles;
+  // 逗号分隔多个关键词，全部匹配（AND）
+  const kws = raw.split(',').map(s => s.trim()).filter(Boolean);
+  if (kws.length === 0) return imageFiles;
+  if (isExactSearchMode(GALLERY_SEARCH_MODE_KEY)) {
+    // 精确：图片需包含每个关键词对应的完全一致标签
+    return imageFiles.filter(item => {
+      const tags = item.tags.map(tg => tg.toLowerCase());
+      return kws.every(k => tags.includes(k));
+    });
+  }
+  // 模糊：子串匹配
+  return imageFiles.filter(item => {
+    const tags = item.tags.map(tg => tg.toLowerCase());
+    return kws.every(k => tags.some(tg => tg.includes(k)));
+  });
+}
+
+function onGallerySearch() {
+  galleryPage = 1;
+  const clearBtn = $('gallerySearchClear');
+  if (clearBtn) clearBtn.style.display = $('gallerySearchInput').value ? 'block' : 'none';
+  renderGallery();
+}
+
+function clearGallerySearch() {
+  $('gallerySearchInput').value = '';
+  onGallerySearch();
+}
+
 function renderGallery() {
   const grid = $('galleryGrid');
-  const total = imageFiles.length;
-  $('galleryTotal').textContent = total;
+  const filtering = ($('gallerySearchInput').value || '').trim() !== '';
+  const list = filtering ? getGalleryFilteredList() : imageFiles;
+  const totalAll = imageFiles.length;
+  $('galleryTotal').textContent = filtering ? `${list.length}/${totalAll}` : `${totalAll}`;
 
-  if (total === 0) {
+  if (totalAll === 0) {
     grid.innerHTML = `<div class="gallery-empty"><span class="icon">📂</span>${t('gallery.empty')}</div>`;
     updateGalleryPagination(0,0);
     return;
   }
+  if (list.length === 0) {
+    grid.innerHTML = `<div class="gallery-empty"><span class="icon">🔍</span>${t('gallery.search.noresults')}</div>`;
+    updateGalleryPagination(0,0);
+    return;
+  }
 
+  const idxMap = new Map(imageFiles.map((it, i) => [it, i]));
   const rowsPP = galleryRowsPage;
-  const totalPages = Math.max(1, Math.ceil(total / rowsPP));
+  const totalPages = Math.max(1, Math.ceil(list.length / rowsPP));
   if (galleryPage > totalPages) galleryPage = totalPages;
 
   const start = (galleryPage - 1) * rowsPP;
-  const end   = Math.min(start + rowsPP, total);
-  const slice = imageFiles.slice(start, end);
+  const end   = Math.min(start + rowsPP, list.length);
+  const slice = list.slice(start, end);
 
   grid.innerHTML = '';
-  slice.forEach((item, localIdx) => {
-    const globalIdx = start + localIdx;
+  slice.forEach(item => {
+    const globalIdx = idxMap.get(item);
     const row = document.createElement('div');
     row.className = 'gallery-row' + (globalIdx === selectedIdx ? ' active' : '');
     row.dataset.idx = globalIdx;
@@ -1763,7 +2145,7 @@ function updateGalleryPagination(current, total) {
 }
 
 function galleryPageDelta(delta) {
-  const total = Math.max(1, Math.ceil(imageFiles.length / galleryRowsPage));
+  const total = Math.max(1, Math.ceil(getGalleryFilteredList().length / galleryRowsPage));
   galleryPage = Math.max(1, Math.min(galleryPage + delta, total));
   renderGallery();
 }
@@ -1900,6 +2282,7 @@ async function deleteTagAll() {
 async function removeTag(tagIdx) {
   if (selectedIdx < 0) return;
   const item = imageFiles[selectedIdx];
+  ctagSelected.delete(item.tags[tagIdx]);
   item.tags.splice(tagIdx, 1);
   await saveTags(item);
   renderCurrentTags();
@@ -1907,72 +2290,30 @@ async function removeTag(tagIdx) {
   showToast(t('toast.remove.success'),'info',1500);
 }
 
-async function editTag(tagIdx, event) {
+async function editTag(tagIdx, anchorEl) {
   if (selectedIdx < 0) return;
   const item = imageFiles[selectedIdx];
   const oldTag = item.tags[tagIdx];
   if (oldTag === undefined) return;
 
-  const ctag = event.currentTarget.closest('.ctag');
-  if (!ctag) return;
-
-  ctag.innerHTML = '';
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.value = oldTag;
-  input.className = 'ctag-edit-input';
-  input.spellcheck = false;
-  input.autocomplete = 'off';
-  ctag.appendChild(input);
-
-  const resize = () => {
-    const len = Math.max(input.value.length, oldTag.length);
-    input.style.width = (len + 3) + 'ch';
-  };
-  input.addEventListener('input', resize);
-  resize();
-
-  let done = false;
-  const finish = async (commit) => {
-    if (done) return;
-    done = true;
-    if (commit) {
-      const newTag = input.value.trim();
-      if (!newTag) {
-        renderCurrentTags();
-        showToast(t('toast.tag.edit.empty'), 'warn', 1500);
-        return;
-      }
-      if (newTag === oldTag) { renderCurrentTags(); return; }
-      if (item.tags.includes(newTag)) {
-        renderCurrentTags();
-        showToast(t('toast.tag.exists') + ' ' + newTag, 'warn', 1800);
-        return;
-      }
-      item.tags[tagIdx] = newTag;
-      try {
-        await saveTags(item);
-        renderCurrentTags();
-        updateGalleryRow(selectedIdx);
-        showToast(t('toast.tag.edit.success'), 'info', 1500);
-      } catch {
-        item.tags[tagIdx] = oldTag;
-        renderCurrentTags();
-      }
-    } else {
+  openTagEditModal(oldTag, async (v) => {
+    if (!v) { showToast(t('toast.tag.edit.empty'), 'warn', 1500); return; }
+    if (v === oldTag) return;
+    if (item.tags.includes(v)) {
+      showToast(t('toast.tag.exists') + ' ' + v, 'warn', 1800);
+      return;
+    }
+    item.tags[tagIdx] = v;
+    try {
+      await saveTags(item);
+      renderCurrentTags();
+      updateGalleryRow(selectedIdx);
+      showToast(t('toast.tag.edit.success'), 'info', 1500);
+    } catch {
+      item.tags[tagIdx] = oldTag;
       renderCurrentTags();
     }
-  };
-
-  input.addEventListener('keydown', e => {
-    e.stopPropagation();
-    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
-    else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
-  });
-  input.addEventListener('blur', () => finish(true));
-
-  input.focus();
-  input.select();
+  }, anchorEl);
 }
 
 // ─── Save tags ─────────────────────────────────────────────
@@ -2017,10 +2358,15 @@ async function handleTagClick(tagName) {
 }
 
 // ─── Batch add tags ────────────────────────────────────────
-async function batchAddTagsToAll() {
+function showBatchPopup(event) {
+  createInlinePopup(event.currentTarget, t('toast.batch.prompt'), value => {
+    batchAddTagsToAll(value);
+  }, { below: true, inputWidth: 320 });
+}
+
+async function batchAddTagsToAll(raw) {
   if (!folderHandle || imageFiles.length === 0) { showToast(t('toast.batch.warn'),'warn',2000); return; }
-  const raw = prompt(t('toast.batch.prompt'));
-  if (raw === null) return;
+  if (typeof raw !== 'string') return;
   const newTags = raw.split(',').map(t => t.trim()).filter(Boolean);
   if (newTags.length === 0) { showToast(t('toast.batch.noinput'),'warn',2000); return; }
 
@@ -2084,6 +2430,29 @@ function showConfirm(msg) {
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+// ─── Long-press helper (mouse & touch) ─────────────────────
+function bindLongPress(el, onLongPress, opts = {}) {
+  const duration = opts.duration || 500;
+  let timer = null;
+  let fired = false;
+  const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  el.addEventListener('pointerdown', e => {
+    if (e.button !== undefined && e.button !== 0) return;
+    fired = false;
+    cancel();
+    timer = setTimeout(() => { timer = null; fired = true; onLongPress(e); }, duration);
+  });
+  el.addEventListener('pointerup', cancel);
+  el.addEventListener('pointerleave', cancel);
+  el.addEventListener('pointercancel', cancel);
+  // 长按触发后抑制紧随的 click，避免误触其他点击行为
+  el.addEventListener('click', e => {
+    if (fired) { fired = false; e.stopPropagation(); e.preventDefault(); }
+  }, true);
+  // 触屏长按会弹出系统 contextmenu，按压期间屏蔽
+  el.addEventListener('contextmenu', e => { if (timer || fired) e.preventDefault(); });
+}
 </script>
 
 <!-- ═══════════════════ TAG GROUPS ═══════════════════ -->
@@ -2102,6 +2471,7 @@ function debounce(fn, ms) {
 var renderTgModalTagsDebounced = debounce(renderTgModalTags, 120);
 var renderCatTagsDebounced = debounce(renderCatTags, 120);
 var onTagSidebarSearchDebounced = debounce(onTagSidebarSearch, 120);
+var onGallerySearchDebounced = debounce(onGallerySearch, 200);
 var renderCurrentTagsDebounced = debounce(renderCurrentTags, 120);
 const TG_STORAGE_KEY = 'anatomy_tag_groups_v1';
 
@@ -2183,16 +2553,19 @@ function onTagSidebarSearch() {
     cat.tags.forEach(tag => {
       allTags.push({
         name: tag,
-        category: cat.name
+        category: cat.name,
+        catId: cat.id
       });
     });
   });
   
   // 搜索匹配的标签
+  const exact = isExactSearchMode(SIDEBAR_SEARCH_MODE_KEY);
   const matchedTags = allTags.filter(tag => {
-    // 支持英文搜索（包含匹配）
+    if (exact) return tag.name.toLowerCase() === keyword;
+    // 模糊：支持英文搜索（包含匹配）
     if (tag.name.toLowerCase().includes(keyword)) return true;
-    // 支持英文首字母搜索
+    // 模糊：支持英文首字母搜索
     const words = tag.name.split(/[\s_]+/);
     const firstLetters = words.map(w => w.charAt(0)).join('');
     if (firstLetters.toLowerCase().includes(keyword)) return true;
@@ -2209,8 +2582,10 @@ function onTagSidebarSearch() {
       tagEl.className = 'ts-tag-item';
       tagEl.style.cursor = 'pointer';
       tagEl.textContent = tag.name;
-      tagEl.title = tag.category;
+      tagEl.title = `${tag.category} · ${t('tag.sidebar.item.hint')}`;
       tagEl.addEventListener('click', () => handleTagClick(tag.name));
+      // 长按编辑标签
+      bindLongPress(tagEl, () => editSidebarTag(tag.catId, tag.name, tagEl, true));
       resultsList.appendChild(tagEl);
     });
   }
@@ -2251,10 +2626,21 @@ function renderCategoriesSidebar() {
         tagEl.className = 'ts-tag-item';
         tagEl.dataset.tag = tag;
         tagEl.textContent = tag;
+        tagEl.title = t('tag.sidebar.item.hint');
         tagEl.addEventListener('click', () => addTagFromSidebar(tag, tagEl));
+        // 长按编辑标签
+        bindLongPress(tagEl, () => editSidebarTag(cat.id, tag, tagEl));
         content.appendChild(tagEl);
       });
     }
+
+    // Quick-add chip (＋) at the tail of the tag list
+    const addChip = document.createElement('div');
+    addChip.className = 'ts-tag-item ts-tag-add';
+    addChip.textContent = '＋';
+    addChip.title = t('toast.cat.tag.add.prompt');
+    addChip.addEventListener('click', e => showSidebarCatTagPopup(cat.id, e));
+    content.appendChild(addChip);
     
     catSection.appendChild(header);
     catSection.appendChild(content);
@@ -2382,7 +2768,7 @@ function openTgModal(editId) {
   setTimeout(() => nameInput.focus(), 60);
 }
 
-function closeTgModal() { $('tgModalOverlay').classList.add('hidden'); }
+function closeTgModal() { closeInlinePopup(); $('tgModalOverlay').classList.add('hidden'); }
 function onTgOverlayClick(e) { if (e.target === $('tgModalOverlay')) closeTgModal(); }
 
 function renderTgModalTags() {
@@ -2594,7 +2980,7 @@ function closeInlinePopup() {
   }
 }
 
-function createInlinePopup(btn, placeholder, onSubmit) {
+function createInlinePopup(btn, placeholder, onSubmit, opts = {}) {
   closeInlinePopup();
   const parentBtn = btn;
   const origOnClick = parentBtn.onclick;
@@ -2603,6 +2989,8 @@ function createInlinePopup(btn, placeholder, onSubmit) {
   const popup = document.createElement('div');
   popup.className = 'inline-input-popup';
   popup.innerHTML = '<input type="text" placeholder="' + placeholder + '" /><button class="ip-confirm">确认</button><button class="ip-cancel">取消</button>';
+  if (opts.below) { popup.style.bottom = 'auto'; popup.style.top = 'calc(100% + 4px)'; }
+  if (opts.inputWidth) popup.querySelector('input').style.width = opts.inputWidth + 'px';
 
   popup.addEventListener('click', e => e.stopPropagation());
   popup.addEventListener('mousedown', e => e.stopPropagation());
@@ -2657,7 +3045,6 @@ function showCatTagPopup(event) {
 }
 
 function addCustomTagToGroup(tag) {
-  if (typeof tag !== 'string') tag = prompt(t('toast.tg.custom.prompt'));
   if (!tag || !tag.trim()) return;
 
   const trimmedTag = tag.trim();
@@ -2695,6 +3082,17 @@ function saveTgGroup() {
   showToast(t('toast.tg.save.success', {name, count: tgSelected.size}), 'info', 2500);
 }
 
+function showSaveGroupPopup(event) {
+  createInlinePopup(event.currentTarget, t('toast.savegroup.prompt'), value => {
+    const trimmed = (value || '').trim();
+    if (!trimmed) return;
+    tagGroups.push({ id: 'tg_' + Date.now(), name: trimmed, tags: [...ctagSelected] });
+    tgSave(); renderTagGroups();
+    showToast(t('toast.tg.save.success', {name: trimmed, count: ctagSelected.size}), 'info', 2500);
+    toggleCtagSelectMode(false);
+  });
+}
+
 // ═══════════════════ CATEGORIES MANAGEMENT FUNCTIONS ═══════════════════
 function openCatModal() {
   const overlay = $('catModalOverlay');
@@ -2703,6 +3101,7 @@ function openCatModal() {
 }
 
 function closeCatModal() {
+  closeInlinePopup();
   $('catModalOverlay').classList.add('hidden');
 }
 
@@ -2753,8 +3152,8 @@ function renderCatList() {
     
     const delBtn = document.createElement('button');
     delBtn.className = 'tg-sel-all-btn';
-    delBtn.style.borderColor = '#ff6b6b';
-    delBtn.style.color = '#ff6b6b';
+    delBtn.style.borderColor = 'var(--danger)';
+    delBtn.style.color = 'var(--danger)';
     delBtn.textContent = t('cat.tags.modal.delete');
     delBtn.onclick = () => deleteCategory(cat.id);
     
@@ -2777,7 +3176,6 @@ function renderCatList() {
 }
 
 function addNewCategory(name) {
-  if (typeof name !== 'string') name = prompt(t('toast.cat.add.prompt'));
   if (!name || !name.trim()) return;
 
   categories.push({
@@ -2818,6 +3216,7 @@ function openCatTagsModal(catId) {
 }
 
 function closeCatTagsModal() {
+  closeInlinePopup();
   $('catTagsModalOverlay').classList.add('hidden');
   catTagEditId = null;
 }
@@ -2864,77 +3263,16 @@ function renderCatTags() {
   
   const tagsDiv = document.createElement('div');
   tagsDiv.className = 'tg-modal-tags';
-  
+
   filteredTags.forEach(tag => {
-    const el = document.createElement('div');
-    el.className = 'tg-sel-tag';
-    el.style.position = 'relative';
-
-    const label = document.createElement('span');
-    label.className = 'tg-sel-tag-cn';
-    label.textContent = tag;
-
-    const deleteBtn = document.createElement('span');
-    deleteBtn.className = 'ctag-del';
-    deleteBtn.style.position = 'absolute';
-    deleteBtn.style.top = '2px';
-    deleteBtn.style.right = '2px';
-    deleteBtn.style.fontSize = '10px';
-    deleteBtn.style.padding = '0 4px';
-    deleteBtn.textContent = '×';
-    deleteBtn.addEventListener('click', (event) => deleteCatTag(tag, event));
-
-    el.appendChild(label);
-    el.appendChild(deleteBtn);
-    tagsDiv.appendChild(el);
+    tagsDiv.appendChild(createCatTagElement(tag));
   });
-  
+
   body.appendChild(tagsDiv);
   $('catTagsCount').innerHTML = t('cat.tags.modal.count', {count: cat.tags.length});
 }
 
-function addNewTagToCategory(tag) {
-  if (typeof tag !== 'string') tag = prompt(t('toast.cat.tag.add.prompt'));
-  if (!tag || !tag.trim()) return;
-
-  const cat = categories.find(c => c.id === catTagEditId);
-  if (!cat) return;
-
-  const trimmedTag = tag.trim();
-  if (cat.tags.includes(trimmedTag)) {
-    showToast(t('toast.cat.tag.exists'), 'warn', 1800);
-    return;
-  }
-
-  cat.tags.push(trimmedTag);
-  catSave();
-
-  // 增量追加 — 仅当无搜索关键词或匹配当前搜索时
-  const kw = $('catTagSearch').value.trim().toLowerCase();
-  if (!kw || trimmedTag.toLowerCase().includes(kw)) {
-    appendCatTagElement(trimmedTag);
-  }
-  $('catTagsCount').innerHTML = t('cat.tags.modal.count', {count: cat.tags.length});
-
-  // 延迟重建较重的列表
-  setTimeout(() => {
-    renderCatList();
-    renderTagSidebar();
-  }, 0);
-
-  showToast(t('toast.cat.tag.add.success', {tag: trimmedTag}), 'info', 1800);
-}
-
-function appendCatTagElement(tag) {
-  const body = $('catTagsModalBody');
-  let tagsDiv = body.querySelector('.tg-modal-tags');
-  if (!tagsDiv) {
-    body.innerHTML = '';
-    tagsDiv = document.createElement('div');
-    tagsDiv.className = 'tg-modal-tags';
-    body.appendChild(tagsDiv);
-  }
-
+function createCatTagElement(tag) {
   const el = document.createElement('div');
   el.className = 'tg-sel-tag';
   el.style.position = 'relative';
@@ -2942,6 +3280,7 @@ function appendCatTagElement(tag) {
   const label = document.createElement('span');
   label.className = 'tg-sel-tag-cn';
   label.textContent = tag;
+  label.title = t('cat.tags.modal.edit.hint');
 
   const deleteBtn = document.createElement('span');
   deleteBtn.className = 'ctag-del';
@@ -2955,7 +3294,98 @@ function appendCatTagElement(tag) {
 
   el.appendChild(label);
   el.appendChild(deleteBtn);
-  tagsDiv.appendChild(el);
+
+  // 长按编辑标签
+  bindLongPress(el, () => editCatTag(tag, el), { suppressClick: true });
+  return el;
+}
+
+function editCatTag(tag, tagEl) {
+  openTagEditModal(tag, (v) => {
+    if (v && v !== tag) renameCatTag(catTagEditId, tag, v);
+    renderCatTags();
+    setTimeout(() => { renderCatList(); renderTagSidebar(); }, 0);
+  }, tagEl);
+}
+
+function addNewTagToCategory(tag) {
+  if (!tag || !tag.trim()) return;
+  addTagToCategory(catTagEditId, tag.trim());
+}
+
+function addTagToCategory(catId, trimmedTag) {
+  const cat = categories.find(c => c.id === catId);
+  if (!cat) return;
+
+  if (cat.tags.includes(trimmedTag)) {
+    showToast(t('toast.cat.tag.exists'), 'warn', 1800);
+    return;
+  }
+
+  cat.tags.push(trimmedTag);
+  catSave();
+
+  // 若该栏目的管理弹窗正打开，增量追加 — 仅当无搜索关键词或匹配当前搜索时
+  if (catTagEditId === catId && !$('catTagsModalOverlay').classList.contains('hidden')) {
+    const kw = $('catTagSearch').value.trim().toLowerCase();
+    if (!kw || trimmedTag.toLowerCase().includes(kw)) {
+      appendCatTagElement(trimmedTag);
+    }
+    $('catTagsCount').innerHTML = t('cat.tags.modal.count', {count: cat.tags.length});
+  }
+
+  // 延迟重建较重的列表
+  setTimeout(() => {
+    renderCatList();
+    renderTagSidebar();
+  }, 0);
+
+  showToast(t('toast.cat.tag.add.success', {tag: trimmedTag}), 'info', 1800);
+}
+
+function showSidebarCatTagPopup(catId, event) {
+  event.stopPropagation();
+  createInlinePopup(event.currentTarget, t('toast.cat.tag.add.prompt'), value => {
+    if (value) addTagToCategory(catId, value);
+  });
+}
+
+// 重命名栏目中的标签（栏目标签库共用）
+function renameCatTag(catId, oldTag, newTag) {
+  const cat = categories.find(c => c.id === catId);
+  if (!cat) return false;
+  const i = cat.tags.indexOf(oldTag);
+  if (i < 0) return false;
+  if (cat.tags.includes(newTag)) {
+    showToast(t('toast.cat.tag.exists'), 'warn', 1800);
+    return false;
+  }
+  cat.tags[i] = newTag;
+  catSave();
+  showToast(t('toast.tag.edit.success'), 'info', 1500);
+  return true;
+}
+
+// 侧边栏标签长按编辑（界面使用时的栏目标签 / 搜索结果标签）
+function editSidebarTag(catId, tag, el, inSearch) {
+  openTagEditModal(tag, (v) => {
+    if (v && v !== tag) renameCatTag(catId, tag, v);
+    renderTagSidebar();
+    if (inSearch) onTagSidebarSearch();
+    setTimeout(() => { renderCatList(); }, 0);
+  }, el);
+}
+
+function appendCatTagElement(tag) {
+  const body = $('catTagsModalBody');
+  let tagsDiv = body.querySelector('.tg-modal-tags');
+  if (!tagsDiv) {
+    body.innerHTML = '';
+    tagsDiv = document.createElement('div');
+    tagsDiv.className = 'tg-modal-tags';
+    body.appendChild(tagsDiv);
+  }
+  tagsDiv.appendChild(createCatTagElement(tag));
 }
 
 async function deleteCatTag(tag, event) {
