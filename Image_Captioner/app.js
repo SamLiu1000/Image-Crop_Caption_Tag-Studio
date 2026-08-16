@@ -6,7 +6,7 @@ const LANGUAGE_SYNC_MESSAGE = 'web-tools-hub:set-language';
 const THEME_SYNC_MESSAGE = 'web-tools-hub:set-theme';
 const SUPPORTED_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.avif']);
 const LM_STUDIO_DEFAULT_URL = 'http://localhost:1234/v1';
-const DEFAULT_TIMEOUT_SECONDS = 120;
+const DEFAULT_TIMEOUT_SECONDS = 60;
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 const MAX_IMAGE_DIMENSION = 1120;
 const MIN_IMAGE_DIMENSION = 256;
@@ -53,7 +53,6 @@ const I18N = {
     serverUrlLabel: '接口地址',
     modelLabel: '模型 ID',
     modelPlaceholder: '自动读取或手动填写',
-    timeoutLabel: '请求超时（秒）',
     apiKeyPlaceholder: 'OpenAI 兼容接口可填写，本地服务可留空',
     show: '显示',
     hide: '隐藏',
@@ -179,7 +178,6 @@ const I18N = {
     serverUrlLabel: 'Server URL',
     modelLabel: 'Model ID',
     modelPlaceholder: 'Auto-detect or enter manually',
-    timeoutLabel: 'Timeout (seconds)',
     apiKeyPlaceholder: 'Optional for OpenAI-compatible APIs, can be left blank for local services',
     show: 'Show',
     hide: 'Hide',
@@ -300,7 +298,6 @@ const els = {
   modelInput: document.getElementById('modelInput'),
   modelDropdownBtn: document.getElementById('modelDropdownBtn'),
   modelDropdown: document.getElementById('modelDropdown'),
-  timeoutInput: document.getElementById('timeoutInput'),
   apiKeyInput: document.getElementById('apiKeyInput'),
   toggleApiKeyBtn: document.getElementById('toggleApiKeyBtn'),
   testConnectionBtn: document.getElementById('testConnectionBtn'),
@@ -508,7 +505,7 @@ function getConfig() {
   return {
     serverUrl: (els.serverUrlInput.value || '').trim(),
     model: (els.modelInput.value || '').trim(),
-    timeoutSeconds: clampNumber(Number.parseInt(els.timeoutInput.value, 10), 5, 600, DEFAULT_TIMEOUT_SECONDS),
+    timeoutSeconds: DEFAULT_TIMEOUT_SECONDS,
     apiKey: els.apiKeyInput.value || '',
     recursive: els.recursiveCheck.checked,
     skipExisting: els.skipExistingCheck.checked,
@@ -580,7 +577,6 @@ function updatePresetSelectOptions() {
 function applyConfig(config) {
   els.serverUrlInput.value = config.serverUrl || LM_STUDIO_DEFAULT_URL;
   els.modelInput.value = config.model || '';
-  els.timeoutInput.value = String(clampNumber(config.timeoutSeconds, 5, 600, DEFAULT_TIMEOUT_SECONDS));
   els.apiKeyInput.value = config.apiKey || '';
   els.recursiveCheck.checked = config.recursive ?? true;
   els.skipExistingCheck.checked = config.skipExisting ?? true;
@@ -725,11 +721,6 @@ function syncStats() {
   els.skippedCountText.textContent = String(state.stats.skipped);
   els.failedCountText.textContent = String(state.stats.failed);
   els.progressText.textContent = state.files.length ? `${Math.max(0, state.currentIndex + 1)} / ${state.files.length}` : '0 / 0';
-}
-
-function clampNumber(value, min, max, fallback) {
-  if (!Number.isFinite(value)) return fallback;
-  return Math.max(min, Math.min(max, value));
 }
 
 function sanitizeBaseUrl(value) {

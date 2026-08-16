@@ -32,17 +32,13 @@
             <span data-i18n="serverUrlLabel">接口地址</span>
             <input id="serverUrlInput" type="url" placeholder="http://localhost:1234/v1" />
           </label>
-          <label class="field">
+          <label class="field full">
             <span data-i18n="modelLabel">模型 ID</span>
             <div class="combobox" id="modelCombobox">
               <input id="modelInput" type="text" placeholder="自动读取或手动填写" autocomplete="off" />
               <button id="modelDropdownBtn" class="combobox-btn" type="button" tabindex="-1" aria-label="展开模型列表">&#9662;</button>
               <div class="combobox-dropdown" id="modelDropdown" hidden></div>
             </div>
-          </label>
-          <label class="field">
-            <span data-i18n="timeoutLabel">请求超时（秒）</span>
-            <input id="timeoutInput" type="number" min="5" max="600" step="5" value="120" />
           </label>
           <label class="field full">
             <span>API Key</span>
