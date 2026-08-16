@@ -164,6 +164,7 @@ const I18N = {
     logCleared: '日志已清空。',
     directoryRescanned: '已重新扫描目录，当前图片数量：{count}',
     appReady: '程序已就绪，等待选择目录。',
+    githubLinkTitle: 'GitHub 项目主页',
   },
   en: {
     pageTitle: 'Image_Captioner',
@@ -289,6 +290,7 @@ const I18N = {
     logCleared: 'Log cleared.',
     directoryRescanned: 'Directory rescanned. Current image count: {count}',
     appReady: 'Application ready. Waiting for a directory selection.',
+    githubLinkTitle: 'GitHub project page',
   },
 };
 
@@ -341,6 +343,7 @@ const els = {
   resultList: document.getElementById('resultList'),
   runtimeStatusText: document.getElementById('runtimeStatusText'),
   logOutput: document.getElementById('logOutput'),
+  githubLink: document.getElementById('githubLink'),
 };
 
 const state = {
@@ -484,6 +487,11 @@ function applyI18n() {
   updatePresetSelectOptions();
 
   els.toggleApiKeyBtn.textContent = els.apiKeyInput.type === 'password' ? t('show') : t('hide');
+
+  if (els.githubLink) {
+    els.githubLink.setAttribute('aria-label', t('githubLinkTitle'));
+    els.githubLink.setAttribute('title', t('githubLinkTitle'));
+  }
 
   setConnectionBadgeByKey(state.connectionBadgeType);
   setRuntimeStatus(state.runtimeStatusKey);

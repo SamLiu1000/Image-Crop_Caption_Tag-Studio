@@ -884,6 +884,39 @@ textarea {
   font: 11px/1.6 Consolas, 'Courier New', monospace;
 }
 
+/* GitHub 项目链接（页面右上角固定角标） */
+.gh-link {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 200;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text-soft);
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+
+.gh-link:hover {
+  color: var(--primary);
+  border-color: var(--seg-active-border);
+  transform: translateY(-1px);
+}
+
+.gh-link svg {
+  width: 16px;
+  height: 16px;
+}
+
 @media (max-width: 1100px) {
   .page-shell,
   .workspace-grid {
