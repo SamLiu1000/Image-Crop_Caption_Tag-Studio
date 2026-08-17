@@ -15,6 +15,10 @@ const RESIZE_FACTOR = 0.75;
 const MAX_PIXELS = 1120 * 1120;
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 5000;
+const CACHE_DB_NAME = 'image-captioner-cache';
+const CACHE_RESULTS_KEY = 'all';
+const CACHE_FOLDERS_KEY = 'folders';
+const CACHE_SESSION_KEY = 'current';
 
 const DEFAULT_SYSTEM_PROMPT = `You are an image analysis assistant that describes images containing adult human characters. Your task is to observe the image and generate a single, complete English caption that clearly and accurately describes the visual content.
 
@@ -147,6 +151,7 @@ const I18N = {
     progressDetected: '检测到历史进度记录：{count} 项。',
     skippedByProgress: '跳过（进度记录）：{name}',
     skippedByExisting: '跳过（已存在 txt）：{name}',
+    skippedByGenerated: '跳过（本次已生成）：{name}',
     processingStarted: '开始处理：{name}',
     processingFinished: '处理完成：{name}',
     processingFailed: '处理失败：{name} -> {error}',
@@ -166,6 +171,21 @@ const I18N = {
     directoryRescanned: '已重新扫描目录，当前图片数量：{count}',
     appReady: '程序已就绪，等待选择目录。',
     githubLinkTitle: 'GitHub 项目主页',
+    cacheLocationLabel: '缓存位置',
+    cacheLocationDefault: '浏览器存储',
+    cacheFolderChosen: '文件夹：{name}',
+    chooseCacheFolderBtn: '选择缓存文件夹',
+    clearCacheBtn: '清除缓存',
+    cacheHelper: '刷新后保留；文件夹缓存存于所选文件夹的同名子目录，单图存于 captioner-cache，互不干扰；文件夹文件手动删除；清除只清浏览器缓存。',
+    cacheFolderSet: '已设置缓存文件夹：{name}',
+    chooseCacheFolderFailed: '选择缓存文件夹失败：{error}',
+    cacheCleared: '已清除缓存。',
+    cacheFolderWriteFailed: '写入缓存文件夹失败，请检查文件夹权限。',
+    restoreFolderBtn: '恢复上次文件夹：{name}',
+    folderRestored: '已恢复文件夹 {name}，共 {count} 张图片。',
+    singlePreviewRestored: '已恢复上次的单图预览。',
+    folderViewDeleted: '已删除文件夹结果：{name}',
+    folderResultsLabel: '文件夹结果',
   },
   en: {
     pageTitle: 'Image_Captioner',
@@ -275,6 +295,7 @@ const I18N = {
     progressDetected: 'Detected historical progress records: {count}.',
     skippedByProgress: 'Skipped (progress record): {name}',
     skippedByExisting: 'Skipped (existing txt): {name}',
+    skippedByGenerated: 'Skipped (already generated this session): {name}',
     processingStarted: 'Processing started: {name}',
     processingFinished: 'Processing finished: {name}',
     processingFailed: 'Processing failed: {name} -> {error}',
@@ -293,6 +314,21 @@ const I18N = {
     directoryRescanned: 'Directory rescanned. Current image count: {count}',
     appReady: 'Application ready. Waiting for a directory selection.',
     githubLinkTitle: 'GitHub project page',
+    cacheLocationLabel: 'Cache Location',
+    cacheLocationDefault: 'Browser Storage',
+    cacheFolderChosen: 'Folder: {name}',
+    chooseCacheFolderBtn: 'Choose Cache Folder',
+    clearCacheBtn: 'Clear Cache',
+    cacheHelper: 'Survives refresh; folder caches go into a same-named subfolder of the chosen folder, single images into captioner-cache. Folder files are deleted manually; Clear only wipes browser cache.',
+    cacheFolderSet: 'Cache folder set: {name}',
+    chooseCacheFolderFailed: 'Failed to choose cache folder: {error}',
+    cacheCleared: 'Cache cleared.',
+    cacheFolderWriteFailed: 'Failed to write to cache folder. Please check folder permissions.',
+    restoreFolderBtn: 'Restore last folder: {name}',
+    folderRestored: 'Restored folder {name} with {count} images.',
+    singlePreviewRestored: 'Restored the previous single-image preview.',
+    folderViewDeleted: 'Deleted folder results: {name}',
+    folderResultsLabel: 'Folder Results',
   },
 };
 
@@ -345,6 +381,11 @@ const els = {
   runtimeStatusText: document.getElementById('runtimeStatusText'),
   logOutput: document.getElementById('logOutput'),
   githubLink: document.getElementById('githubLink'),
+  cacheLocationText: document.getElementById('cacheLocationText'),
+  chooseCacheFolderBtn: document.getElementById('chooseCacheFolderBtn'),
+  clearCacheBtn: document.getElementById('clearCacheBtn'),
+  restoreFolderBtn: document.getElementById('restoreFolderBtn'),
+  folderChips: document.getElementById('folderChips'),
 };
 
 const state = {
@@ -361,7 +402,10 @@ const state = {
   connectionBadgeType: 'idle',
   runtimeStatusKey: 'runtimeIdle',
   lastLogLines: [],
-  results: [],
+  results: [],                 // 当前视图的结果（单图或某个文件夹）
+  singleResults: [],           // 单图模式结果（与文件夹结果分开保存）
+  folderResults: [],           // [{ name, results: [] }] 各文件夹结果
+  activeFolderName: '',        // 当前查看的文件夹名，'' 表示单图视图
   selectedResultId: null,
   resultSeq: 0,
   thumbToken: 0,
@@ -374,6 +418,12 @@ const state = {
   },
   isRunning: false,
   stopRequested: false,
+  runAbortController: null,
+  cacheFolderHandle: null,
+  pendingFolderHandle: null,
+  pendingFolderLabel: '',
+  pendingCurrentIndex: 0,
+  processedSingleNames: new Set(),
 };
 
 function t(key, params = {}) {
@@ -390,10 +440,409 @@ function renderLogs() {
   els.logOutput.textContent = state.lastLogLines.map(formatLogEntry).join('\n');
 }
 
+/* ---------- 浏览器缓存（IndexedDB） ---------- */
+
+let cacheDbPromise = null;
+
+function getCacheDb() {
+  if (!cacheDbPromise) {
+    cacheDbPromise = new Promise((resolve) => {
+      if (!('indexedDB' in window)) {
+        resolve(null);
+        return;
+      }
+      const request = indexedDB.open(CACHE_DB_NAME, 1);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains('results')) db.createObjectStore('results');
+        if (!db.objectStoreNames.contains('session')) db.createObjectStore('session');
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+    });
+  }
+  return cacheDbPromise;
+}
+
+function dbRequestToPromise(request) {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function dbPut(storeName, value, key) {
+  const db = await getCacheDb();
+  if (!db) return;
+  try {
+    const tx = db.transaction(storeName, 'readwrite');
+    tx.objectStore(storeName).put(value, key);
+    await new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  } catch {
+    // 缓存不可用时静默降级为内存模式
+  }
+}
+
+async function dbGet(storeName, key) {
+  const db = await getCacheDb();
+  if (!db) return undefined;
+  try {
+    const tx = db.transaction(storeName, 'readonly');
+    return await dbRequestToPromise(tx.objectStore(storeName).get(key));
+  } catch {
+    return undefined;
+  }
+}
+
+async function dbClear(storeName) {
+  const db = await getCacheDb();
+  if (!db) return;
+  try {
+    const tx = db.transaction(storeName, 'readwrite');
+    tx.objectStore(storeName).clear();
+    await new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  } catch {
+    // 忽略清除失败
+  }
+}
+
+async function saveResultsToCache() {
+  await dbPut('results', state.singleResults, CACHE_RESULTS_KEY);
+  await dbPut('results', state.folderResults, CACHE_FOLDERS_KEY);
+}
+
+async function loadResultsFromCache() {
+  const [single, folders] = await Promise.all([
+    dbGet('results', CACHE_RESULTS_KEY),
+    dbGet('results', CACHE_FOLDERS_KEY),
+  ]);
+  return {
+    single: Array.isArray(single) ? single : [],
+    folders: Array.isArray(folders) ? folders : [],
+  };
+}
+
+async function saveSessionToCache() {
+  const session = {
+    mode: state.singleFileMode ? 'single' : 'folder',
+    singleFiles: state.singleFileMode ? state.files.map((item) => item.sourceFile).filter(Boolean) : [],
+    directoryHandle: state.directoryHandle || null,
+    directoryLabel: state.directoryLabel || '',
+    currentIndex: state.currentIndex,
+    resultSeq: state.resultSeq,
+    cacheFolderHandle: state.cacheFolderHandle || null,
+    activeFolderName: state.activeFolderName || '',
+  };
+  await dbPut('session', session, CACHE_SESSION_KEY);
+}
+
+async function loadSessionFromCache() {
+  return dbGet('session', CACHE_SESSION_KEY);
+}
+
+/* ---------- 可选缓存文件夹 ---------- */
+
+async function chooseCacheFolder() {
+  if (typeof window.showDirectoryPicker !== 'function') {
+    log('browserNoDirectoryPicker');
+    return;
+  }
+  try {
+    const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    state.cacheFolderHandle = handle;
+    updateCacheLocationText();
+    await saveSessionToCache();
+    log('cacheFolderSet', { name: handle.name });
+  } catch (error) {
+    if (error?.name !== 'AbortError') {
+      log('chooseCacheFolderFailed', { error: error.message || error });
+    }
+  }
+}
+
+// 把单个结果以「原图 + 同名 .txt」形式写入缓存文件夹（按相对路径镜像子目录）
+// 文件夹模式的缓存放在与输入文件夹同名的子目录下，单图模式放在 captioner-cache，两者分开
+async function writeResultToCacheFolder(item, file, caption) {
+  if (!state.cacheFolderHandle) return;
+  try {
+    const subDir = !state.singleFileMode && state.directoryLabel
+      ? state.directoryLabel
+      : 'captioner-cache';
+    const cacheRoot = await state.cacheFolderHandle.getDirectoryHandle(subDir, { create: true });
+    const rel = item.relativePath || item.name || `result-${state.resultSeq}`;
+    const parts = rel.split('/');
+    const fileName = parts.pop();
+    const baseName = fileName.replace(/\.[^.]+$/, '');
+    let targetDir = cacheRoot;
+    for (const part of parts) {
+      targetDir = await targetDir.getDirectoryHandle(part, { create: true });
+    }
+    const imageHandle = await targetDir.getFileHandle(fileName, { create: true });
+    const imageWritable = await imageHandle.createWritable();
+    await imageWritable.write(file);
+    await imageWritable.close();
+    const txtHandle = await targetDir.getFileHandle(`${baseName}.txt`, { create: true });
+    const txtWritable = await txtHandle.createWritable();
+    await txtWritable.write(caption || '');
+    await txtWritable.close();
+  } catch {
+    log('cacheFolderWriteFailed');
+  }
+}
+
+function updateCacheLocationText() {
+  if (!els.cacheLocationText) return;
+  els.cacheLocationText.textContent = state.cacheFolderHandle
+    ? t('cacheFolderChosen', { name: state.cacheFolderHandle.name })
+    : t('cacheLocationDefault');
+}
+
+/* ---------- 文件夹结果视图 ---------- */
+
+function getFolderEntry(name) {
+  return state.folderResults.find((entry) => entry.name === name);
+}
+
+function enterSingleView() {
+  state.activeFolderName = '';
+  state.results = state.singleResults;
+  state.selectedResultId = null;
+  renderResults();
+  renderFolderChips();
+}
+
+function enterFolderView(name) {
+  const entry = getFolderEntry(name);
+  if (!entry) return;
+  state.activeFolderName = name;
+  state.results = entry.results;
+  state.selectedResultId = null;
+  renderResults();
+  renderFolderChips();
+}
+
+async function toggleFolderView(name) {
+  if (state.activeFolderName === name) {
+    enterSingleView();
+  } else {
+    enterFolderView(name);
+    // 点击文件夹结果标签时，自动把预览切回该文件夹目录
+    await restoreFolderDirectory(name);
+  }
+}
+
+async function deleteFolderView(name) {
+  const wasActive = state.activeFolderName === name;
+  state.folderResults = state.folderResults.filter((entry) => entry.name !== name);
+  if (wasActive) {
+    enterSingleView();
+  } else {
+    renderFolderChips();
+  }
+  saveResultsToCache();
+  saveSessionToCache();
+  log('folderViewDeleted', { name });
+}
+
+function renderFolderChips() {
+  if (!els.folderChips) return;
+  els.folderChips.innerHTML = '';
+  const visible = state.folderResults.filter((entry) => entry.results.length > 0);
+  els.folderChips.hidden = visible.length === 0;
+  if (!visible.length) return;
+
+  const label = document.createElement('span');
+  label.className = 'folder-chips-label';
+  label.textContent = t('folderResultsLabel');
+  els.folderChips.appendChild(label);
+
+  for (const entry of visible) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'folder-chip' + (state.activeFolderName === entry.name ? ' active' : '');
+    chip.title = entry.name;
+
+    const label = document.createElement('span');
+    label.className = 'folder-chip-name';
+    label.textContent = entry.name;
+
+    const del = document.createElement('span');
+    del.className = 'folder-chip-del';
+    del.textContent = '×';
+    del.addEventListener('click', (event) => {
+      event.stopPropagation();
+      deleteFolderView(entry.name);
+    });
+
+    chip.appendChild(label);
+    chip.appendChild(del);
+    chip.addEventListener('click', () => toggleFolderView(entry.name));
+    els.folderChips.appendChild(chip);
+  }
+}
+
+async function restoreFolderDirectory(name) {
+  const entry = getFolderEntry(name);
+  if (!entry || !entry.directoryHandle) return;
+  let granted = false;
+  try {
+    granted = await ensureDirectoryPermission(entry.directoryHandle, 'readwrite');
+  } catch {
+    granted = false;
+  }
+  if (!granted) return;
+  state.singleFileMode = false;
+  state.directoryHandle = entry.directoryHandle;
+  state.directoryLabel = entry.name;
+  els.folderPathInput.value = entry.name;
+  state.files = await collectImageFiles(entry.directoryHandle, els.recursiveCheck.checked);
+  state.currentIndex = state.files.length ? 0 : -1;
+  resetCounters();
+  syncStats();
+  renderThumbStrip();
+  await renderPreview();
+  saveSessionToCache();
+}
+
+/* ---------- 缓存恢复与清除 ---------- */
+
+function showRestoreFolderBtn() {
+  if (!els.restoreFolderBtn) return;
+  els.restoreFolderBtn.hidden = false;
+  els.restoreFolderBtn.textContent = t('restoreFolderBtn', { name: state.pendingFolderLabel || '' });
+}
+
+function hideRestoreFolderBtn() {
+  if (!els.restoreFolderBtn) return;
+  els.restoreFolderBtn.hidden = true;
+}
+
+async function tryRestoreFolderSession() {
+  const handle = state.pendingFolderHandle;
+  if (!handle) return;
+  let granted = false;
+  try {
+    granted = await ensureDirectoryPermission(handle, 'readwrite');
+  } catch {
+    granted = false;
+  }
+  if (!granted) {
+    showRestoreFolderBtn();
+    return;
+  }
+  state.directoryHandle = handle;
+  state.directoryLabel = state.pendingFolderLabel || handle.name || 'selected-folder';
+  els.folderPathInput.value = state.directoryLabel;
+  state.files = await collectImageFiles(handle, els.recursiveCheck.checked);
+  state.currentIndex = state.pendingCurrentIndex >= 0 && state.pendingCurrentIndex < state.files.length
+    ? state.pendingCurrentIndex
+    : (state.files.length ? 0 : -1);
+  resetCounters();
+  syncStats();
+  renderThumbStrip();
+  await renderPreview();
+  hideRestoreFolderBtn();
+  log('folderRestored', { name: state.directoryLabel, count: state.files.length });
+  saveSessionToCache();
+}
+
+async function restoreCachedSession() {
+  const [cachedResults, cachedSession] = await Promise.all([
+    loadResultsFromCache(),
+    loadSessionFromCache(),
+  ]);
+
+  state.singleResults = Array.isArray(cachedResults.single) ? cachedResults.single : [];
+  state.folderResults = Array.isArray(cachedResults.folders) ? cachedResults.folders : [];
+  state.resultSeq = state.singleResults.reduce((maxId, entry) => Math.max(maxId, Number(entry.id) || 0), 0);
+  for (const folder of state.folderResults) {
+    for (const entry of folder.results) {
+      state.resultSeq = Math.max(state.resultSeq, Number(entry.id) || 0);
+    }
+  }
+  state.processedSingleNames = new Set(state.singleResults.map((entry) => entry.name));
+  enterSingleView();
+
+  if (!cachedSession) return;
+
+  state.cacheFolderHandle = cachedSession.cacheFolderHandle || null;
+  updateCacheLocationText();
+  if (cachedSession.resultSeq > state.resultSeq) state.resultSeq = cachedSession.resultSeq;
+
+  if (cachedSession.mode === 'single') {
+    const singleFiles = Array.isArray(cachedSession.singleFiles) && cachedSession.singleFiles.length
+      ? cachedSession.singleFiles
+      : (cachedSession.singleFile ? [cachedSession.singleFile] : []);
+    if (singleFiles.length) {
+      state.singleFileMode = true;
+      state.singleFileSource = singleFiles[singleFiles.length - 1];
+      state.files = singleFiles.map((file) => createVirtualFileItem(file));
+      state.currentIndex = Math.min(cachedSession.currentIndex || 0, state.files.length - 1);
+      renderThumbStrip();
+      await renderPreview();
+      log('singlePreviewRestored');
+    }
+  } else if (cachedSession.mode === 'folder' && cachedSession.directoryHandle) {
+    state.pendingFolderHandle = cachedSession.directoryHandle;
+    state.pendingFolderLabel = cachedSession.directoryLabel || '';
+    state.pendingCurrentIndex = cachedSession.currentIndex || 0;
+    tryRestoreFolderSession();
+  }
+
+  // 恢复上次查看的文件夹结果视图（若仍存在）
+  if (cachedSession.activeFolderName && getFolderEntry(cachedSession.activeFolderName)) {
+    enterFolderView(cachedSession.activeFolderName);
+  }
+}
+
+async function clearCache() {
+  await dbClear('results');
+  await dbClear('session');
+  if (state.currentObjectUrl) {
+    URL.revokeObjectURL(state.currentObjectUrl);
+    state.currentObjectUrl = '';
+  }
+  state.results = [];
+  state.singleResults = [];
+  state.folderResults = [];
+  state.activeFolderName = '';
+  state.selectedResultId = null;
+  state.resultSeq = 0;
+  state.processedSingleNames = new Set();
+  state.files = [];
+  state.currentIndex = -1;
+  state.singleFileMode = false;
+  state.singleFileSource = null;
+  state.directoryHandle = null;
+  state.directoryLabel = '';
+  state.cacheFolderHandle = null;
+  state.pendingFolderHandle = null;
+  state.pendingFolderLabel = '';
+  state.pendingCurrentIndex = 0;
+  els.folderPathInput.value = '';
+  hideRestoreFolderBtn();
+  updateCacheLocationText();
+  renderFolderChips();
+  resetCounters();
+  renderThumbStrip();
+  renderResults();
+  await renderPreview();
+  log('cacheCleared');
+}
+
 function buildResultItem(entry) {
   const item = document.createElement('div');
   item.className = 'result-item';
   item.dataset.resultId = String(entry.id);
+  item.dataset.resultName = entry.name;
 
   const thumb = document.createElement('img');
   if (entry.thumbUrl) {
@@ -454,6 +903,9 @@ function appendResultItem(entry) {
   const list = els.resultList;
   const placeholder = list.querySelector('.result-empty');
   if (placeholder) placeholder.remove();
+  // 若同名条目已存在（重复处理同一文件），先移除旧节点再插入新节点
+  const oldNode = list.querySelector(`.result-item[data-result-name="${CSS.escape(entry.name)}"]`);
+  if (oldNode) oldNode.remove();
   const nearTop = list.scrollTop < 80;
   const item = buildResultItem(entry);
   list.prepend(item); // 最新的在最上方
@@ -482,11 +934,36 @@ function renderResults() {
   els.resultList.scrollTop = 0;
 }
 
+function getActiveResultsTarget() {
+  if (!state.singleFileMode && state.directoryLabel) {
+    let entry = getFolderEntry(state.directoryLabel);
+    if (!entry) {
+      entry = { name: state.directoryLabel, results: [] };
+      state.folderResults.push(entry);
+    }
+    state.activeFolderName = state.directoryLabel;
+    return entry.results;
+  }
+  state.activeFolderName = '';
+  return state.singleResults;
+}
+
 function addResultEntry(name, caption, thumbUrl) {
   state.resultSeq += 1;
   const entry = { id: state.resultSeq, name, caption, thumbUrl };
-  state.results.push(entry);
+  const target = getActiveResultsTarget();
+  // 同一文件名已存在结果时（多次处理同一文件夹），替换旧条目避免重复
+  const existingIndex = target.findIndex((item) => item.name === name);
+  if (existingIndex >= 0) {
+    target[existingIndex] = entry;
+  } else {
+    target.push(entry);
+  }
+  state.results = target;
   appendResultItem(entry);
+  renderFolderChips();
+  saveResultsToCache();
+  saveSessionToCache();
 }
 
 function applyI18n() {
@@ -504,6 +981,11 @@ function applyI18n() {
   els.userPromptInput.placeholder = t('userPromptPlaceholder');
   els.previewImage.alt = t('previewImageAlt');
   updatePresetSelectOptions();
+  updateCacheLocationText();
+  renderFolderChips();
+  if (state.pendingFolderLabel && els.restoreFolderBtn && !els.restoreFolderBtn.hidden) {
+    els.restoreFolderBtn.textContent = t('restoreFolderBtn', { name: state.pendingFolderLabel || '' });
+  }
 
   els.toggleApiKeyBtn.textContent = els.apiKeyInput.type === 'password' ? t('show') : t('hide');
 
@@ -920,13 +1402,21 @@ async function loadSingleFile(file) {
     return;
   }
 
+  // 拖入单图总是单独处理：从文件夹模式切回单图模式（清空文件夹列表），或单图模式继续累加
+  const switchingFromFolder = !!state.directoryHandle && !state.singleFileMode;
   state.singleFileMode = true;
   state.singleFileSource = file;
   state.directoryHandle = null;
   state.directoryLabel = '';
   els.folderPathInput.value = '';
-  state.files = [createVirtualFileItem(file)];
-  state.currentIndex = 0;
+  if (switchingFromFolder) {
+    state.files = [createVirtualFileItem(file)];
+    state.currentIndex = 0;
+  } else {
+    state.files.push(createVirtualFileItem(file));
+    state.currentIndex = state.files.length - 1;
+  }
+  enterSingleView();
   state.isRunning = false;
   state.stopRequested = false;
   resetCounters();
@@ -935,6 +1425,7 @@ async function loadSingleFile(file) {
   setConnectionBadgeByKey('idle');
   renderThumbStrip();
   await renderPreview();
+  await saveSessionToCache();
 }
 
 async function handlePreviewDrop(event) {
@@ -952,6 +1443,7 @@ async function chooseFolder() {
   try {
     const directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
     state.singleFileMode = false;
+    state.processedSingleNames = new Set();
     state.directoryHandle = directoryHandle;
     state.directoryLabel = directoryHandle.name || 'selected-folder';
     els.folderPathInput.value = state.directoryLabel;
@@ -962,6 +1454,7 @@ async function chooseFolder() {
     renderThumbStrip();
     renderPreview();
     log('directoryLoaded', { name: state.directoryLabel, count: state.files.length });
+    await saveSessionToCache();
   } catch (error) {
     if (error?.name !== 'AbortError') {
       log('chooseDirectoryFailed', { error: error.message || error });
@@ -1166,13 +1659,20 @@ async function makeThumbnail(file, maxDimension = 160) {
 
 function buildAbortSignal(timeoutSeconds) {
   const controller = new AbortController();
+  const onRunAbort = () => controller.abort(new Error('stopped'));
   const timeoutId = window.setTimeout(() => controller.abort(new Error('timeout')), timeoutSeconds * 1000);
+  state.runAbortController?.signal.addEventListener('abort', onRunAbort, { once: true });
   return {
     signal: controller.signal,
     cleanup() {
       window.clearTimeout(timeoutId);
+      state.runAbortController?.signal.removeEventListener('abort', onRunAbort);
     },
   };
+}
+
+function isStopRequested() {
+  return state.stopRequested || !!state.runAbortController?.signal.aborted;
 }
 
 async function safeFetchJson(url, options = {}) {
@@ -1187,17 +1687,23 @@ async function safeFetchJson(url, options = {}) {
 async function detectModelIfNeeded(config) {
   if (config.model) return config.model;
   const baseUrl = sanitizeBaseUrl(config.serverUrl) || LM_STUDIO_DEFAULT_URL;
-  const data = await safeFetchJson(`${baseUrl}/models`, {
-    method: 'GET',
-    mode: 'cors',
-    headers: config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {},
-  });
-  const models = (data?.data || []).map((item) => item.id).filter(Boolean);
-  const modelId = models[0];
-  if (!modelId) throw new Error(t('modelListEmpty'));
-  populateModelList(models, modelId);
-  state.currentModel = modelId;
-  return modelId;
+  const abortable = buildAbortSignal(config.timeoutSeconds);
+  try {
+    const data = await safeFetchJson(`${baseUrl}/models`, {
+      method: 'GET',
+      mode: 'cors',
+      headers: config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {},
+      signal: abortable.signal,
+    });
+    const models = (data?.data || []).map((item) => item.id).filter(Boolean);
+    const modelId = models[0];
+    if (!modelId) throw new Error(t('modelListEmpty'));
+    populateModelList(models, modelId);
+    state.currentModel = modelId;
+    return modelId;
+  } finally {
+    abortable.cleanup();
+  }
 }
 
 async function requestCaption(config, item, file) {
@@ -1230,6 +1736,7 @@ async function requestCaption(config, item, file) {
 
   let lastError = null;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt += 1) {
+    if (isStopRequested()) break;
     const abortable = buildAbortSignal(config.timeoutSeconds);
     try {
       const result = await safeFetchJson(`${baseUrl}/chat/completions`, {
@@ -1247,11 +1754,13 @@ async function requestCaption(config, item, file) {
     } catch (error) {
       abortable.cleanup();
       lastError = error;
+      if (isStopRequested()) break;
       const message = String(error?.message || error);
       const retryable = /failed to process image|memory slot|channel error|timeout|abort/i.test(message);
       if (attempt < MAX_RETRIES && retryable) {
         log('retryRequest', { name: item.relativePath, attempt, seconds: Math.round(RETRY_DELAY_MS / 1000) });
         await sleep(RETRY_DELAY_MS);
+        if (isStopRequested()) break;
         continue;
       }
       break;
@@ -1326,6 +1835,7 @@ async function processItem(item, config, combineMode, progressSet) {
   const progressName = item.relativePath;
   const file = await item.handle.getFile();
   log('processingStarted', { name: progressName });
+  if (isStopRequested()) return;
   const newCaption = await requestCaption(config, item, file);
   let finalCaption = newCaption;
   if (combineMode !== 'none' && !state.singleFileMode) {
@@ -1345,7 +1855,12 @@ async function processItem(item, config, combineMode, progressSet) {
   } catch {
     thumbUrl = '';
   }
+  if (isStopRequested()) return;
   addResultEntry(progressName, finalCaption, thumbUrl);
+  writeResultToCacheFolder(item, file, finalCaption);
+  if (state.singleFileMode) {
+    state.processedSingleNames.add(progressName);
+  }
   if (!state.singleFileMode && progressSet) {
     progressSet.add(progressName);
     saveProgressRecord(progressSet);
@@ -1394,13 +1909,30 @@ async function processAll(combineMode = 'none') {
   persistCurrentConfig(config, false);
   state.isRunning = true;
   state.stopRequested = false;
+  state.runAbortController = new AbortController();
   resetCounters();
   state.lastLogLines = [];
   log('taskStarted');
   if (!state.singleFileMode) {
-    state.results = [];
+    // 文件夹处理结果单独保存到对应文件夹名下
+    // 注意：不在此清空已有结果，多次分开处理同一文件夹时结果累积显示
+    let entry = getFolderEntry(state.directoryLabel);
+    if (!entry) {
+      entry = { name: state.directoryLabel, results: [] };
+      state.folderResults.push(entry);
+    }
+    // 记住该文件夹的目录句柄，点击结果标签时可自动切回对应目录
+    entry.directoryHandle = state.directoryHandle;
+    state.activeFolderName = state.directoryLabel;
+    state.results = entry.results;
     state.selectedResultId = null;
     renderResults();
+    renderFolderChips();
+    saveResultsToCache();
+    saveSessionToCache();
+  } else {
+    // 单图模式：结果显示在单图视图
+    enterSingleView();
   }
   setRuntimeStatus('runtimeRunning');
   setConnectionBadgeByKey('taskRunning');
@@ -1421,25 +1953,42 @@ async function processAll(combineMode = 'none') {
       const item = state.files[index];
       const progressName = item.relativePath;
 
-      if (progressSet.has(progressName)) {
+      if (state.singleFileMode && state.processedSingleNames.has(progressName)) {
         state.stats.skipped += 1;
         syncStats();
-        log('skippedByProgress', { name: progressName });
+        log('skippedByGenerated', { name: progressName });
         continue;
       }
 
-      if (combineMode === 'none' && !state.singleFileMode && config.skipExisting && await hasExistingCaption(item)) {
-        progressSet.add(progressName);
-        saveProgressRecord(progressSet);
-        state.stats.skipped += 1;
-        syncStats();
-        log('skippedByExisting', { name: progressName });
-        continue;
+      if (!state.singleFileMode) {
+        const hasTxt = await hasExistingCaption(item);
+        if (combineMode === 'none' && config.skipExisting && hasTxt) {
+          // 已有 txt 且勾选跳过 → 跳过
+          progressSet.add(progressName);
+          saveProgressRecord(progressSet);
+          state.stats.skipped += 1;
+          syncStats();
+          log('skippedByExisting', { name: progressName });
+          continue;
+        }
+        if (hasTxt && progressSet.has(progressName)) {
+          // txt 仍存在但用户关闭跳过：按进度记录跳过（中断续跑场景）
+          state.stats.skipped += 1;
+          syncStats();
+          log('skippedByProgress', { name: progressName });
+          continue;
+        }
+        // TXT 已被删除（用户想重新生成）→ 清理过期进度记录并处理
+        if (!hasTxt && progressSet.has(progressName)) {
+          progressSet.delete(progressName);
+          saveProgressRecord(progressSet);
+        }
       }
 
       try {
         await processItem(item, config, combineMode, progressSet);
       } catch (error) {
+        if (isStopRequested()) break;
         state.stats.failed += 1;
         syncStats();
         log('processingFailed', { name: progressName, error: error.message || error });
@@ -1455,11 +2004,17 @@ async function processAll(combineMode = 'none') {
     }
     setConnectionBadgeByKey('taskFinished');
   } catch (error) {
-    setConnectionBadgeByKey('taskError');
-    log('taskException', { error: error.message || error });
+    if (isStopRequested()) {
+      log('taskStopped');
+      setConnectionBadgeByKey('taskFinished');
+    } else {
+      setConnectionBadgeByKey('taskError');
+      log('taskException', { error: error.message || error });
+    }
   } finally {
     state.isRunning = false;
     state.stopRequested = false;
+    state.runAbortController = null;
     setTaskButtonsDisabled(false);
     setRuntimeStatus('runtimeIdle');
   }
@@ -1494,11 +2049,30 @@ async function processCurrent() {
 
   state.isRunning = true;
   state.stopRequested = false;
+  state.runAbortController = new AbortController();
   state.lastLogLines = [];
   log('taskStarted');
   setRuntimeStatus('runtimeRunning');
   setConnectionBadgeByKey('taskRunning');
   setTaskButtonsDisabled(true);
+  if (!state.singleFileMode) {
+    // 文件夹模式：结果归入当前文件夹
+    let entry = getFolderEntry(state.directoryLabel);
+    if (!entry) {
+      entry = { name: state.directoryLabel, results: [] };
+      state.folderResults.push(entry);
+    }
+    entry.directoryHandle = state.directoryHandle;
+    state.activeFolderName = state.directoryLabel;
+    state.results = entry.results;
+    state.selectedResultId = null;
+    renderResults();
+    renderFolderChips();
+    saveResultsToCache();
+    saveSessionToCache();
+  } else {
+    enterSingleView();
+  }
 
   const targetItem = state.files[state.currentIndex];
   const itemName = targetItem.relativePath;
@@ -1508,13 +2082,18 @@ async function processCurrent() {
     await processItem(targetItem, config, 'none', progressSet);
     setConnectionBadgeByKey('taskFinished');
   } catch (error) {
-    state.stats.failed += 1;
-    syncStats();
-    log('processingFailed', { name: itemName, error: error.message || error });
-    setConnectionBadgeByKey('taskError');
+    if (isStopRequested()) {
+      setConnectionBadgeByKey('taskFinished');
+    } else {
+      state.stats.failed += 1;
+      syncStats();
+      log('processingFailed', { name: itemName, error: error.message || error });
+      setConnectionBadgeByKey('taskError');
+    }
   } finally {
     state.isRunning = false;
     state.stopRequested = false;
+    state.runAbortController = null;
     setTaskButtonsDisabled(false);
     setRuntimeStatus('runtimeIdle');
   }
@@ -1523,8 +2102,7 @@ async function processCurrent() {
 function stopProcessing() {
   if (!state.isRunning) return;
   state.stopRequested = true;
-  state.isRunning = false;
-  setTaskButtonsDisabled(false);
+  state.runAbortController?.abort();
   log('stopRequested');
 }
 
@@ -1561,9 +2139,20 @@ function clearResults() {
     log('noResultToClear');
     return;
   }
-  state.results = [];
-  state.selectedResultId = null;
-  renderResults();
+  if (state.activeFolderName) {
+    // 清空当前文件夹的结果（空条目一并移除，标签消失）
+    state.folderResults = state.folderResults.filter((entry) => entry.name !== state.activeFolderName);
+    state.results = [];
+    state.selectedResultId = null;
+    enterSingleView();
+  } else {
+    state.singleResults = [];
+    state.results = [];
+    state.selectedResultId = null;
+    state.processedSingleNames = new Set();
+    renderResults();
+  }
+  saveResultsToCache();
   log('resultsCleared');
 }
 
@@ -1680,6 +2269,10 @@ function bindEvents() {
     await renderPreview();
     log('directoryRescanned', { count: state.files.length });
   });
+
+  els.chooseCacheFolderBtn.addEventListener('click', chooseCacheFolder);
+  els.clearCacheBtn.addEventListener('click', clearCache);
+  els.restoreFolderBtn.addEventListener('click', tryRestoreFolderSession);
 }
 
 function init() {
@@ -1694,6 +2287,7 @@ function init() {
   setConnectionBadgeByKey('idle');
   setRuntimeStatus('runtimeIdle');
   log('appReady');
+  restoreCachedSession();
 }
 
 init();

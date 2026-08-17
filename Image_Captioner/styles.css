@@ -626,6 +626,111 @@ textarea {
   font-size: 13px;
 }
 
+.cache-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cache-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.cache-row > span {
+  color: var(--text-soft);
+}
+
+.cache-row strong {
+  color: var(--text);
+  word-break: break-all;
+}
+
+.cache-spacer {
+  flex: 1 1 auto;
+}
+
+.cache-section .ghost-btn {
+  padding: 4px 9px;
+  font-size: 11px;
+}
+
+.folder-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.folder-chips-label {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.folder-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel-muted);
+  color: var(--text-soft);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.folder-chip:hover {
+  border-color: var(--border-strong);
+}
+
+.folder-chip.active {
+  border-color: var(--seg-active-border);
+  background: var(--seg-active-bg);
+  color: var(--primary);
+}
+
+.folder-chip-name {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-chip-del {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-dim);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.folder-chip-del:hover {
+  background: rgba(220, 38, 38, 0.15);
+  color: var(--danger);
+}
+
+.cache-section .helper-text {
+  margin-top: 0;
+  font-size: 10px;
+}
+
+#restoreFolderBtn {
+  align-self: flex-start;
+}
+
 .preview-meta .meta-label,
 .preview-meta strong {
   font-size: 11px;

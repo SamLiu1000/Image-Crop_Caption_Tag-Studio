@@ -158,6 +158,19 @@
             <strong id="failedCountText">0</strong>
           </article>
         </div>
+
+        <div class="cache-section">
+          <div class="cache-row">
+            <span data-i18n="cacheLocationLabel">缓存位置</span>
+            <strong id="cacheLocationText">浏览器存储</strong>
+            <span class="cache-spacer"></span>
+            <button id="chooseCacheFolderBtn" class="ghost-btn" type="button" data-i18n="chooseCacheFolderBtn">选择缓存文件夹</button>
+            <button id="clearCacheBtn" class="ghost-btn danger-ghost-btn" type="button" data-i18n="clearCacheBtn">清除缓存</button>
+          </div>
+          <div id="folderChips" class="folder-chips" hidden></div>
+          <button id="restoreFolderBtn" class="ghost-btn" type="button" hidden></button>
+          <p class="helper-text" data-i18n="cacheHelper">刷新后保留；结果同步存为 原图+字幕.txt 到所选文件夹，文件夹文件手动删除；清除只清浏览器缓存。</p>
+        </div>
       </section>
 
       <section class="workspace-grid">
