@@ -718,17 +718,37 @@ async function applyImportedConfigAndRefresh(data, mode) {
       // ignore
     }
   }
-  // 同浏览器导入时，保留当前会话中已有的缓存文件夹句柄（导入文件不含句柄）
-  let prevCacheHandle = null;
+  // 同浏览器导入时，保留当前会话中已有的目录/文件信息（导入文件不含句柄）
+  // 关键：避免下面 saveSessionToCache() 在 init 阶段把旧目录句柄覆盖为 null
+  let prev = null;
   try {
-    const prevSession = await loadSessionFromCache();
-    prevCacheHandle = prevSession?.cacheFolderHandle || null;
+    prev = await loadSessionFromCache();
   } catch {
-    prevCacheHandle = null;
+    prev = null;
   }
+  const prevDirectoryHandle = prev?.directoryHandle || null;
+  const prevDirectoryLabel = prev?.directoryLabel || '';
+  const prevSingleFileMode = prev?.mode === 'single';
+  const prevSingleFiles = prevSingleFileMode && Array.isArray(prev.singleFiles) ? prev.singleFiles : [];
+  const prevSingleSource = prev?.singleFileSource || (prevSingleFiles.length ? prevSingleFiles[prevSingleFiles.length - 1] : null);
+  const prevCurrentIndex = prev?.currentIndex ?? 0;
+  const prevCacheHandle = prev?.cacheFolderHandle || null;
   applyImportedConfig(data, mode);
+  // 恢复无法从导入文件重建的会话字段
   if (!state.cacheFolderHandle && prevCacheHandle) {
     state.cacheFolderHandle = prevCacheHandle;
+  }
+  if (!state.directoryHandle && prevDirectoryHandle) {
+    state.directoryHandle = prevDirectoryHandle;
+    state.directoryLabel = prevDirectoryLabel;
+    state.singleFileMode = prevSingleFileMode;
+    if (prevSingleFileMode && prevSingleFiles.length) {
+      state.singleFileSource = prevSingleSource;
+      state.files = prevSingleFiles.map((file) => createVirtualFileItem(file));
+      state.currentIndex = Math.min(prevCurrentIndex, state.files.length - 1);
+    } else if (!prevSingleFileMode) {
+      state.singleFileMode = false;
+    }
   }
   updatePresetSelectOptions();
   updateCacheLocationText();
