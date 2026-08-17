@@ -160,6 +160,8 @@ const I18N = {
     resultCopied: '已复制选中的结果到剪贴板。',
     allResultsCopied: '已复制全部 {count} 条结果（每条一行）。',
     copyFailed: '复制失败，浏览器可能拒绝了剪贴板访问。',
+    resultItemCopyBtn: '复制',
+    resultItemCopied: '已复制结果：{name}',
     logCleared: '日志已清空。',
     directoryRescanned: '已重新扫描目录，当前图片数量：{count}',
     appReady: '程序已就绪，等待选择目录。',
@@ -285,6 +287,8 @@ const I18N = {
     noResultToCopy: 'There is no result to copy right now.',
     resultCopied: 'The selected result has been copied to the clipboard.',
     copyFailed: 'Copy failed. The browser may have blocked clipboard access.',
+    resultItemCopyBtn: 'Copy',
+    resultItemCopied: 'Copied result: {name}',
     logCleared: 'Log cleared.',
     directoryRescanned: 'Directory rescanned. Current image count: {count}',
     appReady: 'Application ready. Waiting for a directory selection.',
@@ -402,15 +406,33 @@ function buildResultItem(entry) {
   const textColumn = document.createElement('div');
   textColumn.className = 'result-text';
 
+  const fileNameRow = document.createElement('div');
+  fileNameRow.className = 'result-file-row';
+
   const fileName = document.createElement('div');
   fileName.className = 'result-file-name';
   fileName.textContent = entry.name;
+
+  const copyBtn = document.createElement('button');
+  copyBtn.type = 'button';
+  copyBtn.className = 'result-copy-btn';
+  copyBtn.textContent = t('resultItemCopyBtn');
+  copyBtn.title = t('copyCaptionBtn');
+  copyBtn.addEventListener('click', async (event) => {
+    event.stopPropagation();
+    if (await copyTextToClipboard(entry.caption)) {
+      log('resultItemCopied', { name: entry.name });
+    }
+  });
+
+  fileNameRow.appendChild(fileName);
+  fileNameRow.appendChild(copyBtn);
 
   const caption = document.createElement('div');
   caption.className = 'result-caption';
   caption.textContent = entry.caption;
 
-  textColumn.appendChild(fileName);
+  textColumn.appendChild(fileNameRow);
   textColumn.appendChild(caption);
   item.appendChild(thumb);
   item.appendChild(textColumn);
