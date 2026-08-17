@@ -382,21 +382,39 @@ function isValidConfigPayload(config) {
   return !!config && typeof config === 'object' && !!config.tools && typeof config.tools === 'object';
 }
 
-// Export configuration to JSON file
+// Export configuration to JSON file (choose save location when supported)
 async function exportConfig() {
   try {
     const config = await collectAllLocalStorageData();
     const json = JSON.stringify(config, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement('a');
-    a.href = url;
     const timestamp = new Date().toISOString().slice(0, 10);
-    a.download = `web-tools-config-${timestamp}.json`;
-    a.click();
+    const suggestedName = `web-tools-config-${timestamp}.json`;
 
-    setTimeout(() => URL.revokeObjectURL(url), 500);
+    // 优先使用 showSaveFilePicker 让用户选择保存位置（Chromium 内核浏览器）
+    if (window.showSaveFilePicker) {
+      let handle;
+      try {
+        handle = await window.showSaveFilePicker({
+          suggestedName,
+          types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }],
+        });
+      } catch (error) {
+        if (error?.name === 'AbortError') return; // 用户取消选择
+        throw error;
+      }
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+    } else {
+      // 回退：直接下载到默认下载目录
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = suggestedName;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 500);
+    }
     alert(t('exportSuccess'));
   } catch (error) {
     console.error('Export failed:', error);

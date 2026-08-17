@@ -651,6 +651,14 @@ function applyImportedConfig(data, mode) {
     persistCurrentConfig(getConfig(), false);
   }
 
+  // 收集当前会话中已有的文件夹目录句柄（IndexedDB 恢复的），供导入后按名称保留
+  const existingHandleMap = new Map();
+  for (const entry of state.folderResults) {
+    if (entry.name && entry.directoryHandle) {
+      existingHandleMap.set(entry.name, entry.directoryHandle);
+    }
+  }
+
   if (mode === 'overwrite') {
     state.presets = Array.isArray(data?.presets)
       ? data.presets.filter((item) => item && typeof item.name === 'string' && item.name.trim())
@@ -659,7 +667,12 @@ function applyImportedConfig(data, mode) {
     state.folderResults = Array.isArray(data?.folderResults)
       ? data.folderResults
           .filter((entry) => entry && typeof entry.name === 'string' && entry.name.trim())
-          .map((entry) => ({ name: entry.name, results: sanitizeImportedResults(entry.results) }))
+          .map((entry) => ({
+            name: entry.name,
+            results: sanitizeImportedResults(entry.results),
+            // 同一浏览器导入时保留原有目录句柄，避免覆盖模式丢失目录关联
+            directoryHandle: existingHandleMap.get(entry.name) || null,
+          }))
       : [];
   } else {
     // 合并：预设按名称去重，结果按名称去重合并
@@ -689,7 +702,11 @@ function applyImportedConfig(data, mode) {
         }
         existing.results = [...resultMap.values()];
       } else {
-        folderMap.set(entry.name, { name: entry.name, results: importedResults });
+        folderMap.set(entry.name, {
+          name: entry.name,
+          results: importedResults,
+          directoryHandle: existingHandleMap.get(entry.name) || null,
+        });
       }
     }
     state.folderResults = [...folderMap.values()];
