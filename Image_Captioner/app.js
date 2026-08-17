@@ -175,11 +175,21 @@ const I18N = {
     cacheLocationDefault: '浏览器存储',
     cacheFolderChosen: '文件夹：{name}',
     chooseCacheFolderBtn: '选择缓存文件夹',
-    clearCacheBtn: '清除缓存',
-    cacheHelper: '刷新后保留；文件夹缓存存于所选文件夹的同名子目录，单图存于 captioner-cache，互不干扰；文件夹文件手动删除；清除只清浏览器缓存。',    cacheFolderSet: '已设置缓存文件夹：{name}',
+    clearCacheBtn: '删除选中',
+    cacheHelper: '选择缓存文件夹后自动识别其中内容：captioner-cache 为单图缓存，其它子目录按文件夹名识别为处理结果。先点击标签高亮要删除的目标，再点「删除选中」；删除为永久删除，不经过回收站，无法恢复。',
+    cacheFolderSet: '已设置缓存文件夹：{name}',
     chooseCacheFolderFailed: '选择缓存文件夹失败：{error}',
-    cacheCleared: '已清除缓存。',
+    cacheCleared: '已删除缓存。',
     cacheFolderWriteFailed: '写入缓存文件夹失败，请检查文件夹权限。',
+    cacheScanned: '已识别缓存内容：单图 {single} 条，文件夹 {folders} 个。',
+    cacheScanFailed: '识别缓存内容失败：{error}',
+    confirmDeleteCache: '确定删除缓存文件夹中的全部缓存文件吗？此操作不可恢复。',
+    confirmDeleteSingleCache: '确定删除单图缓存吗？删除为永久删除，不经过回收站，无法恢复。',
+    confirmDeleteFolderView: '确定删除文件夹 {name} 的缓存结果吗？删除为永久删除，不经过回收站，无法恢复。',
+    singleCacheLabel: '单图缓存',
+    cacheDeleteConfirmed: '已删除缓存文件夹内容。',
+    singleCacheDeleted: '已删除单图缓存。',
+    noResultToClear: '当前没有可删除的缓存项，请先点击标签高亮目标。',
     restoreFolderBtn: '恢复上次文件夹：{name}',
     folderRestored: '已恢复文件夹 {name}，共 {count} 张图片。',
     singlePreviewRestored: '已恢复上次的单图预览。',
@@ -319,12 +329,21 @@ const I18N = {
     cacheLocationDefault: 'Browser Storage',
     cacheFolderChosen: 'Folder: {name}',
     chooseCacheFolderBtn: 'Choose Cache Folder',
-    clearCacheBtn: 'Clear Cache',
-    cacheHelper: 'Survives refresh; folder caches go into a same-named subfolder of the chosen folder, single images into captioner-cache. Folder files are deleted manually; Clear only wipes browser cache.',
+    clearCacheBtn: 'Delete Selected',
+    cacheHelper: 'After choosing a cache folder its contents are auto-detected: captioner-cache is single-image cache, other subfolders are folder results by name. Click a chip to highlight the target, then click "Delete Selected". Deletion is permanent, skips the recycle bin, and cannot be undone.',
     cacheFolderSet: 'Cache folder set: {name}',
     chooseCacheFolderFailed: 'Failed to choose cache folder: {error}',
-    cacheCleared: 'Cache cleared.',
+    cacheCleared: 'Cache deleted.',
     cacheFolderWriteFailed: 'Failed to write to cache folder. Please check folder permissions.',
+    cacheScanned: 'Cache detected: {single} single result(s), {folders} folder result(s).',
+    cacheScanFailed: 'Failed to scan cache folder: {error}',
+    confirmDeleteCache: 'Delete all cache files in the cache folder? This cannot be undone.',
+    confirmDeleteSingleCache: 'Delete the single-image cache? Deletion is permanent, skips the recycle bin, and cannot be undone.',
+    confirmDeleteFolderView: 'Delete cached results for folder {name}? Deletion is permanent, skips the recycle bin, and cannot be undone.',
+    singleCacheLabel: 'Single Cache',
+    cacheDeleteConfirmed: 'Cache folder contents deleted.',
+    singleCacheDeleted: 'Single-image cache deleted.',
+    noResultToClear: 'Nothing to delete. Click a chip to highlight a target first.',
     restoreFolderBtn: 'Restore last folder: {name}',
     folderRestored: 'Restored folder {name} with {count} images.',
     singlePreviewRestored: 'Restored the previous single-image preview.',
@@ -564,6 +583,7 @@ async function chooseCacheFolder() {
     updateCacheLocationText();
     await saveSessionToCache();
     log('cacheFolderSet', { name: handle.name });
+    await scanCacheFolderContent();
   } catch (error) {
     if (error?.name !== 'AbortError') {
       log('chooseCacheFolderFailed', { error: error.message || error });
@@ -606,6 +626,103 @@ function updateCacheLocationText() {
   els.cacheLocationText.textContent = state.cacheFolderHandle
     ? t('cacheFolderChosen', { name: state.cacheFolderHandle.name })
     : t('cacheLocationDefault');
+}
+
+/* ---------- 缓存内容扫描与删除 ---------- */
+
+// 递归删除目录内的全部文件与子目录
+async function removeDirContents(dirHandle) {
+  if (!dirHandle) return;
+  for await (const entry of dirHandle.values()) {
+    if (entry.kind === 'file') {
+      await dirHandle.removeEntry(entry.name);
+    } else if (entry.kind === 'directory') {
+      await removeDirContents(entry);
+      await dirHandle.removeEntry(entry.name);
+    }
+  }
+}
+
+// 递归收集缓存目录中的结果：匹配「原图 + 同名 .txt」对，返回 [{ name, caption, thumbUrl }]
+async function collectCacheResults(dirHandle, relPath = '') {
+  const results = [];
+  const files = [];
+  const subDirs = [];
+  for await (const entry of dirHandle.values()) {
+    if (entry.kind === 'file') {
+      files.push(entry);
+    } else if (entry.kind === 'directory') {
+      subDirs.push(entry);
+    }
+  }
+
+  const txtFiles = files.filter((entry) => entry.name.toLowerCase().endsWith('.txt'));
+  for (const txtEntry of txtFiles) {
+    const baseName = txtEntry.name.slice(0, -4);
+    const imageEntry = files.find((entry) => {
+      if (entry.name.toLowerCase() === txtEntry.name.toLowerCase()) return false;
+      const extIndex = entry.name.lastIndexOf('.');
+      const base = extIndex > 0 ? entry.name.slice(0, extIndex) : entry.name;
+      return base === baseName;
+    });
+    if (!imageEntry) continue;
+    try {
+      const txtFile = await (await txtEntry.getFile()).text();
+      const caption = (txtFile || '').trim();
+      const imageFile = await imageEntry.getFile();
+      let thumbUrl = '';
+      try {
+        thumbUrl = await makeThumbnail(imageFile);
+      } catch {
+        thumbUrl = '';
+      }
+      const name = relPath ? `${relPath}/${baseName}` : baseName;
+      results.push({ name, caption, thumbUrl });
+    } catch {
+      // 单个文件读取失败则跳过
+    }
+  }
+
+  for (const sub of subDirs) {
+    const nested = await collectCacheResults(sub, relPath ? `${relPath}/${sub.name}` : sub.name);
+    results.push(...nested);
+  }
+  return results;
+}
+
+// 扫描缓存文件夹：captioner-cache → 单图结果，其它子目录 → 文件夹结果（以缓存为准覆盖）
+async function scanCacheFolderContent() {
+  if (!state.cacheFolderHandle) return;
+  try {
+    const single = [];
+    const folders = [];
+    for await (const entry of state.cacheFolderHandle.values()) {
+      if (entry.kind !== 'directory') continue;
+      if (entry.name === 'captioner-cache') {
+        single.push(...await collectCacheResults(entry));
+      } else {
+        const results = await collectCacheResults(entry);
+        if (results.length) {
+          folders.push({ name: entry.name, results });
+        }
+      }
+    }
+
+    // 以缓存为准覆盖当前结果，并为恢复的条目分配递增 id
+    let seq = 0;
+    const withIds = (results) => results.map((item) => ({ ...item, id: ++seq }));
+    state.singleResults = withIds(single);
+    state.folderResults = folders.map((folder) => ({ ...folder, results: withIds(folder.results) }));
+    state.resultSeq = seq;
+    state.processedSingleNames = new Set(state.singleResults.map((item) => item.name));
+    enterSingleView();
+    renderFolderChips();
+    saveResultsToCache();
+    saveSessionToCache();
+    log('cacheScanned', { single: state.singleResults.length, folders: state.folderResults.length });
+  } catch (error) {
+    log('cacheScanFailed', { error: error.message || error });
+  }
 }
 
 /* ---------- 配置导出 / 导入（由 Hub 调用） ---------- */
@@ -870,6 +987,17 @@ async function toggleFolderView(name) {
 }
 
 async function deleteFolderView(name) {
+  if (!window.confirm(t('confirmDeleteFolderView', { name }))) return;
+  // 删除缓存文件夹中的物理子目录（若存在）
+  if (state.cacheFolderHandle) {
+    try {
+      const subDir = await state.cacheFolderHandle.getDirectoryHandle(name);
+      await removeDirContents(subDir);
+      await state.cacheFolderHandle.removeEntry(name);
+    } catch {
+      // 子目录不存在或删除失败则忽略
+    }
+  }
   const wasActive = state.activeFolderName === name;
   state.folderResults = state.folderResults.filter((entry) => entry.name !== name);
   if (wasActive) {
@@ -879,6 +1007,7 @@ async function deleteFolderView(name) {
   }
   saveResultsToCache();
   saveSessionToCache();
+  syncRuntimeToSession();
   log('folderViewDeleted', { name });
 }
 
@@ -886,13 +1015,41 @@ function renderFolderChips() {
   if (!els.folderChips) return;
   els.folderChips.innerHTML = '';
   const visible = state.folderResults.filter((entry) => entry.results.length > 0);
-  els.folderChips.hidden = visible.length === 0;
-  if (!visible.length) return;
+  const hasSingle = state.singleResults.length > 0;
+  els.folderChips.hidden = !hasSingle && visible.length === 0;
+  if (!hasSingle && !visible.length) return;
 
-  const label = document.createElement('span');
-  label.className = 'folder-chips-label';
-  label.textContent = t('folderResultsLabel');
-  els.folderChips.appendChild(label);
+  // 单图缓存标签（独立可删除）
+  if (hasSingle) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'folder-chip single-cache-chip' + (!state.activeFolderName ? ' active' : '');
+    chip.title = t('singleCacheLabel');
+
+    const label = document.createElement('span');
+    label.className = 'folder-chip-name';
+    label.textContent = t('singleCacheLabel');
+
+    const del = document.createElement('span');
+    del.className = 'folder-chip-del';
+    del.textContent = '×';
+    del.addEventListener('click', (event) => {
+      event.stopPropagation();
+      deleteSingleCache();
+    });
+
+    chip.appendChild(label);
+    chip.appendChild(del);
+    chip.addEventListener('click', enterSingleView);
+    els.folderChips.appendChild(chip);
+  }
+
+  if (visible.length) {
+    const label = document.createElement('span');
+    label.className = 'folder-chips-label';
+    label.textContent = t('folderResultsLabel');
+    els.folderChips.appendChild(label);
+  }
 
   for (const entry of visible) {
     const chip = document.createElement('button');
@@ -917,6 +1074,36 @@ function renderFolderChips() {
     chip.addEventListener('click', () => toggleFolderView(entry.name));
     els.folderChips.appendChild(chip);
   }
+}
+
+async function deleteSingleCache() {
+  if (!state.singleResults.length) return;
+  if (!window.confirm(t('confirmDeleteSingleCache'))) return;
+  // 删除缓存文件夹中的 captioner-cache 物理子目录（若存在）
+  if (state.cacheFolderHandle) {
+    try {
+      const subDir = await state.cacheFolderHandle.getDirectoryHandle('captioner-cache');
+      await removeDirContents(subDir);
+      await state.cacheFolderHandle.removeEntry('captioner-cache');
+    } catch {
+      // 子目录不存在或删除失败则忽略
+    }
+  }
+  state.singleResults = [];
+  state.results = [];
+  state.selectedResultId = null;
+  state.resultSeq = 0;
+  state.processedSingleNames = new Set();
+  if (!state.activeFolderName) {
+    renderResults();
+    renderFolderChips();
+  } else {
+    renderFolderChips();
+  }
+  saveResultsToCache();
+  saveSessionToCache();
+  syncRuntimeToSession();
+  log('singleCacheDeleted');
 }
 
 async function restoreFolderDirectory(name) {
@@ -1036,39 +1223,17 @@ async function restoreCachedSession() {
   syncRuntimeToSession();
 }
 
+// 删除当前选中的缓存项：高亮文件夹 → 删文件夹；单图视图 → 删单图缓存
 async function clearCache() {
-  await dbClear('results');
-  await dbClear('session');
-  if (state.currentObjectUrl) {
-    URL.revokeObjectURL(state.currentObjectUrl);
-    state.currentObjectUrl = '';
+  if (state.activeFolderName) {
+    await deleteFolderView(state.activeFolderName);
+    return;
   }
-  state.results = [];
-  state.singleResults = [];
-  state.folderResults = [];
-  state.activeFolderName = '';
-  state.selectedResultId = null;
-  state.resultSeq = 0;
-  state.processedSingleNames = new Set();
-  state.files = [];
-  state.currentIndex = -1;
-  state.singleFileMode = false;
-  state.singleFileSource = null;
-  state.directoryHandle = null;
-  state.directoryLabel = '';
-  state.cacheFolderHandle = null;
-  state.pendingFolderHandle = null;
-  state.pendingFolderLabel = '';
-  state.pendingCurrentIndex = 0;
-  els.folderPathInput.value = '';
-  hideRestoreFolderBtn();
-  updateCacheLocationText();
-  renderFolderChips();
-  resetCounters();
-  renderThumbStrip();
-  renderResults();
-  await renderPreview();
-  log('cacheCleared');
+  if (state.singleResults.length) {
+    await deleteSingleCache();
+    return;
+  }
+  log('noResultToClear');
 }
 
 function buildResultItem(entry) {

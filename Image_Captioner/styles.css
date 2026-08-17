@@ -697,6 +697,11 @@ textarea {
   color: var(--primary);
 }
 
+.single-cache-chip {
+  border-color: rgba(37, 99, 235, 0.4);
+  color: var(--primary);
+}
+
 .folder-chip-name {
   max-width: 160px;
   overflow: hidden;
