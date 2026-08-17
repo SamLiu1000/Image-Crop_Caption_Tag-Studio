@@ -176,8 +176,7 @@ const I18N = {
     cacheFolderChosen: '文件夹：{name}',
     chooseCacheFolderBtn: '选择缓存文件夹',
     clearCacheBtn: '清除缓存',
-    cacheHelper: '刷新后保留；文件夹缓存存于所选文件夹的同名子目录，单图存于 captioner-cache，互不干扰；文件夹文件手动删除；清除只清浏览器缓存。',
-    cacheFolderSet: '已设置缓存文件夹：{name}',
+    cacheHelper: '刷新后保留；文件夹缓存存于所选文件夹的同名子目录，单图存于 captioner-cache，互不干扰；文件夹文件手动删除；清除只清浏览器缓存。',    cacheFolderSet: '已设置缓存文件夹：{name}',
     chooseCacheFolderFailed: '选择缓存文件夹失败：{error}',
     cacheCleared: '已清除缓存。',
     cacheFolderWriteFailed: '写入缓存文件夹失败，请检查文件夹权限。',
@@ -186,6 +185,19 @@ const I18N = {
     singlePreviewRestored: '已恢复上次的单图预览。',
     folderViewDeleted: '已删除文件夹结果：{name}',
     folderResultsLabel: '文件夹结果',
+    exportConfigBtn: '导出配置',
+    importConfigBtn: '导入配置',
+    importAskLabel: '导入方式',
+    importMergeBtn: '合并',
+    importOverwriteBtn: '覆盖',
+    importCancelBtn: '取消',
+    configExported: '配置已导出到下载文件。',
+    importParseFailed: '导入文件解析失败，请确认是导出的配置文件。',
+    importAppliedMerge: '已合并导入配置。',
+    importAppliedOverwrite: '已覆盖导入配置。',
+    importCancelled: '已取消导入。',
+    importNoCacheFolder: '缓存文件夹句柄无法跨部署转移，请重新选择缓存文件夹。',
+    importNoFolderHandle: '文件夹结果已导入，但目录关联无法跨部署转移；点击文件夹标签可查看结果，重新选择对应文件夹可恢复预览。',
   },
   en: {
     pageTitle: 'Image_Captioner',
@@ -329,6 +341,19 @@ const I18N = {
     singlePreviewRestored: 'Restored the previous single-image preview.',
     folderViewDeleted: 'Deleted folder results: {name}',
     folderResultsLabel: 'Folder Results',
+    exportConfigBtn: 'Export Config',
+    importConfigBtn: 'Import Config',
+    importAskLabel: 'Import mode',
+    importMergeBtn: 'Merge',
+    importOverwriteBtn: 'Overwrite',
+    importCancelBtn: 'Cancel',
+    configExported: 'Config exported to download.',
+    importParseFailed: 'Failed to parse import file. Please use a config file exported by this app.',
+    importAppliedMerge: 'Config imported (merge).',
+    importAppliedOverwrite: 'Config imported (overwrite).',
+    importCancelled: 'Import cancelled.',
+    importNoCacheFolder: 'Cache folder handles cannot transfer across deployments, please re-choose the cache folder.',
+    importNoFolderHandle: 'Folder results imported, but directory links cannot transfer across deployments; click a folder chip to view results, re-choose the folder to restore preview.',
   },
 };
 
@@ -386,6 +411,12 @@ const els = {
   clearCacheBtn: document.getElementById('clearCacheBtn'),
   restoreFolderBtn: document.getElementById('restoreFolderBtn'),
   folderChips: document.getElementById('folderChips'),
+  exportConfigBtn: document.getElementById('exportConfigBtn'),
+  importConfigBtn: document.getElementById('importConfigBtn'),
+  importAskBar: document.getElementById('importAskBar'),
+  importMergeBtn: document.getElementById('importMergeBtn'),
+  importOverwriteBtn: document.getElementById('importOverwriteBtn'),
+  importCancelBtn: document.getElementById('importCancelBtn'),
 };
 
 const state = {
@@ -424,6 +455,7 @@ const state = {
   pendingFolderLabel: '',
   pendingCurrentIndex: 0,
   processedSingleNames: new Set(),
+  pendingImport: null,
 };
 
 function t(key, params = {}) {
@@ -603,6 +635,170 @@ function updateCacheLocationText() {
   els.cacheLocationText.textContent = state.cacheFolderHandle
     ? t('cacheFolderChosen', { name: state.cacheFolderHandle.name })
     : t('cacheLocationDefault');
+}
+
+/* ---------- 配置导出 / 导入 ---------- */
+
+function buildExportData() {
+  return {
+    app: 'Image_Captioner',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    config: getConfig(),
+    presets: state.presets,
+    singleResults: state.singleResults,
+    folderResults: state.folderResults.map((entry) => ({
+      name: entry.name,
+      results: entry.results,
+    })),
+    cacheFolderName: state.cacheFolderHandle?.name || '',
+    // 目录句柄无法序列化导出（浏览器安全限制），只保留名称作参考
+    folderNames: state.folderResults.map((entry) => entry.name),
+  };
+}
+
+async function exportConfig() {
+  const data = buildExportData();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `image-captioner-config-${stamp}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  log('configExported');
+}
+
+function sanitizeImportedResults(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item) => item && typeof item === 'object' && typeof item.name === 'string')
+    .map((item) => ({
+      id: Number(item.id) || 0,
+      name: item.name,
+      caption: String(item.caption ?? ''),
+      thumbUrl: typeof item.thumbUrl === 'string' ? item.thumbUrl : '',
+    }));
+}
+
+function applyImportedConfig(data, mode) {
+  const config = data?.config;
+  if (config && typeof config === 'object') {
+    applyConfig(config);
+    persistCurrentConfig(getConfig(), false);
+  }
+
+  if (mode === 'overwrite') {
+    state.presets = Array.isArray(data?.presets)
+      ? data.presets.filter((item) => item && typeof item.name === 'string' && item.name.trim())
+      : [];
+    state.singleResults = sanitizeImportedResults(data?.singleResults);
+    state.folderResults = Array.isArray(data?.folderResults)
+      ? data.folderResults
+          .filter((entry) => entry && typeof entry.name === 'string' && entry.name.trim())
+          .map((entry) => ({ name: entry.name, results: sanitizeImportedResults(entry.results) }))
+      : [];
+  } else {
+    // 合并：预设按名称去重，结果按名称去重合并
+    const presetMap = new Map(state.presets.map((item) => [item.name, item]));
+    for (const item of (data?.presets || [])) {
+      if (item && typeof item.name === 'string' && item.name.trim()) {
+        presetMap.set(item.name, item);
+      }
+    }
+    state.presets = [...presetMap.values()];
+
+    const singleMap = new Map(state.singleResults.map((item) => [item.name, item]));
+    for (const item of sanitizeImportedResults(data?.singleResults)) {
+      singleMap.set(item.name, item);
+    }
+    state.singleResults = [...singleMap.values()];
+
+    const folderMap = new Map(state.folderResults.map((entry) => [entry.name, entry]));
+    for (const entry of (data?.folderResults || [])) {
+      if (!entry || typeof entry.name !== 'string' || !entry.name.trim()) continue;
+      const existing = folderMap.get(entry.name);
+      const importedResults = sanitizeImportedResults(entry.results);
+      if (existing) {
+        const resultMap = new Map(existing.results.map((item) => [item.name, item]));
+        for (const item of importedResults) {
+          resultMap.set(item.name, item);
+        }
+        existing.results = [...resultMap.values()];
+      } else {
+        folderMap.set(entry.name, { name: entry.name, results: importedResults });
+      }
+    }
+    state.folderResults = [...folderMap.values()];
+  }
+
+  state.folderResults = state.folderResults.filter((entry) => entry.results.length > 0);
+  state.resultSeq = state.singleResults.reduce((maxId, item) => Math.max(maxId, item.id || 0), 0);
+  for (const entry of state.folderResults) {
+    for (const item of entry.results) {
+      state.resultSeq = Math.max(state.resultSeq, item.id || 0);
+    }
+  }
+  state.processedSingleNames = new Set(state.singleResults.map((item) => item.name));
+  state.presets.sort((a, b) => a.name.localeCompare(b.name, state.language === 'zh' ? 'zh-CN' : 'en'));
+  persistPresets();
+}
+
+async function importConfig() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json,application/json';
+  input.addEventListener('change', async () => {
+    const [file] = input.files || [];
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      if (data?.app !== 'Image_Captioner') {
+        log('importParseFailed');
+        return;
+      }
+      state.pendingImport = data;
+      els.importAskBar.hidden = false;
+    } catch {
+      log('importParseFailed');
+    }
+  });
+  input.click();
+}
+
+function applyImport(mode) {
+  const data = state.pendingImport;
+  if (!data) {
+    els.importAskBar.hidden = true;
+    return;
+  }
+  applyImportedConfig(data, mode);
+  state.pendingImport = null;
+  els.importAskBar.hidden = true;
+  updatePresetSelectOptions();
+  updateCacheLocationText();
+  enterSingleView();
+  renderFolderChips();
+  saveResultsToCache();
+  saveSessionToCache();
+  log(mode === 'overwrite' ? 'importAppliedOverwrite' : 'importAppliedMerge');
+  // 导入的文件夹结果没有目录句柄（跨部署无法转移）→ 明确提示
+  const hasImportedFolders = Array.isArray(data.folderResults) && data.folderResults.some((entry) => entry?.results?.length > 0);
+  if (hasImportedFolders) {
+    log('importNoFolderHandle');
+  }
+  if (data.cacheFolderName && !state.cacheFolderHandle) {
+    log('importNoCacheFolder');
+  }
+}
+
+function cancelImport() {
+  state.pendingImport = null;
+  els.importAskBar.hidden = true;
+  log('importCancelled');
 }
 
 /* ---------- 文件夹结果视图 ---------- */
@@ -2273,6 +2469,11 @@ function bindEvents() {
   els.chooseCacheFolderBtn.addEventListener('click', chooseCacheFolder);
   els.clearCacheBtn.addEventListener('click', clearCache);
   els.restoreFolderBtn.addEventListener('click', tryRestoreFolderSession);
+  els.exportConfigBtn.addEventListener('click', exportConfig);
+  els.importConfigBtn.addEventListener('click', importConfig);
+  els.importMergeBtn.addEventListener('click', () => applyImport('merge'));
+  els.importOverwriteBtn.addEventListener('click', () => applyImport('overwrite'));
+  els.importCancelBtn.addEventListener('click', cancelImport);
 }
 
 function init() {

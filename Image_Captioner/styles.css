@@ -661,6 +661,20 @@ textarea {
   font-size: 11px;
 }
 
+.import-ask-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-soft);
+}
+
+.import-ask-bar .ghost-btn {
+  padding: 3px 9px;
+  font-size: 11px;
+}
+
 .folder-chips {
   display: flex;
   flex-wrap: wrap;
