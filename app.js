@@ -30,6 +30,11 @@ const I18N = {
     exportSuccess: '✓ 配置已导出',
     importSuccess: '✓ 配置已导入',
     importConfirm: '导入配置将覆盖现有设置，是否继续？',
+    importAskTitle: '选择导入方式',
+    importAskDesc: '合并：保留现有数据，导入内容按名称去重合并；覆盖：清空现有配置与结果后整体替换。',
+    importMergeBtn: '合并',
+    importOverwriteBtn: '覆盖',
+    importCancelBtn: '取消',
     importError: '❌ 配置导入失败',
     exportError: '❌ 配置导出失败',
     importInvalid: '❌ 无效的配置文件',
@@ -49,6 +54,11 @@ const I18N = {
     exportSuccess: '✓ Configuration exported',
     importSuccess: '✓ Configuration imported',
     importConfirm: 'Importing configuration will overwrite existing settings. Continue?',
+    importAskTitle: 'Choose import mode',
+    importAskDesc: 'Merge: keep existing data, import merges by name (dedup). Overwrite: clear existing config and results, then replace entirely.',
+    importMergeBtn: 'Merge',
+    importOverwriteBtn: 'Overwrite',
+    importCancelBtn: 'Cancel',
     importError: '❌ Configuration import failed',
     exportError: '❌ Configuration export failed',
     importInvalid: '❌ Invalid configuration file',
@@ -211,6 +221,58 @@ const PREFIX_STORAGE_KEYS = {
 
 const CONFIG_VERSION = '1.1';
 
+const CAPTIONER_EXPORT_MESSAGE = 'captioner:export-data';
+const CAPTIONER_IMPORT_MESSAGE = 'captioner:import-data';
+const CAPTIONER_RUNTIME_KEY = 'captioner-runtime';
+const CAPTIONER_PENDING_IMPORT_KEY = 'captioner-pending-import';
+
+function postToCaptioner(type, payload, mode) {
+  return new Promise((resolve) => {
+    const frame = document.querySelector('#panel-captioner iframe');
+    if (!frame?.contentWindow) {
+      resolve(null);
+      return;
+    }
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    let timer = null;
+    const onMessage = (event) => {
+      const data = event.data || {};
+      if (data.requestId !== requestId) return;
+      if (timer) window.clearTimeout(timer);
+      window.removeEventListener('message', onMessage);
+      resolve(data);
+    };
+    window.addEventListener('message', onMessage);
+    timer = window.setTimeout(() => {
+      window.removeEventListener('message', onMessage);
+      resolve(null);
+    }, 3000);
+    frame.contentWindow.postMessage(
+      { type, requestId, payload, mode },
+      { targetOrigin: '*' },
+    );
+  });
+}
+
+async function collectCaptionerRuntimeData() {
+  // 优先从 sessionStorage 读取 captioner 实时同步的导出数据（同源共享，最可靠）
+  try {
+    const raw = sessionStorage.getItem(CAPTIONER_RUNTIME_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
+  } catch {
+    // ignore
+  }
+  // 回退：postMessage 请求 iframe
+  const reply = await postToCaptioner(CAPTIONER_EXPORT_MESSAGE);
+  if (reply && reply.payload && typeof reply.payload === 'object') {
+    return reply.payload;
+  }
+  return null;
+}
+
 function readScopedLocalStorage(keys) {
   const output = {};
   for (const key of keys) {
@@ -274,7 +336,8 @@ function collectCaptionerData() {
   return stored;
 }
 
-function collectAllLocalStorageData() {
+async function collectAllLocalStorageData() {
+  const captionerRuntime = await collectCaptionerRuntimeData();
   return {
     version: CONFIG_VERSION,
     exportDate: new Date().toISOString(),
@@ -282,6 +345,7 @@ function collectAllLocalStorageData() {
       cropper: readScopedLocalStorage(TOOL_STORAGE_KEYS.cropper),
       captioner: collectCaptionerData(),
       captionerProgress: readPrefixedLocalStorage(PREFIX_STORAGE_KEYS.captionerProgress),
+      captionerRuntime, // 图片描述工具新增数据（单图/文件夹结果、缓存文件夹名等，来自 IndexedDB）
       tagtool: readScopedLocalStorage(TOOL_STORAGE_KEYS.tagtool),
       hub: readScopedLocalStorage(Object.values(STORAGE_KEYS)),
     },
@@ -321,7 +385,7 @@ function isValidConfigPayload(config) {
 // Export configuration to JSON file
 async function exportConfig() {
   try {
-    const config = collectAllLocalStorageData();
+    const config = await collectAllLocalStorageData();
     const json = JSON.stringify(config, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -358,15 +422,11 @@ async function importConfig() {
         throw new Error(t('importInvalid'));
       }
 
-      if (!confirm(t('importConfirm'))) {
-        return;
-      }
+      // 弹窗询问合并还是覆盖
+      const mode = await askImportMode();
+      if (!mode) return;
 
-      writeScopedLocalStorage(config.tools.cropper, TOOL_STORAGE_KEYS.cropper);
-      writeScopedLocalStorage(config.tools.captioner, TOOL_STORAGE_KEYS.captioner);
-      replacePrefixedLocalStorage(PREFIX_STORAGE_KEYS.captionerProgress, config.tools.captionerProgress);
-      writeScopedLocalStorage(config.tools.tagtool, TOOL_STORAGE_KEYS.tagtool);
-      writeScopedLocalStorage(config.tools.hub, Object.values(STORAGE_KEYS));
+      await applyImportedTools(config, mode);
 
       // Reload page to apply changes
       alert(t('importSuccess'));
@@ -380,6 +440,62 @@ async function importConfig() {
   input.click();
 }
 
+function showImportModal() {
+  const modal = document.getElementById('importModal');
+  if (modal) modal.hidden = false;
+}
+
+function hideImportModal() {
+  const modal = document.getElementById('importModal');
+  if (modal) modal.hidden = true;
+}
+
+function askImportMode() {
+  return new Promise((resolve) => {
+    showImportModal();
+    const mergeBtn = document.getElementById('importMergeConfirmBtn');
+    const overwriteBtn = document.getElementById('importOverwriteConfirmBtn');
+    const cancelBtn = document.getElementById('importCancelConfirmBtn');
+
+    const cleanup = () => {
+      hideImportModal();
+      if (mergeBtn) mergeBtn.removeEventListener('click', onMerge);
+      if (overwriteBtn) overwriteBtn.removeEventListener('click', onOverwrite);
+      if (cancelBtn) cancelBtn.removeEventListener('click', onCancel);
+    };
+    const onMerge = () => { cleanup(); resolve('merge'); };
+    const onOverwrite = () => { cleanup(); resolve('overwrite'); };
+    const onCancel = () => { cleanup(); resolve(null); };
+
+    if (mergeBtn) mergeBtn.addEventListener('click', onMerge);
+    if (overwriteBtn) overwriteBtn.addEventListener('click', onOverwrite);
+    if (cancelBtn) cancelBtn.addEventListener('click', onCancel);
+  });
+}
+
+async function applyImportedTools(config, mode) {
+  // 写入各工具 localStorage 配置
+  writeScopedLocalStorage(config.tools.cropper, TOOL_STORAGE_KEYS.cropper);
+  writeScopedLocalStorage(config.tools.captioner, TOOL_STORAGE_KEYS.captioner);
+  replacePrefixedLocalStorage(PREFIX_STORAGE_KEYS.captionerProgress, config.tools.captionerProgress);
+  writeScopedLocalStorage(config.tools.tagtool, TOOL_STORAGE_KEYS.tagtool);
+  writeScopedLocalStorage(config.tools.hub, Object.values(STORAGE_KEYS));
+
+  // 图片描述工具的新数据（单图/文件夹结果等，存于 IndexedDB）
+  // 优先写入 sessionStorage：同源共享，reload 后 captioner 自己读取应用，规避 iframe 时序问题
+  if (config.tools.captionerRuntime && typeof config.tools.captionerRuntime === 'object') {
+    try {
+      sessionStorage.setItem(
+        CAPTIONER_PENDING_IMPORT_KEY,
+        JSON.stringify({ payload: config.tools.captionerRuntime, mode }),
+      );
+    } catch {
+      // sessionStorage 不可用/超限时，回退为 postMessage 即时应用
+      await postToCaptioner(CAPTIONER_IMPORT_MESSAGE, config.tools.captionerRuntime, mode);
+    }
+  }
+}
+
 // Update config button text when language changes
 function updateConfigButtons() {
   if (exportConfigBtn) {
@@ -389,6 +505,20 @@ function updateConfigButtons() {
   if (importConfigBtn) {
     importConfigBtn.textContent = t('importConfig');
     importConfigBtn.title = t('importConfig');
+  }
+
+  const i18nNodeIds = ['importModal', 'importMergeConfirmBtn', 'importOverwriteConfirmBtn', 'importCancelConfirmBtn'];
+  for (const id of i18nNodeIds) {
+    const node = document.getElementById(id);
+    if (node?.dataset.i18n) {
+      node.textContent = t(node.dataset.i18n);
+    }
+  }
+  const modal = document.getElementById('importModal');
+  if (modal) {
+    for (const node of modal.querySelectorAll('[data-i18n]')) {
+      node.textContent = t(node.dataset.i18n);
+    }
   }
 }
 

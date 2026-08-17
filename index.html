@@ -35,6 +35,18 @@
     </main>
   </div>
 
+  <div id="importModal" class="modal-overlay" hidden>
+    <div class="modal-card">
+      <p class="modal-title" data-i18n="importAskTitle">选择导入方式</p>
+      <p class="modal-desc" data-i18n="importAskDesc">合并：保留现有数据，导入内容按名称去重合并；覆盖：清空现有配置与结果后整体替换。</p>
+      <div class="modal-actions">
+        <button id="importMergeConfirmBtn" class="config-btn" type="button" data-i18n="importMergeBtn">合并</button>
+        <button id="importOverwriteConfirmBtn" class="config-btn" type="button" data-i18n="importOverwriteBtn">覆盖</button>
+        <button id="importCancelConfirmBtn" class="config-btn" type="button" data-i18n="importCancelBtn">取消</button>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>

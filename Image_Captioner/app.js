@@ -185,17 +185,6 @@ const I18N = {
     singlePreviewRestored: '已恢复上次的单图预览。',
     folderViewDeleted: '已删除文件夹结果：{name}',
     folderResultsLabel: '文件夹结果',
-    exportConfigBtn: '导出配置',
-    importConfigBtn: '导入配置',
-    importAskLabel: '导入方式',
-    importMergeBtn: '合并',
-    importOverwriteBtn: '覆盖',
-    importCancelBtn: '取消',
-    configExported: '配置已导出到下载文件。',
-    importParseFailed: '导入文件解析失败，请确认是导出的配置文件。',
-    importAppliedMerge: '已合并导入配置。',
-    importAppliedOverwrite: '已覆盖导入配置。',
-    importCancelled: '已取消导入。',
     importNoCacheFolder: '缓存文件夹句柄无法跨部署转移，请重新选择缓存文件夹。',
     importNoFolderHandle: '文件夹结果已导入，但目录关联无法跨部署转移；点击文件夹标签可查看结果，重新选择对应文件夹可恢复预览。',
   },
@@ -341,17 +330,6 @@ const I18N = {
     singlePreviewRestored: 'Restored the previous single-image preview.',
     folderViewDeleted: 'Deleted folder results: {name}',
     folderResultsLabel: 'Folder Results',
-    exportConfigBtn: 'Export Config',
-    importConfigBtn: 'Import Config',
-    importAskLabel: 'Import mode',
-    importMergeBtn: 'Merge',
-    importOverwriteBtn: 'Overwrite',
-    importCancelBtn: 'Cancel',
-    configExported: 'Config exported to download.',
-    importParseFailed: 'Failed to parse import file. Please use a config file exported by this app.',
-    importAppliedMerge: 'Config imported (merge).',
-    importAppliedOverwrite: 'Config imported (overwrite).',
-    importCancelled: 'Import cancelled.',
     importNoCacheFolder: 'Cache folder handles cannot transfer across deployments, please re-choose the cache folder.',
     importNoFolderHandle: 'Folder results imported, but directory links cannot transfer across deployments; click a folder chip to view results, re-choose the folder to restore preview.',
   },
@@ -411,12 +389,6 @@ const els = {
   clearCacheBtn: document.getElementById('clearCacheBtn'),
   restoreFolderBtn: document.getElementById('restoreFolderBtn'),
   folderChips: document.getElementById('folderChips'),
-  exportConfigBtn: document.getElementById('exportConfigBtn'),
-  importConfigBtn: document.getElementById('importConfigBtn'),
-  importAskBar: document.getElementById('importAskBar'),
-  importMergeBtn: document.getElementById('importMergeBtn'),
-  importOverwriteBtn: document.getElementById('importOverwriteBtn'),
-  importCancelBtn: document.getElementById('importCancelBtn'),
 };
 
 const state = {
@@ -455,7 +427,6 @@ const state = {
   pendingFolderLabel: '',
   pendingCurrentIndex: 0,
   processedSingleNames: new Set(),
-  pendingImport: null,
 };
 
 function t(key, params = {}) {
@@ -637,7 +608,11 @@ function updateCacheLocationText() {
     : t('cacheLocationDefault');
 }
 
-/* ---------- 配置导出 / 导入 ---------- */
+/* ---------- 配置导出 / 导入（由 Hub 调用） ---------- */
+
+const HUB_EXPORT_MESSAGE = 'captioner:export-data';
+const HUB_IMPORT_MESSAGE = 'captioner:import-data';
+const PENDING_IMPORT_KEY = 'captioner-pending-import';
 
 function buildExportData() {
   return {
@@ -655,21 +630,6 @@ function buildExportData() {
     // 目录句柄无法序列化导出（浏览器安全限制），只保留名称作参考
     folderNames: state.folderResults.map((entry) => entry.name),
   };
-}
-
-async function exportConfig() {
-  const data = buildExportData();
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `image-captioner-config-${stamp}.json`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-  log('configExported');
 }
 
 function sanitizeImportedResults(raw) {
@@ -747,44 +707,36 @@ function applyImportedConfig(data, mode) {
   persistPresets();
 }
 
-async function importConfig() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.json,application/json';
-  input.addEventListener('change', async () => {
-    const [file] = input.files || [];
-    if (!file) return;
+async function applyImportedConfigAndRefresh(data, mode) {
+  // init 阶段合并时，state 尚未从 IndexedDB 恢复 → 先加载现有结果再合并，避免覆盖
+  if (!state.singleResults.length && !state.folderResults.length) {
     try {
-      const data = JSON.parse(await file.text());
-      if (data?.app !== 'Image_Captioner') {
-        log('importParseFailed');
-        return;
-      }
-      state.pendingImport = data;
-      els.importAskBar.hidden = false;
+      const existing = await loadResultsFromCache();
+      state.singleResults = Array.isArray(existing.single) ? existing.single : [];
+      state.folderResults = Array.isArray(existing.folders) ? existing.folders : [];
     } catch {
-      log('importParseFailed');
+      // ignore
     }
-  });
-  input.click();
-}
-
-function applyImport(mode) {
-  const data = state.pendingImport;
-  if (!data) {
-    els.importAskBar.hidden = true;
-    return;
+  }
+  // 同浏览器导入时，保留当前会话中已有的缓存文件夹句柄（导入文件不含句柄）
+  let prevCacheHandle = null;
+  try {
+    const prevSession = await loadSessionFromCache();
+    prevCacheHandle = prevSession?.cacheFolderHandle || null;
+  } catch {
+    prevCacheHandle = null;
   }
   applyImportedConfig(data, mode);
-  state.pendingImport = null;
-  els.importAskBar.hidden = true;
+  if (!state.cacheFolderHandle && prevCacheHandle) {
+    state.cacheFolderHandle = prevCacheHandle;
+  }
   updatePresetSelectOptions();
   updateCacheLocationText();
   enterSingleView();
   renderFolderChips();
-  saveResultsToCache();
-  saveSessionToCache();
-  log(mode === 'overwrite' ? 'importAppliedOverwrite' : 'importAppliedMerge');
+  // 等待 IndexedDB 写入完成，避免 Hub 立即刷新导致数据丢失
+  await Promise.all([saveResultsToCache(), saveSessionToCache()]);
+  syncRuntimeToSession();
   // 导入的文件夹结果没有目录句柄（跨部署无法转移）→ 明确提示
   const hasImportedFolders = Array.isArray(data.folderResults) && data.folderResults.some((entry) => entry?.results?.length > 0);
   if (hasImportedFolders) {
@@ -795,10 +747,55 @@ function applyImport(mode) {
   }
 }
 
-function cancelImport() {
-  state.pendingImport = null;
-  els.importAskBar.hidden = true;
-  log('importCancelled');
+function setupHubBridge() {
+  // Hub 与 captioner 同源，通过 sessionStorage 可靠传递导入数据（reload 后仍可读）
+  window.addEventListener('message', (event) => {
+    const { type } = event.data || {};
+    if (type === HUB_EXPORT_MESSAGE) {
+      // Hub 请求导出数据
+      event.source?.postMessage(
+        { type: `${HUB_EXPORT_MESSAGE}:reply`, payload: buildExportData() },
+        { targetOrigin: '*' },
+      );
+    } else if (type === HUB_IMPORT_MESSAGE) {
+      // Hub 请求导入数据（mode: 'merge' | 'overwrite'），等待写入完成后回复
+      applyImportedConfigAndRefresh(event.data.payload, event.data.mode || 'merge').then(() => {
+        event.source?.postMessage(
+          { type: `${HUB_IMPORT_MESSAGE}:reply`, ok: true },
+          { targetOrigin: '*' },
+        );
+      });
+    }
+  });
+}
+
+// 把当前导出数据同步到 sessionStorage，供 Hub 导出时读取（同源共享，规避 postMessage 时序）
+function syncRuntimeToSession() {
+  try {
+    sessionStorage.setItem('captioner-runtime', JSON.stringify(buildExportData()));
+  } catch {
+    // sessionStorage 容量超限或不可用时忽略
+  }
+}
+
+// 应用 Hub 写入 sessionStorage 的待导入数据（reload 后 captioner init 时调用）
+async function applyPendingImportFromSession() {
+  let raw = null;
+  try {
+    raw = sessionStorage.getItem('captioner-pending-import');
+  } catch {
+    return;
+  }
+  if (!raw) return;
+  try {
+    sessionStorage.removeItem('captioner-pending-import');
+    const { payload, mode } = JSON.parse(raw);
+    if (payload && typeof payload === 'object') {
+      await applyImportedConfigAndRefresh(payload, mode || 'merge');
+    }
+  } catch {
+    // 解析失败时忽略
+  }
 }
 
 /* ---------- 文件夹结果视图 ---------- */
@@ -997,6 +994,9 @@ async function restoreCachedSession() {
   if (cachedSession.activeFolderName && getFolderEntry(cachedSession.activeFolderName)) {
     enterFolderView(cachedSession.activeFolderName);
   }
+
+  // 恢复完成后同步到 sessionStorage，供 Hub 导出时读取（即使刚打开页面未做任何操作也能导出）
+  syncRuntimeToSession();
 }
 
 async function clearCache() {
@@ -1160,6 +1160,7 @@ function addResultEntry(name, caption, thumbUrl) {
   renderFolderChips();
   saveResultsToCache();
   saveSessionToCache();
+  syncRuntimeToSession();
 }
 
 function applyI18n() {
@@ -2469,14 +2470,9 @@ function bindEvents() {
   els.chooseCacheFolderBtn.addEventListener('click', chooseCacheFolder);
   els.clearCacheBtn.addEventListener('click', clearCache);
   els.restoreFolderBtn.addEventListener('click', tryRestoreFolderSession);
-  els.exportConfigBtn.addEventListener('click', exportConfig);
-  els.importConfigBtn.addEventListener('click', importConfig);
-  els.importMergeBtn.addEventListener('click', () => applyImport('merge'));
-  els.importOverwriteBtn.addEventListener('click', () => applyImport('overwrite'));
-  els.importCancelBtn.addEventListener('click', cancelImport);
 }
 
-function init() {
+async function init() {
   loadPresets();
   loadConfig();
   resetCounters();
@@ -2488,7 +2484,10 @@ function init() {
   setConnectionBadgeByKey('idle');
   setRuntimeStatus('runtimeIdle');
   log('appReady');
-  restoreCachedSession();
+  // 先应用 Hub 通过 sessionStorage 传来的待导入数据，再恢复会话，避免读取时序问题
+  await applyPendingImportFromSession();
+  await restoreCachedSession();
+  setupHubBridge();
 }
 
 init();

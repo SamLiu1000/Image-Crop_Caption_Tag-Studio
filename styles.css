@@ -112,6 +112,59 @@ button {
   opacity: 1;
 }
 
+/* 导入方式弹窗 */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.modal-overlay[hidden] {
+  display: none;
+}
+
+.modal-card {
+  max-width: 420px;
+  width: calc(100% - 32px);
+  padding: 16px;
+  border-radius: 12px;
+  background: #161b22;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.modal-title {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #e6edf3;
+}
+
+.modal-desc {
+  margin: 0 0 14px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgba(230, 237, 243, 0.72);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.modal-actions .config-btn {
+  padding: 5px 12px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e6edf3;
+}
+
 .panel-stack {
   min-height: 0;
 }
