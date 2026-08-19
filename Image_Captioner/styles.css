@@ -118,29 +118,22 @@ textarea {
 
 .page-shell {
   display: grid;
-  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  grid-template-columns: 2fr 3fr 3fr 2fr;
   gap: 10px;
   height: 100vh;
-  padding: 10px;
-  max-width: 1500px;
-  margin: 0 auto;
+  padding: 10px 20px;
 }
 
 .sidebar-shell,
-.content-shell {
+.preview-panel,
+.output-panel,
+.task-shell {
   min-height: 0;
   height: 100%;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   overflow-y: auto;
-}
-
-.content-shell {
-  grid-template-rows: auto minmax(240px, 1fr);
-}
-
-.sidebar-shell {
-  grid-template-rows: minmax(0, 1fr);
 }
 
 .glass-card {
@@ -742,21 +735,12 @@ textarea {
   font-weight: 700;
 }
 
-.workspace-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
-  grid-template-rows: minmax(0, 1fr);
-  gap: 10px;
-  min-height: 0;
-}
-
 .preview-panel,
 .output-panel {
   min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  overflow: auto;
 }
 
 .preview-panel .section-heading,
@@ -770,12 +754,27 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 5px;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.preview-panel .preview-meta,
 .output-panel .log-block {
   margin-top: 0;
   flex: 0 0 auto;
+  height: 140px;
+}
+
+.preview-panel .preview-meta {
+  margin-top: 0;
+  flex: 0 0 auto;
+}
+
+.preview-main {
+  display: flex;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .preview-stage {
@@ -843,14 +842,17 @@ textarea {
 
 .thumb-strip {
   display: flex;
+  flex-direction: column;
   gap: 6px;
-  overflow-x: auto;
-  margin-top: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 8px;
   background: var(--panel-muted);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   flex: 0 0 auto;
+  max-height: 100%;
+  width: 88px;
 }
 
 .thumb-strip[hidden] {
@@ -891,7 +893,7 @@ textarea {
 
 .result-list {
   flex: 1 1 auto;
-  min-height: 200px;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -950,6 +952,7 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 1 1 auto;
 }
 
 .result-file-row {
@@ -980,6 +983,37 @@ textarea {
   background: var(--seg-active-bg);
 }
 
+.result-delete-btn {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.result-delete-btn:hover {
+  color: #fff;
+  border-color: var(--danger);
+  background: var(--danger);
+}
+
+.result-actions-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
 .result-file-name {
   font-size: 10px;
   color: var(--text-dim);
@@ -993,6 +1027,7 @@ textarea {
   line-height: 1.55;
   color: var(--text);
   user-select: text;
+  flex: 1 1 auto;
 }
 
 .log-block {
@@ -1015,62 +1050,48 @@ textarea {
 .log-output {
   margin: 0;
   padding: 10px 12px;
-  max-height: 120px;
-  overflow: auto;
+  height: calc(140px - 33px);
+  overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
   font: 11px/1.6 Consolas, 'Courier New', monospace;
 }
 
-/* GitHub 项目链接（页面右上角固定角标） */
-.gh-link {
-  position: fixed;
-  top: 14px;
-  right: 14px;
-  z-index: 200;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border);
-  background: var(--panel);
-  color: var(--text-soft);
-  text-decoration: none;
-  cursor: pointer;
-  box-shadow: var(--shadow);
-  transition: color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
-}
-
-.gh-link:hover {
-  color: var(--primary);
-  border-color: var(--seg-active-border);
-  transform: translateY(-1px);
-}
-
-.gh-link svg {
-  width: 16px;
-  height: 16px;
-}
-
-@media (max-width: 1100px) {
-  .page-shell,
-  .workspace-grid {
-    grid-template-columns: 1fr;
+@media (max-width: 1200px) {
+  .page-shell {
+    grid-template-columns: minmax(260px, 300px) minmax(0, 1fr) minmax(260px, 300px);
   }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 1100px) {
   .page-shell {
-    padding: 8px;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
     height: auto;
     min-height: 100vh;
   }
 
   .sidebar-shell,
-  .content-shell {
+  .preview-panel,
+  .output-panel,
+  .task-shell {
+    height: auto;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 720px) {
+  .page-shell {
+    padding: 8px 12px;
+    grid-template-columns: 1fr;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .sidebar-shell,
+  .preview-panel,
+  .output-panel,
+  .task-shell {
     height: auto;
     overflow: visible;
   }
@@ -1093,9 +1114,21 @@ textarea {
     height: 88px;
   }
 
+  .thumb-strip {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    width: auto;
+    max-height: none;
+  }
+
   .thumb-strip .thumb-cell {
     width: 56px;
     height: 56px;
+  }
+
+  .preview-main {
+    flex-direction: column;
   }
 
   .brand-topbar,

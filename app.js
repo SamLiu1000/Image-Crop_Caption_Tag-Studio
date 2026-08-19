@@ -27,14 +27,25 @@ const I18N = {
     importConfig: '📤 导入配置',
     themeDark: '🌙',
     themeLight: '☀️',
+    privacyNotice: '🔒 所有数据仅保存在你的浏览器和本地磁盘上，本站点永远不会获得你的数据',
     exportSuccess: '✓ 配置已导出',
     importSuccess: '✓ 配置已导入',
-    importConfirm: '导入配置将覆盖现有设置，是否继续？',
-    importAskTitle: '选择导入方式',
-    importAskDesc: '合并：保留现有数据，导入内容按名称去重合并；覆盖：清空现有配置与结果后整体替换。',
-    importMergeBtn: '合并',
-    importOverwriteBtn: '覆盖',
-    importCancelBtn: '取消',
+    exportAskTitle: '选择要导出的数据',
+    exportAskDesc: '勾选要包含在导出文件中的数据种类：',
+    importAskTitle: '选择要导入的数据',
+    importAskDesc: '勾选要导入的数据种类，并选择导入方式：',
+    categoryConfirmBtn: '确定',
+    categoryCancelBtn: '取消',
+    categoryEmpty: '请至少选择一种数据',
+    importModeTitle: '导入方式',
+    importMergeLabel: '合并（保留现有数据，按名称去重）',
+    importOverwriteLabel: '覆盖（清空现有数据后整体替换）',
+    catCropper: '图片裁切',
+    catCropperDesc: '裁切设置',
+    catCaptioner: '图片描述',
+    catCaptionerDesc: '配置 / 提示词 / 预设 / 进度 / 结果',
+    catTagtool: '标签工具',
+    catTagtoolDesc: '分组与标签',
     importError: '❌ 配置导入失败',
     exportError: '❌ 配置导出失败',
     importInvalid: '❌ 无效的配置文件',
@@ -51,14 +62,25 @@ const I18N = {
     importConfig: '📤 Import Config',
     themeDark: '🌙',
     themeLight: '☀️',
+    privacyNotice: '🔒 All data is stored only in your browser and local disk. This site never receives your data.',
     exportSuccess: '✓ Configuration exported',
     importSuccess: '✓ Configuration imported',
-    importConfirm: 'Importing configuration will overwrite existing settings. Continue?',
-    importAskTitle: 'Choose import mode',
-    importAskDesc: 'Merge: keep existing data, import merges by name (dedup). Overwrite: clear existing config and results, then replace entirely.',
-    importMergeBtn: 'Merge',
-    importOverwriteBtn: 'Overwrite',
-    importCancelBtn: 'Cancel',
+    exportAskTitle: 'Select data to export',
+    exportAskDesc: 'Check the data categories to include in the export file:',
+    importAskTitle: 'Select data to import',
+    importAskDesc: 'Check the data categories to import and choose the import mode:',
+    categoryConfirmBtn: 'Confirm',
+    categoryCancelBtn: 'Cancel',
+    categoryEmpty: 'Please select at least one data category',
+    importModeTitle: 'Import Mode',
+    importMergeLabel: 'Merge (keep existing data, dedupe by name)',
+    importOverwriteLabel: 'Overwrite (clear existing data, then replace entirely)',
+    catCropper: 'Image Cropper',
+    catCropperDesc: 'Crop settings',
+    catCaptioner: 'Image Captioner',
+    catCaptionerDesc: 'Config / Prompts / Presets / Progress / Results',
+    catTagtool: 'Tag Tool',
+    catTagtoolDesc: 'Groups and tags',
     importError: '❌ Configuration import failed',
     exportError: '❌ Configuration export failed',
     importInvalid: '❌ Invalid configuration file',
@@ -200,12 +222,22 @@ const TOOL_STORAGE_KEYS = {
   tagtool: ['anatomy_tag_groups_v1', 'anatomy_categories_v1', 'app_language'],
 };
 
+// 数据种类定义：id 用于勾选过滤，i18nKey/i18nDescKey 提供多语言标签
+// 三种工具各一项；图片描述项内部包含 API 配置/提示词/预设/进度/结果
+const DATA_CATEGORIES = [
+  { id: 'cropper', i18nKey: 'catCropper', i18nDescKey: 'catCropperDesc' },
+  { id: 'captioner', i18nKey: 'catCaptioner', i18nDescKey: 'catCaptionerDesc' },
+  { id: 'tagtool', i18nKey: 'catTagtool', i18nDescKey: 'catTagtoolDesc' },
+];
+
+function allCategoryIds() {
+  return DATA_CATEGORIES.map((cat) => cat.id);
+}
+
 const TOOL_SELECTORS = {
   captioner: {
-    providerType: '#providerTabs [data-provider].active',
     serverUrl: '#serverUrlInput',
     model: '#modelInput',
-    timeoutSeconds: '#timeoutInput',
     apiKey: '#apiKeyInput',
     recursive: '#recursiveCheck',
     skipExisting: '#skipExistingCheck',
@@ -303,13 +335,11 @@ function readFormSnapshot(frameDocument, selectors) {
     const element = frameDocument.querySelector(selector);
     return element ? !!element.checked : fallback;
   };
-  const activeProvider = frameDocument.querySelector(selectors.providerType);
 
+  // 仅读取页面真实存在的表单字段；timeoutSeconds 等页面无输入项的字段由调用方从已有配置继承
   return {
-    providerType: activeProvider?.dataset?.provider === 'openai' ? 'openai' : 'lmstudio',
     serverUrl: String(readValue(selectors.serverUrl)).trim(),
     model: String(readValue(selectors.model)).trim(),
-    timeoutSeconds: Number.parseInt(readValue(selectors.timeoutSeconds), 10) || 120,
     apiKey: String(readValue(selectors.apiKey)),
     recursive: readChecked(selectors.recursive, true),
     skipExisting: readChecked(selectors.skipExisting, true),
@@ -327,7 +357,14 @@ function collectCaptionerData() {
     const frameDocument = captionerFrame?.contentDocument;
     const liveConfig = readFormSnapshot(frameDocument, TOOL_SELECTORS.captioner);
     if (liveConfig) {
-      stored['image-captioner-config'] = JSON.stringify(liveConfig);
+      // 用实时表单值覆盖，但保留页面无输入项的字段（如 timeoutSeconds、providerType）原值
+      let previous = {};
+      try {
+        previous = JSON.parse(stored['image-captioner-config'] || '{}');
+      } catch {
+        // ignore malformed stored config
+      }
+      stored['image-captioner-config'] = JSON.stringify({ ...previous, ...liveConfig });
     }
   } catch {
     // Ignore iframe access/read issues and fall back to stored values.
@@ -336,19 +373,25 @@ function collectCaptionerData() {
   return stored;
 }
 
-async function collectAllLocalStorageData() {
-  const captionerRuntime = await collectCaptionerRuntimeData();
+async function collectAllLocalStorageData(categories) {
+  const set = new Set(categories && categories.length ? categories : allCategoryIds());
+  const tools = {};
+  if (set.has('cropper')) {
+    tools.cropper = readScopedLocalStorage(TOOL_STORAGE_KEYS.cropper);
+  }
+  if (set.has('captioner')) {
+    // 图片描述项包含：配置/预设（localStorage）、进度（带前缀 localStorage）、结果（IndexedDB/sessionStorage）
+    tools.captioner = collectCaptionerData();
+    tools.captionerProgress = readPrefixedLocalStorage(PREFIX_STORAGE_KEYS.captionerProgress);
+    tools.captionerRuntime = await collectCaptionerRuntimeData();
+  }
+  if (set.has('tagtool')) {
+    tools.tagtool = readScopedLocalStorage(TOOL_STORAGE_KEYS.tagtool);
+  }
   return {
     version: CONFIG_VERSION,
     exportDate: new Date().toISOString(),
-    tools: {
-      cropper: readScopedLocalStorage(TOOL_STORAGE_KEYS.cropper),
-      captioner: collectCaptionerData(),
-      captionerProgress: readPrefixedLocalStorage(PREFIX_STORAGE_KEYS.captionerProgress),
-      captionerRuntime, // 图片描述工具新增数据（单图/文件夹结果、缓存文件夹名等，来自 IndexedDB）
-      tagtool: readScopedLocalStorage(TOOL_STORAGE_KEYS.tagtool),
-      hub: readScopedLocalStorage(Object.values(STORAGE_KEYS)),
-    },
+    tools,
   };
 }
 
@@ -385,7 +428,9 @@ function isValidConfigPayload(config) {
 // Export configuration to JSON file (choose save location when supported)
 async function exportConfig() {
   try {
-    const config = await collectAllLocalStorageData();
+    const selection = await showCategorySelection({ mode: 'export' });
+    if (!selection) return;
+    const config = await collectAllLocalStorageData(selection.categories);
     const json = JSON.stringify(config, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const timestamp = new Date().toISOString().slice(0, 10);
@@ -440,11 +485,11 @@ async function importConfig() {
         throw new Error(t('importInvalid'));
       }
 
-      // 弹窗询问合并还是覆盖
-      const mode = await askImportMode();
-      if (!mode) return;
+      // 弹窗选择要导入的数据种类与导入方式（合并/覆盖）
+      const selection = await showCategorySelection({ mode: 'import' });
+      if (!selection) return;
 
-      await applyImportedTools(config, mode);
+      await applyImportedTools(config, selection.importMode, selection.categories);
 
       // Reload page to apply changes
       alert(t('importSuccess'));
@@ -458,59 +503,117 @@ async function importConfig() {
   input.click();
 }
 
-function showImportModal() {
-  const modal = document.getElementById('importModal');
-  if (modal) modal.hidden = false;
-}
-
-function hideImportModal() {
-  const modal = document.getElementById('importModal');
-  if (modal) modal.hidden = true;
-}
-
-function askImportMode() {
+// 数据种类选择弹窗：mode 为 'export' 或 'import'
+// 返回 { categories: string[], importMode: 'merge'|'overwrite'|null }，取消返回 null
+function showCategorySelection({ mode }) {
   return new Promise((resolve) => {
-    showImportModal();
-    const mergeBtn = document.getElementById('importMergeConfirmBtn');
-    const overwriteBtn = document.getElementById('importOverwriteConfirmBtn');
-    const cancelBtn = document.getElementById('importCancelConfirmBtn');
+    const modal = document.getElementById('categoryModal');
+    const title = document.getElementById('categoryModalTitle');
+    const desc = document.getElementById('categoryModalDesc');
+    const list = document.getElementById('categoryList');
+    const modeRow = document.getElementById('importModeRow');
+    const confirmBtn = document.getElementById('categoryConfirmBtn');
+    const cancelBtn = document.getElementById('categoryCancelBtn');
+    if (!modal || !list || !confirmBtn || !cancelBtn) {
+      resolve(null);
+      return;
+    }
+
+    const isExport = mode === 'export';
+    title.textContent = t(isExport ? 'exportAskTitle' : 'importAskTitle');
+    desc.textContent = t(isExport ? 'exportAskDesc' : 'importAskDesc');
+
+    // 渲染分类复选框（默认全选）
+    list.innerHTML = '';
+    for (const cat of DATA_CATEGORIES) {
+      const label = document.createElement('label');
+      label.className = 'category-option';
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = cat.id;
+      checkbox.checked = true;
+
+      const name = document.createElement('span');
+      name.textContent = t(cat.i18nKey);
+
+      const hint = document.createElement('span');
+      hint.className = 'category-desc';
+      hint.textContent = t(cat.i18nDescKey);
+
+      label.appendChild(checkbox);
+      label.appendChild(name);
+      label.appendChild(hint);
+      list.appendChild(label);
+    }
+
+    // 导入时显示合并/覆盖选择，导出时隐藏
+    if (modeRow) {
+      modeRow.hidden = !isExport ? false : true;
+      if (!isExport) {
+        const mergeRadio = modeRow.querySelector('input[name="importMode"][value="merge"]');
+        if (mergeRadio) mergeRadio.checked = true;
+      }
+    }
+
+    confirmBtn.textContent = t('categoryConfirmBtn');
+    cancelBtn.textContent = t('categoryCancelBtn');
 
     const cleanup = () => {
-      hideImportModal();
-      if (mergeBtn) mergeBtn.removeEventListener('click', onMerge);
-      if (overwriteBtn) overwriteBtn.removeEventListener('click', onOverwrite);
-      if (cancelBtn) cancelBtn.removeEventListener('click', onCancel);
+      modal.hidden = true;
+      confirmBtn.removeEventListener('click', onConfirm);
+      cancelBtn.removeEventListener('click', onCancel);
     };
-    const onMerge = () => { cleanup(); resolve('merge'); };
-    const onOverwrite = () => { cleanup(); resolve('overwrite'); };
-    const onCancel = () => { cleanup(); resolve(null); };
+    const onConfirm = () => {
+      const checked = [...list.querySelectorAll('input[type="checkbox"]:checked')].map((el) => el.value);
+      if (!checked.length) {
+        alert(t('categoryEmpty'));
+        return;
+      }
+      const importMode = isExport
+        ? null
+        : (modeRow?.querySelector('input[name="importMode"]:checked')?.value || 'merge');
+      cleanup();
+      resolve({ categories: checked, importMode });
+    };
+    const onCancel = () => {
+      cleanup();
+      resolve(null);
+    };
 
-    if (mergeBtn) mergeBtn.addEventListener('click', onMerge);
-    if (overwriteBtn) overwriteBtn.addEventListener('click', onOverwrite);
-    if (cancelBtn) cancelBtn.addEventListener('click', onCancel);
+    confirmBtn.addEventListener('click', onConfirm);
+    cancelBtn.addEventListener('click', onCancel);
+    modal.hidden = false;
   });
 }
 
-async function applyImportedTools(config, mode) {
-  // 写入各工具 localStorage 配置
-  writeScopedLocalStorage(config.tools.cropper, TOOL_STORAGE_KEYS.cropper);
-  writeScopedLocalStorage(config.tools.captioner, TOOL_STORAGE_KEYS.captioner);
-  replacePrefixedLocalStorage(PREFIX_STORAGE_KEYS.captionerProgress, config.tools.captionerProgress);
-  writeScopedLocalStorage(config.tools.tagtool, TOOL_STORAGE_KEYS.tagtool);
-  writeScopedLocalStorage(config.tools.hub, Object.values(STORAGE_KEYS));
+async function applyImportedTools(config, mode, categories) {
+  const set = new Set(categories && categories.length ? categories : allCategoryIds());
 
-  // 图片描述工具的新数据（单图/文件夹结果等，存于 IndexedDB）
-  // 优先写入 sessionStorage：同源共享，reload 后 captioner 自己读取应用，规避 iframe 时序问题
-  if (config.tools.captionerRuntime && typeof config.tools.captionerRuntime === 'object') {
-    try {
-      sessionStorage.setItem(
-        CAPTIONER_PENDING_IMPORT_KEY,
-        JSON.stringify({ payload: config.tools.captionerRuntime, mode }),
-      );
-    } catch {
-      // sessionStorage 不可用/超限时，回退为 postMessage 即时应用
-      await postToCaptioner(CAPTIONER_IMPORT_MESSAGE, config.tools.captionerRuntime, mode);
+  // 写入各工具 localStorage 配置
+  if (set.has('cropper')) {
+    writeScopedLocalStorage(config.tools.cropper, TOOL_STORAGE_KEYS.cropper);
+  }
+  if (set.has('captioner')) {
+    writeScopedLocalStorage(config.tools.captioner, TOOL_STORAGE_KEYS.captioner);
+    replacePrefixedLocalStorage(PREFIX_STORAGE_KEYS.captionerProgress, config.tools.captionerProgress);
+
+    // 图片描述工具的新数据（单图/文件夹结果等，存于 IndexedDB）
+    // 优先写入 sessionStorage：同源共享，reload 后 captioner 自己读取应用，规避 iframe 时序问题
+    if (config.tools.captionerRuntime && typeof config.tools.captionerRuntime === 'object') {
+      try {
+        sessionStorage.setItem(
+          CAPTIONER_PENDING_IMPORT_KEY,
+          JSON.stringify({ payload: config.tools.captionerRuntime, mode }),
+        );
+      } catch {
+        // sessionStorage 不可用/超限时，回退为 postMessage 即时应用
+        await postToCaptioner(CAPTIONER_IMPORT_MESSAGE, config.tools.captionerRuntime, mode);
+      }
     }
+  }
+  if (set.has('tagtool')) {
+    writeScopedLocalStorage(config.tools.tagtool, TOOL_STORAGE_KEYS.tagtool);
   }
 }
 
@@ -525,16 +628,14 @@ function updateConfigButtons() {
     importConfigBtn.title = t('importConfig');
   }
 
-  const i18nNodeIds = ['importModal', 'importMergeConfirmBtn', 'importOverwriteConfirmBtn', 'importCancelConfirmBtn'];
-  for (const id of i18nNodeIds) {
-    const node = document.getElementById(id);
-    if (node?.dataset.i18n) {
-      node.textContent = t(node.dataset.i18n);
-    }
+  const privacyNotice = document.getElementById('privacyNotice');
+  if (privacyNotice) {
+    privacyNotice.textContent = t('privacyNotice');
   }
-  const modal = document.getElementById('importModal');
-  if (modal) {
-    for (const node of modal.querySelectorAll('[data-i18n]')) {
+
+  const categoryModal = document.getElementById('categoryModal');
+  if (categoryModal) {
+    for (const node of categoryModal.querySelectorAll('[data-i18n]')) {
       node.textContent = t(node.dataset.i18n);
     }
   }

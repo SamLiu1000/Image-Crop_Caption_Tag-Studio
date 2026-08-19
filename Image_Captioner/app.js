@@ -94,8 +94,8 @@ const I18N = {
     clearPromptsBtn: '清空',
     systemPromptPlaceholder: '系统提示词',
     userPromptPlaceholder: '例如：Describe this image in one detailed English paragraph。',
-    startBtn: '开始生成',
-    generateCurrentBtn: '单图生成（文件夹）',
+    startBtn: '生成（文件夹）',
+    generateCurrentBtn: '生成（单图）',
     stopBtn: '停止任务',
     prependBtn: '生成（前置）',
     appendBtn: '生成（追加）',
@@ -117,6 +117,7 @@ const I18N = {
     resultsEmptyHint: '生成结果将以图片 + 字幕的形式显示在这里，最新在最上方；点选条目后点击“复制结果”可单独复制该条。',
     resultsCleared: '已清除生成结果。',
     noResultToClear: '当前没有可清除的生成结果。',
+    resultDeleted: '已删除结果：{name}',
     runtimeLogLabel: '运行日志',
     runtimeIdle: '待命中',
     runtimeRunning: '运行中',
@@ -147,11 +148,11 @@ const I18N = {
     unknownRequestError: '未知请求错误',
     taskCompletedWithFailure: '任务已结束，但有 {count} 张图片处理失败。',
     chooseDirectoryFirst: '请先选择图片目录。',
+    useSingleGenerateButton: '单图模式下，请使用「生成（单图）」按钮。',
     directoryPermissionDenied: '目录读写权限被拒绝。',
     progressDetected: '检测到历史进度记录：{count} 项。',
     skippedByProgress: '跳过（进度记录）：{name}',
     skippedByExisting: '跳过（已存在 txt）：{name}',
-    skippedByGenerated: '跳过（本次已生成）：{name}',
     processingStarted: '开始处理：{name}',
     processingFinished: '处理完成：{name}',
     processingFailed: '处理失败：{name} -> {error}',
@@ -182,6 +183,7 @@ const I18N = {
     cacheCleared: '已删除缓存。',
     cacheFolderWriteFailed: '写入缓存文件夹失败，请检查文件夹权限。',
     cacheScanned: '已识别缓存内容：单图 {single} 条，文件夹 {folders} 个。',
+    cachePreviewRestored: '已从缓存恢复预览：{count} 张图片。',
     cacheScanFailed: '识别缓存内容失败：{error}',
     confirmDeleteCache: '确定删除缓存文件夹中的全部缓存文件吗？此操作不可恢复。',
     confirmDeleteSingleCache: '确定删除单图缓存吗？删除为永久删除，不经过回收站，无法恢复。',
@@ -248,8 +250,8 @@ const I18N = {
     clearPromptsBtn: 'Clear',
     systemPromptPlaceholder: 'System prompt',
     userPromptPlaceholder: 'Example: Describe this image in one detailed English paragraph.',
-    startBtn: 'Start Generation',
-    generateCurrentBtn: 'Generate Current (Folder)',
+    startBtn: 'Generate (Folder)',
+    generateCurrentBtn: 'Generate (Single)',
     stopBtn: 'Stop Task',
     prependBtn: 'Generate (Prepend)',
     appendBtn: 'Generate (Append)',
@@ -271,6 +273,7 @@ const I18N = {
     resultsEmptyHint: 'Results appear here as image + caption pairs, newest on top. Click an entry, then click "Copy Result" to copy that one.',
     resultsCleared: 'Generated results cleared.',
     noResultToClear: 'There are no generated results to clear yet.',
+    resultDeleted: 'Deleted result: {name}',
     allResultsCopied: 'Copied all {count} result(s), one per line.',
     runtimeLogLabel: 'Runtime Log',
     runtimeIdle: 'Idle',
@@ -302,11 +305,11 @@ const I18N = {
     unknownRequestError: 'Unknown request error',
     taskCompletedWithFailure: 'Task finished, but {count} image(s) failed.',
     chooseDirectoryFirst: 'Please choose an image directory first.',
+    useSingleGenerateButton: 'In single image mode, please use the "Generate (Single)" button.',
     directoryPermissionDenied: 'Directory read/write permission was denied.',
     progressDetected: 'Detected historical progress records: {count}.',
     skippedByProgress: 'Skipped (progress record): {name}',
     skippedByExisting: 'Skipped (existing txt): {name}',
-    skippedByGenerated: 'Skipped (already generated this session): {name}',
     processingStarted: 'Processing started: {name}',
     processingFinished: 'Processing finished: {name}',
     processingFailed: 'Processing failed: {name} -> {error}',
@@ -336,6 +339,7 @@ const I18N = {
     cacheCleared: 'Cache deleted.',
     cacheFolderWriteFailed: 'Failed to write to cache folder. Please check folder permissions.',
     cacheScanned: 'Cache detected: {single} single result(s), {folders} folder result(s).',
+    cachePreviewRestored: 'Preview restored from cache: {count} image(s).',
     cacheScanFailed: 'Failed to scan cache folder: {error}',
     confirmDeleteCache: 'Delete all cache files in the cache folder? This cannot be undone.',
     confirmDeleteSingleCache: 'Delete the single-image cache? Deletion is permanent, skips the recycle bin, and cannot be undone.',
@@ -402,7 +406,6 @@ const els = {
   resultList: document.getElementById('resultList'),
   runtimeStatusText: document.getElementById('runtimeStatusText'),
   logOutput: document.getElementById('logOutput'),
-  githubLink: document.getElementById('githubLink'),
   cacheLocationText: document.getElementById('cacheLocationText'),
   chooseCacheFolderBtn: document.getElementById('chooseCacheFolderBtn'),
   clearCacheBtn: document.getElementById('clearCacheBtn'),
@@ -445,7 +448,6 @@ const state = {
   pendingFolderHandle: null,
   pendingFolderLabel: '',
   pendingCurrentIndex: 0,
-  processedSingleNames: new Set(),
 };
 
 function t(key, params = {}) {
@@ -536,9 +538,14 @@ async function dbClear(storeName) {
   }
 }
 
+// 剥离结果条目中的内存级 File 引用，避免持久化图片本体
+function stripResultFiles(results) {
+  return results.map((item) => ({ ...item, file: undefined }));
+}
+
 async function saveResultsToCache() {
-  await dbPut('results', state.singleResults, CACHE_RESULTS_KEY);
-  await dbPut('results', state.folderResults, CACHE_FOLDERS_KEY);
+  await dbPut('results', stripResultFiles(state.singleResults), CACHE_RESULTS_KEY);
+  await dbPut('results', stripResultFiles(state.folderResults.map((entry) => ({ ...entry, results: entry.results }))), CACHE_FOLDERS_KEY);
 }
 
 async function loadResultsFromCache() {
@@ -593,14 +600,15 @@ async function chooseCacheFolder() {
 
 // 把单个结果以「原图 + 同名 .txt」形式写入缓存文件夹（按相对路径镜像子目录）
 // 文件夹模式的缓存放在与输入文件夹同名的子目录下，单图模式放在 captioner-cache，两者分开
-async function writeResultToCacheFolder(item, file, caption) {
+async function writeResultToCacheFolder(item, file, caption, nameOverride = '') {
   if (!state.cacheFolderHandle) return;
   try {
     const subDir = !state.singleFileMode && state.directoryLabel
       ? state.directoryLabel
       : 'captioner-cache';
     const cacheRoot = await state.cacheFolderHandle.getDirectoryHandle(subDir, { create: true });
-    const rel = item.relativePath || item.name || `result-${state.resultSeq}`;
+    // nameOverride 用于单图多次生成（已带 _N 后缀），此时直接作为缓存内的结果文件名
+    const rel = nameOverride || item.relativePath || item.name || `result-${state.resultSeq}`;
     const parts = rel.split('/');
     const fileName = parts.pop();
     const baseName = fileName.replace(/\.[^.]+$/, '');
@@ -677,7 +685,8 @@ async function collectCacheResults(dirHandle, relPath = '') {
         thumbUrl = '';
       }
       const name = relPath ? `${relPath}/${baseName}` : baseName;
-      results.push({ name, caption, thumbUrl });
+      // file 仅用于内存中恢复预览，持久化前会被剥离
+      results.push({ name, caption, thumbUrl, file: imageFile });
     } catch {
       // 单个文件读取失败则跳过
     }
@@ -714,7 +723,11 @@ async function scanCacheFolderContent() {
     state.singleResults = withIds(single);
     state.folderResults = folders.map((folder) => ({ ...folder, results: withIds(folder.results) }));
     state.resultSeq = seq;
-    state.processedSingleNames = new Set(state.singleResults.map((item) => item.name));
+
+    // 预览恢复：用缓存中的原图重建单图预览（若当前预览还是其它文件夹的图片则自动切换；
+    // 若已有单图缓存文件或缓存为空则保持不变）
+    await restoreSinglePreviewFromCache();
+
     enterSingleView();
     renderFolderChips();
     saveResultsToCache();
@@ -738,10 +751,10 @@ function buildExportData() {
     exportedAt: new Date().toISOString(),
     config: getConfig(),
     presets: state.presets,
-    singleResults: state.singleResults,
+    singleResults: stripResultFiles(state.singleResults),
     folderResults: state.folderResults.map((entry) => ({
       name: entry.name,
-      results: entry.results,
+      results: stripResultFiles(entry.results),
     })),
     cacheFolderName: state.cacheFolderHandle?.name || '',
     // 目录句柄无法序列化导出（浏览器安全限制），只保留名称作参考
@@ -836,7 +849,6 @@ function applyImportedConfig(data, mode) {
       state.resultSeq = Math.max(state.resultSeq, item.id || 0);
     }
   }
-  state.processedSingleNames = new Set(state.singleResults.map((item) => item.name));
   state.presets.sort((a, b) => a.name.localeCompare(b.name, state.language === 'zh' ? 'zh-CN' : 'en'));
   persistPresets();
 }
@@ -964,6 +976,8 @@ function enterSingleView() {
   state.selectedResultId = null;
   renderResults();
   renderFolderChips();
+  // 确保按钮状态正确：单图模式下禁用"生成（文件夹）"按钮
+  setTaskButtonsDisabled(state.isRunning);
 }
 
 function enterFolderView(name) {
@@ -974,16 +988,63 @@ function enterFolderView(name) {
   state.selectedResultId = null;
   renderResults();
   renderFolderChips();
+  // 确保按钮状态正确：文件夹模式下启用"生成（文件夹）"按钮
+  setTaskButtonsDisabled(state.isRunning);
 }
 
 async function toggleFolderView(name) {
   if (state.activeFolderName === name) {
     enterSingleView();
+    // 切回单图视图时，若无真实文件列表则尝试从缓存恢复单图预览
+    await restoreSinglePreviewFromCache();
   } else {
     enterFolderView(name);
     // 点击文件夹结果标签时，自动把预览切回该文件夹目录
-    await restoreFolderDirectory(name);
+    const restored = await restoreFolderDirectory(name);
+    if (!restored) {
+      // 无真实目录句柄（如其它浏览器导入配置后）→ 用缓存中的原图副本恢复预览
+      await restoreFolderPreviewFromCache(name);
+    }
   }
+}
+
+// 用缓存扫描得到的单图结果文件重建预览列表（跨浏览器导入配置后的恢复路径）
+async function restoreSinglePreviewFromCache() {
+  const files = state.singleResults.map((item) => item.file).filter(Boolean);
+  if (!files.length) return false;
+  const unchanged = state.files.length === files.length
+    && state.files.every((item, index) => item.sourceFile === files[index]);
+  if (unchanged) return true;
+  state.singleFileMode = true;
+  state.directoryHandle = null;
+  state.directoryLabel = '';
+  els.folderPathInput.value = '';
+  state.singleFileSource = files[files.length - 1];
+  state.files = files.map((fileObj) => createVirtualFileItem(fileObj));
+  state.currentIndex = 0;
+  syncStats();
+  renderThumbStrip();
+  await renderPreview();
+  log('cachePreviewRestored', { count: files.length });
+  return true;
+}
+
+// 用文件夹结果在缓存中的原图副本重建预览列表
+async function restoreFolderPreviewFromCache(name) {
+  const entry = getFolderEntry(name);
+  const files = (entry?.results || []).map((item) => item.file).filter(Boolean);
+  if (!files.length) return false;
+  state.singleFileMode = false;
+  state.directoryHandle = null;
+  state.directoryLabel = entry.name;
+  els.folderPathInput.value = entry.name;
+  state.files = files.map((fileObj) => createVirtualFileItem(fileObj));
+  state.currentIndex = 0;
+  syncStats();
+  renderThumbStrip();
+  await renderPreview();
+  log('cachePreviewRestored', { count: files.length });
+  return true;
 }
 
 async function deleteFolderView(name) {
@@ -1030,17 +1091,13 @@ function renderFolderChips() {
     label.className = 'folder-chip-name';
     label.textContent = t('singleCacheLabel');
 
-    const del = document.createElement('span');
-    del.className = 'folder-chip-del';
-    del.textContent = '×';
-    del.addEventListener('click', (event) => {
-      event.stopPropagation();
-      deleteSingleCache();
-    });
-
     chip.appendChild(label);
-    chip.appendChild(del);
-    chip.addEventListener('click', enterSingleView);
+    chip.addEventListener('click', async () => {
+      enterSingleView();
+      // 点击单图缓存标签时恢复单图缓存的图片预览（若当前预览还是其它文件夹的图片）
+      await restoreSinglePreviewFromCache();
+      setTaskButtonsDisabled(state.isRunning);
+    });
     els.folderChips.appendChild(chip);
   }
 
@@ -1061,16 +1118,7 @@ function renderFolderChips() {
     label.className = 'folder-chip-name';
     label.textContent = entry.name;
 
-    const del = document.createElement('span');
-    del.className = 'folder-chip-del';
-    del.textContent = '×';
-    del.addEventListener('click', (event) => {
-      event.stopPropagation();
-      deleteFolderView(entry.name);
-    });
-
     chip.appendChild(label);
-    chip.appendChild(del);
     chip.addEventListener('click', () => toggleFolderView(entry.name));
     els.folderChips.appendChild(chip);
   }
@@ -1093,7 +1141,6 @@ async function deleteSingleCache() {
   state.results = [];
   state.selectedResultId = null;
   state.resultSeq = 0;
-  state.processedSingleNames = new Set();
   if (!state.activeFolderName) {
     renderResults();
     renderFolderChips();
@@ -1108,14 +1155,14 @@ async function deleteSingleCache() {
 
 async function restoreFolderDirectory(name) {
   const entry = getFolderEntry(name);
-  if (!entry || !entry.directoryHandle) return;
+  if (!entry || !entry.directoryHandle) return false;
   let granted = false;
   try {
     granted = await ensureDirectoryPermission(entry.directoryHandle, 'readwrite');
   } catch {
     granted = false;
   }
-  if (!granted) return;
+  if (!granted) return false;
   state.singleFileMode = false;
   state.directoryHandle = entry.directoryHandle;
   state.directoryLabel = entry.name;
@@ -1127,6 +1174,7 @@ async function restoreFolderDirectory(name) {
   renderThumbStrip();
   await renderPreview();
   saveSessionToCache();
+  return true;
 }
 
 /* ---------- 缓存恢复与清除 ---------- */
@@ -1185,7 +1233,6 @@ async function restoreCachedSession() {
       state.resultSeq = Math.max(state.resultSeq, Number(entry.id) || 0);
     }
   }
-  state.processedSingleNames = new Set(state.singleResults.map((entry) => entry.name));
   enterSingleView();
 
   if (!cachedSession) return;
@@ -1260,6 +1307,25 @@ function buildResultItem(entry) {
   fileName.className = 'result-file-name';
   fileName.textContent = entry.name;
 
+  // 右上角删除按钮
+  const deleteBtn = document.createElement('button');
+  deleteBtn.type = 'button';
+  deleteBtn.className = 'result-delete-btn';
+  deleteBtn.innerHTML = '&times;';
+  deleteBtn.title = '删除此结果';
+  deleteBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    deleteResultItem(entry.id);
+  });
+
+  fileNameRow.appendChild(fileName);
+  fileNameRow.appendChild(deleteBtn);
+
+  const caption = document.createElement('div');
+  caption.className = 'result-caption';
+  caption.textContent = entry.caption;
+
+  // 右下角复制按钮
   const copyBtn = document.createElement('button');
   copyBtn.type = 'button';
   copyBtn.className = 'result-copy-btn';
@@ -1272,15 +1338,13 @@ function buildResultItem(entry) {
     }
   });
 
-  fileNameRow.appendChild(fileName);
-  fileNameRow.appendChild(copyBtn);
-
-  const caption = document.createElement('div');
-  caption.className = 'result-caption';
-  caption.textContent = entry.caption;
+  const actionsRow = document.createElement('div');
+  actionsRow.className = 'result-actions-row';
+  actionsRow.appendChild(copyBtn);
 
   textColumn.appendChild(fileNameRow);
   textColumn.appendChild(caption);
+  textColumn.appendChild(actionsRow);
   item.appendChild(thumb);
   item.appendChild(textColumn);
 
@@ -1387,11 +1451,6 @@ function applyI18n() {
   }
 
   els.toggleApiKeyBtn.textContent = els.apiKeyInput.type === 'password' ? t('show') : t('hide');
-
-  if (els.githubLink) {
-    els.githubLink.setAttribute('aria-label', t('githubLinkTitle'));
-    els.githubLink.setAttribute('title', t('githubLinkTitle'));
-  }
 
   setConnectionBadgeByKey(state.connectionBadgeType);
   setRuntimeStatus(state.runtimeStatusKey);
@@ -1842,7 +1901,6 @@ async function chooseFolder() {
   try {
     const directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
     state.singleFileMode = false;
-    state.processedSingleNames = new Set();
     state.directoryHandle = directoryHandle;
     state.directoryLabel = directoryHandle.name || 'selected-folder';
     els.folderPathInput.value = state.directoryLabel;
@@ -1852,6 +1910,8 @@ async function chooseFolder() {
     syncStats();
     renderThumbStrip();
     renderPreview();
+    // 更新按钮状态：文件夹模式下启用"生成（文件夹）"按钮
+    setTaskButtonsDisabled(false);
     log('directoryLoaded', { name: state.directoryLabel, count: state.files.length });
     await saveSessionToCache();
   } catch (error) {
@@ -2223,17 +2283,31 @@ async function readExistingCaption(item) {
 }
 
 function setTaskButtonsDisabled(disabled) {
-  els.startBtn.disabled = disabled;
+  els.startBtn.disabled = disabled || state.singleFileMode; // 单图模式下禁用"生成（文件夹）"按钮
   els.generateCurrentBtn.disabled = disabled;
   els.prependBtn.disabled = disabled;
   els.appendBtn.disabled = disabled;
   els.stopBtn.disabled = !disabled;
 }
 
+// 单图模式：为多次生成分配唯一结果名（hello.jpg → hello.jpg, hello_2.jpg, hello_3.jpg …）
+function nextSingleResultName(baseName) {
+  const existing = state.singleResults.map((item) => item.name);
+  if (!existing.includes(baseName)) return baseName;
+  const extIndex = baseName.lastIndexOf('.');
+  const stem = extIndex > 0 ? baseName.slice(0, extIndex) : baseName;
+  const ext = extIndex > 0 ? baseName.slice(extIndex) : '';
+  let n = 2;
+  while (existing.includes(`${stem}_${n}${ext}`)) n += 1;
+  return `${stem}_${n}${ext}`;
+}
+
 async function processItem(item, config, combineMode, progressSet) {
-  const progressName = item.relativePath;
+  const baseName = item.relativePath;
+  // 单图模式：同一张图多次生成时递增序号，使每次结果独立成条（多生成挑一条）
+  const resultName = state.singleFileMode ? nextSingleResultName(baseName) : baseName;
   const file = await item.handle.getFile();
-  log('processingStarted', { name: progressName });
+  log('processingStarted', { name: resultName });
   if (isStopRequested()) return;
   const newCaption = await requestCaption(config, item, file);
   let finalCaption = newCaption;
@@ -2255,22 +2329,25 @@ async function processItem(item, config, combineMode, progressSet) {
     thumbUrl = '';
   }
   if (isStopRequested()) return;
-  addResultEntry(progressName, finalCaption, thumbUrl);
-  writeResultToCacheFolder(item, file, finalCaption);
-  if (state.singleFileMode) {
-    state.processedSingleNames.add(progressName);
-  }
+  addResultEntry(resultName, finalCaption, thumbUrl);
+  writeResultToCacheFolder(item, file, finalCaption, resultName);
   if (!state.singleFileMode && progressSet) {
-    progressSet.add(progressName);
+    progressSet.add(baseName);
     saveProgressRecord(progressSet);
   }
   state.stats.processed += 1;
   syncStats();
-  log('processingFinished', { name: progressName });
+  log('processingFinished', { name: resultName });
 }
 
 async function processAll(combineMode = 'none') {
   if (state.isRunning) return;
+
+  // 单图模式下，生成（文件夹）按钮应该被禁用或提示用户
+  if (state.singleFileMode) {
+    log('useSingleGenerateButton');
+    return;
+  }
 
   const shouldRestoreSingleFile = state.singleFileMode
     && !state.files.length
@@ -2344,20 +2421,18 @@ async function processAll(combineMode = 'none') {
 
   try {
     await detectModelIfNeeded(config);
-    for (let index = 0; index < state.files.length; index += 1) {
+    // 单图模式：只生成当前选中的那张（点击哪张就为哪张追加一条结果）；
+    // 文件夹模式仍按全量批处理
+    const indices = state.singleFileMode
+      ? (state.currentIndex >= 0 && state.currentIndex < state.files.length ? [state.currentIndex] : [])
+      : state.files.map((_, i) => i);
+    for (const index of indices) {
       if (state.stopRequested) break;
 
       state.currentIndex = index;
       await renderPreview();
       const item = state.files[index];
       const progressName = item.relativePath;
-
-      if (state.singleFileMode && state.processedSingleNames.has(progressName)) {
-        state.stats.skipped += 1;
-        syncStats();
-        log('skippedByGenerated', { name: progressName });
-        continue;
-      }
 
       if (!state.singleFileMode) {
         const hasTxt = await hasExistingCaption(item);
@@ -2533,6 +2608,40 @@ async function copyCurrentCaption() {
   }
 }
 
+function deleteResultItem(resultId) {
+  const index = state.results.findIndex((entry) => entry.id === resultId);
+  if (index === -1) return;
+
+  const entry = state.results[index];
+  state.results.splice(index, 1);
+
+  if (state.selectedResultId === resultId) {
+    state.selectedResultId = null;
+  }
+
+  // 同步更新 folderResults 中的对应条目
+  if (state.activeFolderName) {
+    const folderEntry = state.folderResults.find((f) => f.name === state.activeFolderName);
+    if (folderEntry) {
+      folderEntry.results = state.results;
+      if (!state.results.length) {
+        // 如果该文件夹结果为空，移除该文件夹条目
+        state.folderResults = state.folderResults.filter((f) => f.name !== state.activeFolderName);
+        state.activeFolderName = null;
+        enterSingleView();
+      }
+    }
+  } else {
+    state.singleResults = state.results;
+  }
+
+  renderResults();
+  renderFolderChips();
+  saveResultsToCache();
+  saveSessionToCache();
+  log('resultDeleted', { name: entry.name });
+}
+
 function clearResults() {
   if (!state.results.length) {
     log('noResultToClear');
@@ -2548,7 +2657,6 @@ function clearResults() {
     state.singleResults = [];
     state.results = [];
     state.selectedResultId = null;
-    state.processedSingleNames = new Set();
     renderResults();
   }
   saveResultsToCache();

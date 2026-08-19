@@ -14,6 +14,7 @@ html,
 body {
   margin: 0;
   min-height: 100%;
+  overflow: hidden;
 }
 
 body {
@@ -30,6 +31,22 @@ button {
   min-height: 100vh;
   display: grid;
   grid-template-rows: 28px 1fr;
+}
+
+.privacy-notice {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--tab-text);
+  font-size: 11px;
+  line-height: 1.1;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 55%;
+  pointer-events: none;
 }
 
 .hub-header {
@@ -112,6 +129,35 @@ button {
   opacity: 1;
 }
 
+.hub-gh-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 18px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--tab-text);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, opacity 0.18s ease;
+  backdrop-filter: blur(6px);
+  opacity: 0.78;
+}
+
+.hub-gh-link:hover {
+  background: var(--tab-hover-bg);
+  color: var(--tab-text-hover);
+  opacity: 1;
+}
+
+.hub-gh-link svg {
+  width: 13px;
+  height: 13px;
+}
+
 /* 导入方式弹窗 */
 .modal-overlay {
   position: fixed;
@@ -165,6 +211,95 @@ button {
   color: #e6edf3;
 }
 
+.category-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.category-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  font-size: 12px;
+  color: #e6edf3;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.category-option:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.category-option:has(input:checked) {
+  background: rgba(78, 158, 255, 0.12);
+  border-color: rgba(78, 158, 255, 0.4);
+}
+
+.category-option input[type='checkbox'],
+.category-option input[type='radio'] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #4e9eff;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.category-option .category-desc {
+  font-size: 10px;
+  color: rgba(230, 237, 243, 0.55);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.mode-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 作者样式的 display:flex 会覆盖 HTML hidden 属性，需显式补回隐藏规则 */
+.mode-row[hidden] {
+  display: none;
+}
+
+.mode-title {
+  margin: 0 0 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #e6edf3;
+}
+
+.mode-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(230, 237, 243, 0.82);
+  cursor: pointer;
+}
+
+.mode-option input[type='radio'] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #4e9eff;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
 .panel-stack {
   min-height: 0;
 }
@@ -178,11 +313,13 @@ button {
 }
 
 .tool-frame {
+  display: block;
   width: 100%;
   height: calc(100vh - 28px);
   border: 0;
   border-radius: 0;
   background: transparent;
+  vertical-align: top;
 }
 
 @media (max-width: 900px) {

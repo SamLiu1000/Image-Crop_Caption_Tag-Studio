@@ -14,7 +14,16 @@
         <button class="tool-tab" type="button" role="tab" aria-selected="false" aria-controls="panel-captioner" id="tab-captioner" data-tab="captioner">图片描述</button>
         <button class="tool-tab" type="button" role="tab" aria-selected="false" aria-controls="panel-tagtool" id="tab-tagtool" data-tab="tagtool">标签工具</button>
       </div>
+      <div id="privacyNotice" class="privacy-notice" role="note" data-i18n="privacyNotice">
+        🔒 所有数据仅保存在你的浏览器和本地磁盘上，本站点永远不会获得你的数据
+      </div>
       <div class="header-actions">
+        <a id="githubLink" class="hub-gh-link" href="https://github.com/SamLiu1000/Image-Crop_Caption_Tag-Studio"
+          target="_blank" rel="noopener noreferrer" title="GitHub 项目主页" aria-label="GitHub 项目主页">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
+          </svg>
+        </a>
         <button id="themeToggleBtn" class="config-btn" type="button" data-i18n="themeToggle" title="切换浅色/暗色主题">🌙</button>
         <button id="exportConfigBtn" class="config-btn" type="button" data-i18n="exportConfig" title="导出所有工具配置">📥 导出配置</button>
         <button id="importConfigBtn" class="config-btn" type="button" data-i18n="importConfig" title="导入配置文件">📤 导入配置</button>
@@ -35,14 +44,25 @@
     </main>
   </div>
 
-  <div id="importModal" class="modal-overlay" hidden>
+  <div id="categoryModal" class="modal-overlay" hidden>
     <div class="modal-card">
-      <p class="modal-title" data-i18n="importAskTitle">选择导入方式</p>
-      <p class="modal-desc" data-i18n="importAskDesc">合并：保留现有数据，导入内容按名称去重合并；覆盖：清空现有配置与结果后整体替换。</p>
+      <p class="modal-title" id="categoryModalTitle">选择数据种类</p>
+      <p class="modal-desc" id="categoryModalDesc">勾选要导出的数据</p>
+      <div class="category-list" id="categoryList"></div>
+      <div class="mode-row" id="importModeRow" hidden>
+        <p class="mode-title" data-i18n="importModeTitle">导入方式</p>
+        <label class="mode-option">
+          <input type="radio" name="importMode" value="merge" checked />
+          <span data-i18n="importMergeLabel">合并（保留现有数据，按名称去重）</span>
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="importMode" value="overwrite" />
+          <span data-i18n="importOverwriteLabel">覆盖（清空现有数据后整体替换）</span>
+        </label>
+      </div>
       <div class="modal-actions">
-        <button id="importMergeConfirmBtn" class="config-btn" type="button" data-i18n="importMergeBtn">合并</button>
-        <button id="importOverwriteConfirmBtn" class="config-btn" type="button" data-i18n="importOverwriteBtn">覆盖</button>
-        <button id="importCancelConfirmBtn" class="config-btn" type="button" data-i18n="importCancelBtn">取消</button>
+        <button id="categoryConfirmBtn" class="config-btn" type="button" data-i18n="categoryConfirmBtn">确定</button>
+        <button id="categoryCancelBtn" class="config-btn" type="button" data-i18n="categoryCancelBtn">取消</button>
       </div>
     </div>
   </div>

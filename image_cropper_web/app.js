@@ -138,7 +138,6 @@ const I18N = {
     addVLineTitle: '竖边界',
     addHLineTitle: '横边界',
     clearGuidesTitle: '清除所有参考线',
-    githubLinkTitle: 'GitHub 项目主页',
     guideAdded: '已添加参考线',
     guideDeleted: '已删除参考线',
     guidesCleared: '已清除参考线',
@@ -250,7 +249,6 @@ const I18N = {
     addVLineTitle: 'Vertical boundary',
     addHLineTitle: 'Horizontal boundary',
     clearGuidesTitle: 'Clear all guides',
-    githubLinkTitle: 'GitHub project page',
     guideAdded: 'Guide added',
     guideDeleted: 'Guide removed',
     guidesCleared: 'Guides cleared',
@@ -305,7 +303,6 @@ const els = {
   addVLineBtn: document.getElementById('addVLineBtn'),
   addHLineBtn: document.getElementById('addHLineBtn'),
   clearGuidesBtn: document.getElementById('clearGuidesBtn'),
-  githubLink: document.getElementById('githubLink'),
 };
 
 const ctx = els.canvas.getContext('2d');
@@ -380,8 +377,6 @@ function applyI18n() {
   els.addHLineBtn.setAttribute('title', t('addHLineTitle'));
   els.clearGuidesBtn.setAttribute('aria-label', t('clearGuidesTitle'));
   els.clearGuidesBtn.setAttribute('title', t('clearGuidesTitle'));
-  els.githubLink.setAttribute('aria-label', t('githubLinkTitle'));
-  els.githubLink.setAttribute('title', t('githubLinkTitle'));
   els.imageScaleValue.setAttribute('title', t('zoomResetHint'));
   els.tipsText.textContent = t('tipsText');
 
@@ -2634,8 +2629,29 @@ async function init() {
   applyI18n();
   setStatus(t('statusReady'));
   setNav(t('navEmpty'));
+  // 立即同步 canvas 内部像素尺寸，避免绘制前 canvas 停留在 300×150 默认值而被 CSS 拉伸
+  updateCanvasSize();
   scheduleRedraw();
   await restoreSavedDirectoryHandle();
+
+  // 修复：canvas 内部像素尺寸与 CSS 显示尺寸不同步时，绘制内容会被浏览器拉伸变形
+  // （初次打开 iframe 布局抖动、字体加载等会让 canvas 经历中间尺寸）。
+  // 1) ResizeObserver 监听 CSS 尺寸变化，变化时重新同步内部像素并重绘
+  if (typeof ResizeObserver !== 'undefined') {
+    const observer = new ResizeObserver(() => {
+      if (state.redrawPending) return;
+      scheduleRedraw();
+    });
+    observer.observe(els.canvas);
+  }
+  // 2) 非 rAF 兜底：布局稳定后直接同步并重绘（不依赖 requestAnimationFrame 时序）
+  window.setTimeout(() => redraw(), 120);
+  window.setTimeout(() => redraw(), 500);
+  // 3) 字体/布局完全稳定后（load 事件）再强制同步一次
+  window.addEventListener('load', () => {
+    scheduleRedraw();
+    window.setTimeout(() => redraw(), 100);
+  });
 }
 
 init();
