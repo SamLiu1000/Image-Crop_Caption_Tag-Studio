@@ -4,6 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Image_Captioner</title>
+  <script>
+    // 首帧前应用已保存的主题，避免明暗模式闪动（与 hub 默认一致：无记录时按暗色）
+    (function () {
+      var theme = 'dark';
+      try { theme = localStorage.getItem('web-tools-hub-theme') || 'dark'; } catch (e) { theme = 'dark'; }
+      if (theme === 'dark' || theme === 'light') {
+        document.documentElement.setAttribute('data-theme', theme);
+      }
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />

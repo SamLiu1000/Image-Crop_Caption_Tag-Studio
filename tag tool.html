@@ -1,6 +1,16 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
+<script>
+// 首帧前应用已保存的主题，避免明暗模式闪动（与 hub 默认一致：无记录时按暗色）
+(function(){
+  var theme = 'dark';
+  try { theme = localStorage.getItem('web-tools-hub-theme') || 'dark'; } catch (e) { theme = 'dark'; }
+  if (theme === 'dark' || theme === 'light') {
+    document.documentElement.setAttribute('data-theme', theme);
+  }
+})();
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>tag tool</title>
@@ -1336,7 +1346,7 @@ const I18N = {
 const LANGUAGE_SYNC_MESSAGE = 'web-tools-hub:set-language';
 const THEME_SYNC_MESSAGE = 'web-tools-hub:set-theme';
 let currentLang = localStorage.getItem('app_language') || 'zh';
-let currentTheme = localStorage.getItem('tag_tool_theme') || 'dark';
+let currentTheme = localStorage.getItem('web-tools-hub-theme') || 'dark';
 
 function toggleLanguage() {
   const newLang = currentLang === 'zh' ? 'en' : 'zh';
