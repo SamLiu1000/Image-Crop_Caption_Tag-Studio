@@ -1020,7 +1020,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
     <div class="tg-modal-search-row" style="display:flex;gap:8px;align-items:center">
       <input class="tg-modal-search" id="catTagSearch" type="text" style="flex:1;min-width:0"
         data-i18n-placeholder="cat.tags.modal.search.placeholder" placeholder="搜索标签…" autocomplete="off" spellcheck="false" oninput="renderCatTagsDebounced()">
-      <button class="tg-sel-all-btn" id="catTagSortBtn" onclick="toggleCatTagSort()" style="flex-shrink:0" data-i18n-title="cat.tags.modal.sort.title" title="按名称排序" data-i18n="cat.tags.modal.sort">按名称排序</button>
+      <button class="tg-sel-all-btn" id="catTagSortBtn" onclick="sortCatTags()" style="flex-shrink:0" data-i18n-title="cat.tags.modal.sort.title" title="按名称排序" data-i18n="cat.tags.modal.sort">按名称排序</button>
     </div>
     <div class="tg-modal-body" id="catTagsModalBody"></div>
     <div class="tg-modal-foot">
@@ -1192,6 +1192,7 @@ const I18N = {
     'toast.cat.tag.add.prompt': '请输入新标签名称：',
     'toast.cat.tag.exists': '⚠ 该标签已存在',
     'toast.cat.tag.add.success': '✓ 已添加标签「{tag}」',
+    'toast.cat.sort.success': '✓ 已按名称排序（{count} 个标签）',
     'toast.cat.tag.delete.confirm': '确定删除标签「{tag}」？',
     'toast.cat.tag.delete.success': '🗑 已删除标签「{tag}」',
     'toast.cat.no.categories': '暂无栏目，请先点击「管理栏目」添加栏目和标签',
@@ -1341,6 +1342,7 @@ const I18N = {
     'toast.cat.tag.add.prompt': 'Enter new tag name:',
     'toast.cat.tag.exists': '⚠ Tag already exists',
     'toast.cat.tag.add.success': '✓ Added tag "{tag}"',
+    'toast.cat.sort.success': '✓ Sorted by name ({count} tags)',
     'toast.cat.tag.delete.confirm': 'Delete tag "{tag}"?',
     'toast.cat.tag.delete.success': '🗑 Deleted tag "{tag}"',
     'toast.cat.no.categories': 'No categories, please click "Manage Categories" to add categories and tags',
@@ -1475,7 +1477,6 @@ document.addEventListener('DOMContentLoaded', () => {
   catLoad();
   renderTagGroups();
   renderTagSidebar();
-  updateCatTagSortBtn();
 
   // Restore insert mode toggle UI
   setInsertMode(tagInsertMode);
@@ -2567,8 +2568,6 @@ let categories = [];
 let catEditId  = null;
 let catTagEditId = null; // 正在编辑标签的栏目ID
 const CAT_STORAGE_KEY = 'anatomy_categories_v1';
-const CAT_TAG_SORT_KEY = 'anatomy_cat_tag_sort_by_name';
-let catTagSortByName = (() => { try { return localStorage.getItem(CAT_TAG_SORT_KEY) === '1'; } catch { return false; } })();
 
 function tgSave() { try { localStorage.setItem(TG_STORAGE_KEY, JSON.stringify(tagGroups)); } catch {} }
 function tgLoad() {
@@ -3183,25 +3182,17 @@ function showSaveGroupPopup(event) {
 }
 
 // ═══════════════════ CATEGORIES MANAGEMENT FUNCTIONS ═══════════════════
-function toggleCatTagSort() {
-  catTagSortByName = !catTagSortByName;
-  try { localStorage.setItem(CAT_TAG_SORT_KEY, catTagSortByName ? '1' : '0'); } catch {}
-  updateCatTagSortBtn();
-  renderCatTags();
-}
+function sortCatTags() {
+  const cat = categories.find(c => c.id === catTagEditId);
+  if (!cat) return;
 
-function updateCatTagSortBtn() {
-  const btn = $('catTagSortBtn');
-  if (!btn) return;
-  if (catTagSortByName) {
-    btn.style.borderColor = 'var(--c3)';
-    btn.style.color = 'var(--c3)';
-    btn.style.background = 'rgba(240,165,0,.15)';
-  } else {
-    btn.style.borderColor = '';
-    btn.style.color = '';
-    btn.style.background = '';
-  }
+  cat.tags.sort((a, b) => a.localeCompare(b));
+  catSave();
+
+  renderCatTags();
+  renderCatList();
+  renderTagSidebar();
+  showToast(t('toast.cat.sort.success', {count: cat.tags.length}), 'info', 1800);
 }
 
 function openCatModal() {
@@ -3322,7 +3313,6 @@ function openCatTagsModal(catId) {
   $('catNameInput').value = cat.name;
   $('catTagSearch').value = '';
   $('catTagsModalOverlay').classList.remove('hidden');
-  updateCatTagSortBtn();
   renderCatTags();
 }
 
@@ -3365,10 +3355,6 @@ function renderCatTags() {
   const filteredTags = cat.tags.filter(tag =>
     !kw || tag.toLowerCase().includes(kw)
   );
-
-  if (catTagSortByName) {
-    filteredTags.sort((a, b) => a.localeCompare(b));
-  }
 
   if (filteredTags.length === 0) {
     body.innerHTML = `<div style="font-size:10px;color:var(--muted);font-style:italic;text-align:center;padding:20px">${t('cat.tags.modal.empty')}</div>`;
@@ -3444,9 +3430,7 @@ function addTagToCategory(catId, trimmedTag) {
   if (catTagEditId === catId && !$('catTagsModalOverlay').classList.contains('hidden')) {
     const kw = $('catTagSearch').value.trim().toLowerCase();
     if (!kw || trimmedTag.toLowerCase().includes(kw)) {
-      // 按名称排序开启时需要整体重排，否则增量追加到末尾
-      if (catTagSortByName) renderCatTags();
-      else appendCatTagElement(trimmedTag);
+      appendCatTagElement(trimmedTag);
     }
     $('catTagsCount').innerHTML = t('cat.tags.modal.count', {count: cat.tags.length});
   }
