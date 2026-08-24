@@ -2043,6 +2043,12 @@ async function renderPreview() {
   els.previewVideo.hidden = !isVideo;
   if (isVideo) {
     els.previewVideo.src = state.currentObjectUrl;
+    // 生成首帧海报，确保未播放时也能看到画面（解码失败则忽略）
+    if (!els.previewVideo.poster) {
+      makeVideoThumbnail(file, 480)
+        .then((poster) => { els.previewVideo.poster = poster; })
+        .catch(() => {});
+    }
   } else {
     els.previewImage.src = state.currentObjectUrl;
   }

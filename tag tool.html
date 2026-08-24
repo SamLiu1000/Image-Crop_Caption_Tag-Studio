@@ -158,6 +158,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 }
 .big-image-wrap.empty-wrap{flex-direction:column;gap:10px}
 .big-img{max-width:100%;max-height:100%;object-fit:contain;display:block;transition:opacity .2s}
+.big-video{max-width:100%;max-height:100%;border-radius:6px;background:#000;outline:none}
 .big-img-placeholder{font-size:40px;opacity:.2}
 .big-img-hint{font-size:10px;color:var(--muted);letter-spacing:.08em}
 
@@ -1769,6 +1770,40 @@ async function readTags(handle) {
   } catch { return []; }
 }
 
+// 生成视频首帧图片（data URL），用作未播放时的海报与画廊缩略图
+async function videoPosterDataUrl(file, maxDimension = 320) {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'auto';
+    video.src = objectUrl;
+    await new Promise((resolve, reject) => {
+      video.onloadeddata = resolve;
+      video.onerror = () => reject(new Error('video'));
+    });
+    // 跳到 0.1s（或时长的 10%），避免取到黑首帧
+    const target = video.duration ? Math.min(0.1, video.duration * 0.1) : 0;
+    if (target > 0) {
+      await new Promise((resolve) => {
+        video.onseeked = resolve;
+        video.currentTime = target;
+      });
+    }
+    const ratio = Math.min(1, maxDimension / video.videoWidth, maxDimension / video.videoHeight);
+    const w = Math.max(1, Math.round(video.videoWidth * ratio));
+    const h = Math.max(1, Math.round(video.videoHeight * ratio));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+    return canvas.toDataURL('image/jpeg', 0.8);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 // ─── Navigate ──────────────────────────────────────────────
 function navigateImage(delta) {
   if (imageFiles.length === 0) return;
@@ -1891,12 +1926,29 @@ async function renderPreview() {
 
   const ext = item.name.split('.').pop().toLowerCase();
   if (VIDEO_EXTS.includes(ext)) {
-    wrap.innerHTML = '<div class="big-img-placeholder">🎬</div><div class="big-img-hint">视频文件</div>';
-    wrap.classList.add('empty-wrap');
+    const video = document.createElement('video');
+    video.className = 'big-video';
+    video.controls = true;
+    video.playsInline = true;
+    video.preload = 'metadata';
+    video.title = item.name;
+    wrap.innerHTML = '';
+    wrap.appendChild(video);
+    wrap.classList.remove('empty-wrap');
     imgZoom.img = null;
     $('imgZoomBar').style.display = 'none';
     $('detailFilename').textContent = item.base + '.txt';
     renderCurrentTags();
+    try {
+      const file = await item.imgHandle.getFile();
+      if (!item.objUrl) item.objUrl = URL.createObjectURL(file);
+      if (item.objUrl) video.src = item.objUrl;
+      // 生成首帧海报，确保未播放时也能看到预览画面
+      if (!item.thumbUrl) item.thumbUrl = await videoPosterDataUrl(file);
+      if (item.thumbUrl) video.poster = item.thumbUrl;
+    } catch {
+      // 读取/解码失败则保留控制条，用户仍可尝试播放
+    }
     return;
   }
 
@@ -2088,6 +2140,25 @@ function renderGallery() {
     const ext = item.name.split('.').pop().toLowerCase();
     if (VIDEO_EXTS.includes(ext)) {
       thumbHtml = `<div class="gallery-thumb-placeholder">🎬</div>`;
+      // 异步生成视频首帧缩略图（缓存到 item.thumbUrl）
+      requestAnimationFrame(async () => {
+        try {
+          const file = await item.imgHandle.getFile();
+          if (!item.objUrl) item.objUrl = URL.createObjectURL(file);
+          if (!item.thumbUrl) item.thumbUrl = await videoPosterDataUrl(file);
+          const ph = row.querySelector('.gallery-thumb-placeholder');
+          if (ph && item.thumbUrl) {
+            const img = document.createElement('img');
+            img.className = 'gallery-thumb';
+            img.src = item.thumbUrl;
+            img.alt = escHtml(item.name);
+            img.loading = 'lazy';
+            ph.replaceWith(img);
+          }
+        } catch {
+          // 解码失败则保留 🎬 徽标
+        }
+      });
     } else if (item.objUrl) {
       thumbHtml = `<img class="gallery-thumb" src="${item.objUrl}" alt="${escHtml(item.name)}" loading="lazy">`;
     } else {
