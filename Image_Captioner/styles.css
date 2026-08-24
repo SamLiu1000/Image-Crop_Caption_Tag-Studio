@@ -854,7 +854,8 @@ textarea {
   border-radius: var(--radius-md);
   flex: 0 0 auto;
   max-height: 100%;
-  width: 88px;
+  width: 106px;
+  scrollbar-gutter: stable;
 }
 
 .thumb-strip[hidden] {

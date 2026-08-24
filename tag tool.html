@@ -275,6 +275,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 .tag-edit-area:focus{border-color:var(--c5);box-shadow:0 0 0 2px rgba(176,166,204,.15)}
 .tag-edit-pop-foot{display:flex;align-items:center;gap:6px;margin-top:8px}
 .tag-edit-pop-hint{flex:1;font-size:9px;color:var(--muted);letter-spacing:.04em}
+.tag-edit-pop-count{flex:0 0 auto;font-size:9px;color:var(--muted);font-family:'IBM Plex Mono',monospace}
 .tag-edit-pop-foot button{
   padding:4px 12px;border:none;border-radius:4px;color:#fff;font-size:10px;
   cursor:pointer;font-family:'IBM Plex Mono',monospace;white-space:nowrap
@@ -1033,10 +1034,12 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 
 <!-- Tag Edit Floating Sticky (long-press edit, shared) -->
 <div id="tagEditPop" class="tag-edit-pop" style="display:none">
-  <textarea id="tagEditArea" class="tag-edit-area" maxlength="200" spellcheck="false"
-    onkeydown="event.stopPropagation();if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();closeTagEdit(true)}else if(event.key==='Escape'){event.preventDefault();closeTagEdit(false)}"></textarea>
+  <textarea id="tagEditArea" class="tag-edit-area" maxlength="2000" spellcheck="false"
+    onkeydown="event.stopPropagation();if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();closeTagEdit(true)}else if(event.key==='Escape'){event.preventDefault();closeTagEdit(false)}"
+    oninput="updateTagEditCount()"></textarea>
   <div class="tag-edit-pop-foot">
     <span class="tag-edit-pop-hint" data-i18n="tag.edit.pop.hint">Enter 保存 · Esc 取消 · Shift+Enter 换行</span>
+    <span id="tagEditCount" class="tag-edit-pop-count">0/2000</span>
     <button type="button" class="ip-cancel" onclick="closeTagEdit(false)" data-i18n="tg.modal.cancel">取消</button>
     <button type="button" class="ip-confirm" onclick="closeTagEdit(true)" data-i18n="cat.tags.modal.save.name">保存名称</button>
   </div>
@@ -1583,7 +1586,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (popup && !popup.contains(e.target)) closeInlinePopup();
     // 点击便利贴编辑框外部时取消
     const pop = $('tagEditPop');
-    if (pop && pop.style.display !== 'none' && !pop.contains(e.target)) closeTagEdit(false);
+    if (pop && pop.style.display !== 'none' && !pop.contains(e.target)) {
+      // 长按打开编辑框后，浏览器可能补发打在原标签上的合成 mousedown，此刻忽略，避免把刚打开的框直接关掉
+      if (tagEditJustOpened) { tagEditJustOpened = false; return; }
+      closeTagEdit(false);
+    }
   }, true);
 
   document.addEventListener('keydown', e => {
@@ -1881,6 +1888,13 @@ function initImgZoom(img) {
 
 // ─── Tag edit floating sticky (shared by all long-press edits) ──
 let tagEditSubmit = null;
+let tagEditJustOpened = false;
+
+function updateTagEditCount() {
+  const area = $('tagEditArea');
+  const counter = $('tagEditCount');
+  if (area && counter) counter.textContent = area.value.length + '/' + area.maxLength;
+}
 
 function openTagEditModal(value, onSubmit, anchorEl) {
   tagEditSubmit = onSubmit;
@@ -1888,6 +1902,9 @@ function openTagEditModal(value, onSubmit, anchorEl) {
   const area = $('tagEditArea');
   area.value = value;
   pop.style.display = 'block';
+  // 长按触发刚打开，忽略紧随其后的合成 mousedown，避免一打开就被"框外点击"关闭
+  tagEditJustOpened = true;
+  setTimeout(() => { tagEditJustOpened = false; }, 700);
 
   // 锚定在长按的标签附近（便利贴浮框，自动防溢出）
   if (anchorEl && anchorEl.getBoundingClientRect) {
@@ -1902,6 +1919,7 @@ function openTagEditModal(value, onSubmit, anchorEl) {
   }
 
   setTimeout(() => { area.focus(); area.select(); }, 30);
+  updateTagEditCount();
 }
 
 function closeTagEdit(commit) {
