@@ -4,10 +4,12 @@ const PROGRESS_PREFIX = 'image-captioner-progress:';
 const LANGUAGE_KEY = 'image-captioner-language';
 const LANGUAGE_SYNC_MESSAGE = 'web-tools-hub:set-language';
 const THEME_SYNC_MESSAGE = 'web-tools-hub:set-theme';
-const SUPPORTED_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.avif']);
+const VIDEO_EXTENSIONS = new Set(['.mp4', '.webm', '.mov', '.m4v']);
+const SUPPORTED_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.avif', ...VIDEO_EXTENSIONS]);
 const LM_STUDIO_DEFAULT_URL = 'http://localhost:1234/v1';
 const DEFAULT_TIMEOUT_SECONDS = 60;
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_VIDEO_SIZE_BYTES = 80 * 1024 * 1024;
 const MAX_IMAGE_DIMENSION = 1120;
 const MIN_IMAGE_DIMENSION = 256;
 const JPEG_QUALITY_STEPS = [85, 75, 65, 55, 45, 35];
@@ -85,7 +87,7 @@ const I18N = {
     recursiveLabel: '递归子目录',
     skipExistingLabel: '跳过已有 .txt',
     stripThinkingLabel: '去除思考内容',
-    statSelected: '已选图片',
+    statSelected: '已选文件',
     statProcessed: '已完成',
     statSkipped: '已跳过',
     statFailed: '失败',
@@ -100,12 +102,12 @@ const I18N = {
     prependBtn: '生成（前置）',
     appendBtn: '生成（追加）',
     clearProgressBtn: '清除进度记录',
-    previewTitle: '图片预览',
+    previewTitle: '媒体预览',
     prevPreviewBtn: '上一张',
     nextPreviewBtn: '下一张',
     previewImageAlt: '预览图',
     previewPlaceholder: '选择图片目录后，可在这里查看当前处理图片。',
-    previewDropHint: '支持单张图片拖拽到此区域进行导入，并直接生成描述/反推提示词。',
+    previewDropHint: '支持拖入单张图片或视频进行导入，并直接生成描述/反推提示词。',
     currentFileLabel: '当前文件',
     currentFileNone: '未选择目录',
     progressLabel: '进度',
@@ -137,11 +139,14 @@ const I18N = {
     noProgressToClear: '当前还没有目录进度记录可清除。',
     progressCleared: '已清除目录进度记录：{name}',
     browserNoDirectoryPicker: '当前浏览器不支持目录选择器，请使用 Chromium 内核浏览器。',
-    directoryLoaded: '已加载目录 {name}，共 {count} 张图片。',
+    directoryLoaded: '已加载目录 {name}，共 {count} 个文件。',
     chooseDirectoryFailed: '选择目录失败：{error}',
     fileReadFailed: '读取文件失败',
     canvasExportFailed: 'Canvas 导出失败',
     imageDecodeFailed: '图片解码失败',
+    videoDecodeFailed: '视频解码失败',
+    videoTooLarge: '视频文件过大（默认上限 80MB），无法处理。',
+    videoSupportNote: '视频会以原生视频形式直接发送给模型，需要模型/服务端支持视频输入；官方 OpenAI/Anthropic 通常不支持。',
     modelListEmpty: '模型列表为空，请手动填写模型 ID',
     emptyResponse: '返回内容为空',
     retryRequest: '  {name} 第 {attempt} 次请求失败，{seconds} 秒后重试。',
@@ -193,7 +198,7 @@ const I18N = {
     singleCacheDeleted: '已删除单图缓存。',
     noResultToClear: '当前没有可删除的缓存项，请先点击标签高亮目标。',
     restoreFolderBtn: '恢复上次文件夹：{name}',
-    folderRestored: '已恢复文件夹 {name}，共 {count} 张图片。',
+    folderRestored: '已恢复文件夹 {name}，共 {count} 个文件。',
     singlePreviewRestored: '已恢复上次的单图预览。',
     folderViewDeleted: '已删除文件夹结果：{name}',
     folderResultsLabel: '文件夹结果',
@@ -241,7 +246,7 @@ const I18N = {
     recursiveLabel: 'Recursive subfolders',
     skipExistingLabel: 'Skip existing .txt',
     stripThinkingLabel: 'Strip thinking',
-    statSelected: 'Selected',
+    statSelected: 'Files Selected',
     statProcessed: 'Processed',
     statSkipped: 'Skipped',
     statFailed: 'Failed',
@@ -256,12 +261,12 @@ const I18N = {
     prependBtn: 'Generate (Prepend)',
     appendBtn: 'Generate (Append)',
     clearProgressBtn: 'Clear Progress',
-    previewTitle: 'Image Preview',
+    previewTitle: 'Media Preview',
     prevPreviewBtn: 'Previous',
     nextPreviewBtn: 'Next',
     previewImageAlt: 'Preview image',
     previewPlaceholder: 'After selecting an image folder, the current image will be previewed here.',
-    previewDropHint: 'This area also supports dragging in a single image for direct import and caption/prompt generation.',
+    previewDropHint: 'This area also supports dragging in a single image or video for direct import and caption/prompt generation.',
     currentFileLabel: 'Current File',
     currentFileNone: 'No folder selected',
     progressLabel: 'Progress',
@@ -294,11 +299,14 @@ const I18N = {
     noProgressToClear: 'There is no directory progress record to clear yet.',
     progressCleared: 'Cleared directory progress record: {name}',
     browserNoDirectoryPicker: 'This browser does not support the directory picker. Please use a Chromium-based browser.',
-    directoryLoaded: 'Loaded directory {name} with {count} images.',
+    directoryLoaded: 'Loaded directory {name} with {count} files.',
     chooseDirectoryFailed: 'Failed to choose directory: {error}',
     fileReadFailed: 'Failed to read file',
     canvasExportFailed: 'Canvas export failed',
     imageDecodeFailed: 'Image decode failed',
+    videoDecodeFailed: 'Video decode failed',
+    videoTooLarge: 'Video file is too large to process (default limit 80MB).',
+    videoSupportNote: 'Video is sent to the model as native video input and requires the model/endpoint to support video; official OpenAI/Anthropic generally do not.',
     modelListEmpty: 'The model list is empty. Please enter the model ID manually.',
     emptyResponse: 'The response content is empty',
     retryRequest: '  Request failed for {name} on attempt {attempt}, retrying in {seconds} seconds.',
@@ -349,7 +357,7 @@ const I18N = {
     singleCacheDeleted: 'Single-image cache deleted.',
     noResultToClear: 'Nothing to delete. Click a chip to highlight a target first.',
     restoreFolderBtn: 'Restore last folder: {name}',
-    folderRestored: 'Restored folder {name} with {count} images.',
+    folderRestored: 'Restored folder {name} with {count} files.',
     singlePreviewRestored: 'Restored the previous single-image preview.',
     folderViewDeleted: 'Deleted folder results: {name}',
     folderResultsLabel: 'Folder Results',
@@ -396,6 +404,7 @@ const els = {
   nextPreviewBtn: document.getElementById('nextPreviewBtn'),
   previewStage: document.getElementById('previewStage'),
   previewImage: document.getElementById('previewImage'),
+  previewVideo: document.getElementById('previewVideo'),
   previewPlaceholder: document.getElementById('previewPlaceholder'),
   thumbStrip: document.getElementById('thumbStrip'),
   currentFileText: document.getElementById('currentFileText'),
@@ -1813,6 +1822,10 @@ function getExtension(name) {
   return index >= 0 ? name.slice(index).toLowerCase() : '';
 }
 
+function isVideoName(name) {
+  return VIDEO_EXTENSIONS.has(getExtension(name));
+}
+
 function createVirtualFileItem(file) {
   return {
     handle: {
@@ -2007,6 +2020,8 @@ async function renderPreview() {
   if (state.currentIndex < 0 || state.currentIndex >= state.files.length) {
     els.previewImage.removeAttribute('src');
     els.previewImage.hidden = true;
+    els.previewVideo.removeAttribute('src');
+    els.previewVideo.hidden = true;
     els.previewPlaceholder.hidden = false;
     els.thumbStrip.hidden = true;
     els.currentFileText.textContent = t('currentFileNone');
@@ -2017,13 +2032,20 @@ async function renderPreview() {
   const item = state.files[state.currentIndex];
   const file = await item.handle.getFile();
   state.currentObjectUrl = URL.createObjectURL(file);
-  els.previewImage.src = state.currentObjectUrl;
-  els.previewImage.hidden = false;
   els.previewPlaceholder.hidden = true;
   els.thumbStrip.hidden = false;
   els.currentFileText.textContent = item.relativePath;
   syncStats();
   updateThumbStripCurrent();
+
+  const isVideo = isVideoName(item.name);
+  els.previewImage.hidden = isVideo;
+  els.previewVideo.hidden = !isVideo;
+  if (isVideo) {
+    els.previewVideo.src = state.currentObjectUrl;
+  } else {
+    els.previewImage.src = state.currentObjectUrl;
+  }
 }
 
 function stripThinking(text) {
@@ -2037,6 +2059,31 @@ async function fileToDataUrl(file) {
     reader.onerror = () => reject(reader.error || new Error(t('fileReadFailed')));
     reader.readAsDataURL(file);
   });
+}
+
+// 把 ArrayBuffer 转成 base64（分块拼接，避免大视频一次性展开导致堆栈溢出）
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+// 视频走原生 video_url 时，按扩展名推断 MIME 并手动构造 data URI，
+// 规避部分文件 File.type 为空（得到 application/octet-stream）导致供应商不识别的问题
+async function videoFileToDataUrl(file) {
+  const mimeByExt = {
+    '.mp4': 'video/mp4',
+    '.m4v': 'video/mp4',
+    '.mov': 'video/quicktime',
+    '.webm': 'video/webm',
+  };
+  const mime = mimeByExt[getExtension(file.name)] || file.type || 'video/mp4';
+  const buffer = await file.arrayBuffer();
+  return `data:${mime};base64,${arrayBufferToBase64(buffer)}`;
 }
 
 
@@ -2103,7 +2150,43 @@ async function imageFileToPayloadUrl(file) {
   return compressImage(file);
 }
 
+async function makeVideoThumbnail(file, maxDimension = 160) {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'auto';
+    video.src = objectUrl;
+    await new Promise((resolve, reject) => {
+      video.onloadeddata = resolve;
+      video.onerror = () => reject(new Error(t('videoDecodeFailed')));
+    });
+    // 跳到 0.1s（或时长的 10%），避免取到常见的黑首帧
+    const target = video.duration ? Math.min(0.1, video.duration * 0.1) : 0;
+    if (target > 0) {
+      await new Promise((resolve) => {
+        video.onseeked = () => resolve();
+        video.currentTime = target;
+      });
+    }
+    const ratio = Math.min(1, maxDimension / video.videoWidth, maxDimension / video.videoHeight);
+    const width = Math.max(1, Math.round(video.videoWidth * ratio));
+    const height = Math.max(1, Math.round(video.videoHeight * ratio));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext('2d').drawImage(video, 0, 0, width, height);
+    return canvas.toDataURL('image/jpeg', 0.8);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 async function makeThumbnail(file, maxDimension = 160) {
+  if (isVideoName(file.name)) {
+    return makeVideoThumbnail(file, maxDimension);
+  }
   const imageUrl = await fileToDataUrl(file);
   const image = await loadImage(imageUrl);
   const ratio = Math.min(1, maxDimension / image.width, maxDimension / image.height);
@@ -2168,22 +2251,28 @@ async function detectModelIfNeeded(config) {
 async function requestCaption(config, item, file) {
   const baseUrl = sanitizeBaseUrl(config.serverUrl) || LM_STUDIO_DEFAULT_URL;
   const model = await detectModelIfNeeded(config);
-  const imageDataUrl = await imageFileToPayloadUrl(file);
   const messages = [];
 
   if (config.systemPrompt) {
     messages.push({ role: 'system', content: config.systemPrompt });
   }
 
+  let mediaPart;
+  if (isVideoName(file.name)) {
+    if (file.size > MAX_VIDEO_SIZE_BYTES) {
+      throw new Error(t('videoTooLarge'));
+    }
+    const videoDataUrl = await videoFileToDataUrl(file);
+    mediaPart = { type: 'video_url', video_url: { url: videoDataUrl } };
+  } else {
+    const imageDataUrl = await imageFileToPayloadUrl(file);
+    mediaPart = { type: 'image_url', image_url: { url: imageDataUrl } };
+  }
+
   messages.push({
     role: 'user',
     content: [
-      {
-        type: 'image_url',
-        image_url: {
-          url: imageDataUrl,
-        },
-      },
+      mediaPart,
       { type: 'text', text: config.userPrompt || DEFAULT_USER_PROMPT },
     ],
   });

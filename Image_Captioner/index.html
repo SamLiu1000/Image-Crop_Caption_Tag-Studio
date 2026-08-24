@@ -96,6 +96,7 @@
             <span>User Prompt</span>
             <textarea id="userPromptInput" rows="3" placeholder="例如：Describe this image in one detailed English paragraph."></textarea>
           </label>
+          <p class="helper-text" data-i18n="videoSupportNote">视频会以原生视频形式直接发送给模型，需要模型/服务端支持视频输入；官方 OpenAI/Anthropic 通常不支持。</p>
         </div>
       </section>
     </aside>
@@ -125,9 +126,10 @@
       <div class="preview-main">
         <div id="previewStage" class="preview-stage" tabindex="0">
           <img id="previewImage" alt="预览图" hidden />
+          <video id="previewVideo" controls muted playsinline hidden></video>
           <div id="previewPlaceholder" class="preview-placeholder">
             <p data-i18n="previewPlaceholder">选择图片目录后，可在这里查看当前处理图片。</p>
-            <p class="preview-drop-hint" data-i18n="previewDropHint">支持单张图片拖拽到此区域进行导入，并直接生成描述/反推提示词。</p>
+            <p class="preview-drop-hint" data-i18n="previewDropHint">支持拖入单张图片或视频进行导入，并直接生成描述/反推提示词。</p>
           </div>
         </div>
         <div id="thumbStrip" class="thumb-strip" hidden></div>
