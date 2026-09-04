@@ -621,6 +621,15 @@ async function chooseCacheFolder() {
 async function writeResultToCacheFolder(item, file, caption, nameOverride = '') {
   if (!state.cacheFolderHandle) return;
   try {
+    // 若缓存文件夹就是当前处理的源文件夹，再以同名子目录缓存会套出「文件夹名/文件夹名」的嵌套目录，
+    // 混乱且多余——此时 writeCaptionFile 已把合并结果写回原图旁的 txt，直接跳过这份缓存副本。
+    if (state.directoryHandle && typeof state.cacheFolderHandle.isSameEntry === 'function') {
+      try {
+        if (await state.cacheFolderHandle.isSameEntry(state.directoryHandle)) return;
+      } catch {
+        // isSameEntry 不可用/抛错时继续走正常缓存
+      }
+    }
     // 缓存位置跟随「所在文件夹上下文」：有文件夹（无论单图/文件夹模式）缓存在该文件夹同名子目录，
     // 独立拖入的单图（无文件夹）缓存在 captioner-cache
     const subDir = state.directoryLabel ? state.directoryLabel : 'captioner-cache';
@@ -2635,7 +2644,10 @@ async function processAll(combineMode = 'none') {
   setConnectionBadgeByKey('taskRunning');
   setTaskButtonsDisabled(true);
 
-  const progressSet = state.singleFileMode ? new Set() : loadProgressRecord();
+  // 进度记录仅对普通「生成」用于中断续跑；前置/追加总是重新处理全部图片
+  const progressSet = state.singleFileMode || combineMode !== 'none'
+    ? new Set()
+    : loadProgressRecord();
   if (progressSet.size) {
     log('progressDetected', { count: progressSet.size });
   }
@@ -2655,9 +2667,10 @@ async function processAll(combineMode = 'none') {
       const item = state.files[index];
       const progressName = item.relativePath;
 
-      if (!state.singleFileMode) {
+      // 跳过逻辑只对普通「生成」(none) 生效；前置/追加要重新处理并合并已有 txt，因此不跳
+      if (!state.singleFileMode && combineMode === 'none') {
         const hasTxt = await hasExistingCaption(item);
-        if (combineMode === 'none' && config.skipExisting && hasTxt) {
+        if (config.skipExisting && hasTxt) {
           // 已有 txt 且勾选跳过 → 跳过
           progressSet.add(progressName);
           saveProgressRecord(progressSet);
