@@ -600,6 +600,14 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 #tagEditImageRow{display:flex;align-items:center;gap:6px;margin-bottom:6px}
 .tag-edit-img{width:44px;height:44px;border-radius:6px;object-fit:cover;border:1px solid var(--border);flex:0 0 auto}
 
+/* 标签预览图放大浮层 */
+.img-preview-overlay{position:fixed;inset:0;z-index:1200;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;cursor:zoom-out}
+.img-preview-overlay.hidden{display:none}
+.img-preview-box{position:relative;max-width:92vw;max-height:90vh;display:flex;align-items:center;justify-content:center}
+.img-preview-box img{max-width:92vw;max-height:90vh;border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.6);object-fit:contain}
+.img-preview-close{position:absolute;top:-14px;right:-14px;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);color:#fff;font-size:16px;line-height:28px;text-align:center;cursor:pointer;z-index:1}
+.img-preview-close:hover{background:rgba(255,255,255,.28)}
+
 /* Sidebar tag inline edit input (long-press rename) — superseded by tag edit modal */
 
 /* Quick-add chip (＋) at the tail of each category's tags */
@@ -668,6 +676,10 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 }
 .tg-summary-tag .ctag-del:hover{color:var(--danger)}
 .tg-modal-section{margin-bottom:16px}
+.tg-modal-section .drag-handle{cursor:grab;flex:0 0 auto}
+.tg-modal-section .drag-handle:active{cursor:grabbing}
+.tg-modal-section.drag-source{opacity:.5;border-style:dashed;border-color:var(--c4)}
+.tg-modal-section.drag-over{border-color:var(--c4);box-shadow:0 0 0 1px var(--c4)}
 .tg-modal-sec-title{font-size:9px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)}
 .tg-modal-tags{display:flex;flex-wrap:wrap;gap:6px}
 .tg-sel-tag{display:inline-flex;flex-direction:column;gap:1px;padding:5px 9px;background:var(--tag-bg);border:1px solid var(--border);border-radius:4px;cursor:pointer;transition:all .12s;user-select:none}
@@ -691,7 +703,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 
 /* Inline popup input */
 .inline-input-popup{
-  position:fixed;z-index:20;
+  position:fixed;z-index:600;
   display:flex;align-items:center;gap:4px
 }
 .inline-input-popup input{
@@ -710,7 +722,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
   width:320px;max-width:92vw;
   flex-direction:column;align-items:stretch;gap:6px;
   background:var(--modal-bg);border:1px solid var(--c5);border-radius:10px;
-  box-shadow:0 14px 44px rgba(0,0,0,.55);padding:10px;z-index:30
+  box-shadow:0 14px 44px rgba(0,0,0,.55);padding:10px;z-index:650
 }
 .inline-input-popup.big textarea{
   width:100%;min-height:88px;resize:vertical;box-sizing:border-box;
@@ -1006,6 +1018,14 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
   </div>
 </div>
 
+<!-- 标签预览图放大浮层（点击标签旁缩略图显示） -->
+<div id="imgPreviewOverlay" class="img-preview-overlay hidden" onclick="if(event.target===this)hideImgPreview()">
+  <div class="img-preview-box">
+    <img id="imgPreviewBig" alt="" />
+    <button type="button" class="img-preview-close" onclick="hideImgPreview()" data-i18n-title="tag.img.close" title="关闭">✕</button>
+  </div>
+</div>
+
 <!-- Tag Groups Modal -->
 <div class="tg-modal-overlay hidden" id="tgModalOverlay" onclick="onTgOverlayClick(event)">
   <div class="tg-modal" onclick="event.stopPropagation()">
@@ -1170,6 +1190,8 @@ const I18N = {
     'tag.img.upload.failed': '上传图片失败',
     'tag.img.removed': '已移除预览图',
     'tag.img.need.folder': '请先选择数据文件夹',
+    'tag.img.view': '点击查看大图',
+    'tag.img.close': '关闭',
     'tag.sidebar.search.placeholder': '搜索标签…',
     'tag.sidebar.search.results': '搜索结果',
     'tag.sidebar.search.noresults': '未找到匹配的标签',
@@ -1201,6 +1223,10 @@ const I18N = {
     'cat.modal.title': '栏目管理',
     'cat.modal.empty': '暂无栏目，点击下方按钮添加',
     'cat.modal.add': '＋ 添加栏目',
+    'cat.hide': '隐藏该栏目',
+    'cat.show': '显示该栏目',
+    'cat.hide.done': '已隐藏栏目',
+    'cat.show.done': '已显示栏目',
     'cat.tags.modal.title': '管理标签',
     'cat.tags.modal.title.prefix': '管理「',
     'cat.tags.modal.title.suffix': '」的标签',
@@ -1335,6 +1361,8 @@ const I18N = {
     'tag.img.upload.failed': 'Failed to upload image',
     'tag.img.removed': 'Preview removed',
     'tag.img.need.folder': 'Please choose a data folder first',
+    'tag.img.view': 'Click to view large',
+    'tag.img.close': 'Close',
     'tag.sidebar.search.placeholder': 'Search tags…',
     'tag.sidebar.search.results': 'Search Results',
     'tag.sidebar.search.noresults': 'No matching tags found',
@@ -1366,6 +1394,10 @@ const I18N = {
     'cat.modal.title': 'Category Management',
     'cat.modal.empty': 'No categories, click button below to add',
     'cat.modal.add': '＋ Add Category',
+    'cat.hide': 'Hide this category',
+    'cat.show': 'Show this category',
+    'cat.hide.done': 'Category hidden',
+    'cat.show.done': 'Category shown',
     'cat.tags.modal.title': 'Manage Tags',
     'cat.tags.modal.title.prefix': 'Manage tags for "',
     'cat.tags.modal.title.suffix': '"',
@@ -2687,15 +2719,25 @@ const TG_STORAGE_KEY = 'anatomy_tag_groups_v1';
 let categories = [];
 let catEditId  = null;
 let catTagEditId = null; // 正在编辑标签的栏目ID
+const collapsedCatIds = new Set(); // 记住折叠的侧栏栏目，重建/刷新后保持折叠状态
+const CAT_COLLAPSE_KEY = 'anatomy_collapsed_cats';
+function saveCollapsedCats() { try { localStorage.setItem(CAT_COLLAPSE_KEY, JSON.stringify([...collapsedCatIds])); } catch {} }
+function loadCollapsedCats() {
+  try {
+    const raw = localStorage.getItem(CAT_COLLAPSE_KEY);
+    collapsedCatIds.clear();
+    if (raw) { const arr = JSON.parse(raw); if (Array.isArray(arr)) arr.forEach(id => collapsedCatIds.add(id)); }
+  } catch { collapsedCatIds.clear(); }
+}
 const CAT_STORAGE_KEY = 'anatomy_categories_v1';
 
-function tgSave() { try { localStorage.setItem(TG_STORAGE_KEY, JSON.stringify(tagGroups)); } catch {} }
+function tgSave() { try { localStorage.setItem(TG_STORAGE_KEY, JSON.stringify(tagGroups)); } catch {} saveDataFolder(); }
 function tgLoad() {
   try { const raw = localStorage.getItem(TG_STORAGE_KEY); if (raw) tagGroups = JSON.parse(raw); } catch { tagGroups = []; }
 }
 
 // ═══════════════════ CATEGORIES STORAGE ═══════════════════
-function catSave() { try { localStorage.setItem(CAT_STORAGE_KEY, JSON.stringify(categories)); } catch {} }
+function catSave() { try { localStorage.setItem(CAT_STORAGE_KEY, JSON.stringify(categories)); } catch {} saveDataFolder(); }
 function catLoad() {
   try { const raw = localStorage.getItem(CAT_STORAGE_KEY); if (raw) categories = JSON.parse(raw); } catch { categories = []; }
 }
@@ -2747,6 +2789,7 @@ async function initDataState() {
   tgLoad();
   catLoad();
   loadTagImagesLocal();
+  loadCollapsedCats();
   try {
     const h = await idbGet('dataFolderHandle');
     if (h) { dataFolderHandle = h; await connectDataFolder(); }
@@ -2863,14 +2906,14 @@ function applyTagPreview(tag, imgUrl) {
   onTagSidebarSearch();
 }
 
-// 预览图上传：缩放至最长边 64px 的 JPEG 小图（base64）
+// 预览图上传：缩放至最长边 256px 的 JPEG 小图（base64，点击可放大查看）
 function fileToThumbDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
-        const max = 64;
+        const max = 256;
         let w = img.width, h = img.height;
         if (w > 0 && h > 0 && Math.max(w, h) > max) {
           const r = max / Math.max(w, h);
@@ -2954,13 +2997,32 @@ function tagThumbEl(tag, catId, inSearch) {
   const img = document.createElement('img');
   img.className = 'ts-tag-thumb';
   img.src = url;
+  img.title = t('tag.img.view');
   img.addEventListener('mousedown', e => e.stopPropagation());
   img.addEventListener('click', e => {
     e.stopPropagation();
-    editSidebarTag(catId, tag, img, inSearch);
+    showTagImagePreview(tag); // 点击缩略图 → 放大预览
   });
   return img;
 }
+
+// 放大预览：把标签预览图以全屏浮层展示
+function showTagImagePreview(tag) {
+  const url = tagImages[tag];
+  if (!url) return;
+  const ov = $('imgPreviewOverlay');
+  const big = $('imgPreviewBig');
+  if (!ov || !big) return;
+  big.src = url;
+  ov.classList.remove('hidden');
+}
+function hideImgPreview() {
+  const ov = $('imgPreviewOverlay');
+  if (ov) ov.classList.add('hidden');
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') hideImgPreview();
+});
 
 function renderTagGroups() {
   const list = $('tagGroupsList');
@@ -3017,9 +3079,10 @@ function onTagSidebarSearch() {
     return;
   }
   
-  // 收集所有来自categories的标签
+  // 收集所有来自categories的标签（隐藏栏目的不收集）
   const allTags = [];
   categories.forEach(cat => {
+    if (cat.hidden) return;
     cat.tags.forEach(tag => {
       allTags.push({
         name: tag,
@@ -3075,6 +3138,7 @@ function renderCategoriesSidebar() {
   }
   
   categories.forEach(cat => {
+    if (cat.hidden) return; // 隐藏的栏目不显示在快速标签侧栏
     const catSection = document.createElement('div');
     catSection.className = 'ts-cat-section';
     catSection.dataset.catId = cat.id;
@@ -3089,6 +3153,8 @@ function renderCategoriesSidebar() {
     const content = document.createElement('div');
     content.className = 'ts-cat-content';
     content.id = `catContent_${cat.id}`;
+    // 重建时恢复该栏目折叠状态，避免每次操作都全部展开
+    if (collapsedCatIds.has(cat.id)) { content.classList.add('collapsed'); header.classList.add('collapsed'); }
     
     if (cat.tags.length === 0) {
       content.innerHTML = `<div style="font-size:9px;color:var(--muted);font-style:italic;padding:6px">${t('cat.tags.modal.empty')}</div>`;
@@ -3140,6 +3206,10 @@ function toggleCategorySection(catId) {
   const header = content.previousElementSibling;
   content.classList.toggle('collapsed');
   header.classList.toggle('collapsed');
+  // 记录折叠状态，渲染/刷新后保持一致
+  if (content.classList.contains('collapsed')) collapsedCatIds.add(catId);
+  else collapsedCatIds.delete(catId);
+  saveCollapsedCats();
 }
 
 async function addTagFromSidebar(tagName, tagEl) {
@@ -3657,6 +3727,28 @@ function onCatOverlayClick(e) {
   if (e.target === $('catModalOverlay')) closeCatModal();
 }
 
+let dragCatId = null;
+function moveCatRow(e, targetEl) {
+  const list = $('catList');
+  const dragging = list.querySelector('.drag-source');
+  if (!dragging || dragging === targetEl) return;
+  const rect = targetEl.getBoundingClientRect();
+  const after = (e.clientY - rect.top) > rect.height / 2;
+  list.insertBefore(dragging, after ? targetEl.nextSibling : targetEl);
+}
+function finishCatDrag() {
+  const list = $('catList');
+  const src = list.querySelector('.drag-source');
+  if (src) src.classList.remove('drag-source');
+  const ids = Array.from(list.querySelectorAll('.tg-modal-section[data-catid]')).map(r => r.dataset.catid);
+  if (ids.length) {
+    categories = ids.map(id => categories.find(c => c.id === id)).filter(Boolean);
+    catSave();
+  }
+  dragCatId = null;
+  setTimeout(() => renderTagSidebar(), 0); // 顺序变更同步到侧栏
+}
+
 function renderCatList() {
   const list = $('catList');
   list.innerHTML = '';
@@ -3674,6 +3766,10 @@ function renderCatList() {
     catEl.style.background = 'var(--tag-bg)';
     catEl.style.borderRadius = '6px';
     catEl.style.border = '1px solid var(--border)';
+    // 拖拽排序：仅限左侧把手，整行不可拖拽
+    catEl.dataset.catid = cat.id;
+    catEl.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; moveCatRow(e, catEl); });
+    catEl.addEventListener('drop', e => { e.preventDefault(); });
     
     const header = document.createElement('div');
     header.style.display = 'flex';
@@ -3691,6 +3787,14 @@ function renderCatList() {
     actions.style.display = 'flex';
     actions.style.gap = '6px';
     
+    const eyeBtn = document.createElement('button');
+    eyeBtn.className = 'tg-sel-all-btn';
+    eyeBtn.style.borderColor = cat.hidden ? 'var(--danger)' : 'var(--c4)';
+    eyeBtn.style.color = cat.hidden ? 'var(--danger)' : 'var(--c4)';
+    eyeBtn.textContent = cat.hidden ? '🙈' : '👁';
+    eyeBtn.title = cat.hidden ? t('cat.show') : t('cat.hide');
+    eyeBtn.onclick = () => toggleCategoryHidden(cat.id);
+
     const manageBtn = document.createElement('button');
     manageBtn.className = 'tg-sel-all-btn';
     manageBtn.style.borderColor = 'var(--c3)';
@@ -3705,10 +3809,34 @@ function renderCatList() {
     delBtn.textContent = t('cat.tags.modal.delete');
     delBtn.onclick = () => deleteCategory(cat.id);
     
+    actions.appendChild(eyeBtn);
     actions.appendChild(manageBtn);
     actions.appendChild(delBtn);
     
-    header.appendChild(nameDiv);
+    // 左侧：拖拽把手 + 栏目名
+    const headerLeft = document.createElement('div');
+    headerLeft.style.display = 'flex';
+    headerLeft.style.alignItems = 'center';
+    headerLeft.style.gap = '6px';
+    const handle = document.createElement('span');
+    handle.textContent = '⠿';
+    handle.className = 'drag-handle';
+    handle.style.cursor = 'grab';
+    handle.style.color = 'var(--muted)';
+    handle.style.userSelect = 'none';
+    // 仅把手可拖拽
+    handle.draggable = true;
+    handle.addEventListener('dragstart', e => {
+      dragCatId = cat.id;
+      catEl.classList.add('drag-source');
+      try { e.dataTransfer.setData('text/plain', cat.id); } catch {}
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setDragImage(catEl, 8, 8); } catch {}
+    });
+    handle.addEventListener('dragend', () => finishCatDrag());
+    headerLeft.appendChild(handle);
+    headerLeft.appendChild(nameDiv);
+    header.appendChild(headerLeft);
     header.appendChild(actions);
     
     const tagsPreview = document.createElement('div');
@@ -3729,13 +3857,25 @@ function addNewCategory(name) {
   categories.push({
     id: 'cat_' + Date.now(),
     name: name.trim(),
-    tags: []
+    tags: [],
+    hidden: false
   });
 
   catSave();
   renderCatList();
   setTimeout(() => renderTagSidebar(), 0);
   showToast(t('toast.cat.add.success', {name: name.trim()}), 'info', 2000);
+}
+
+function toggleCategoryHidden(catId) {
+  const cat = categories.find(c => c.id === catId);
+  if (!cat) return;
+  cat.hidden = !cat.hidden;
+  catSave();
+  renderCatList();
+  renderTagSidebar();
+  onTagSidebarSearch();
+  showToast(cat.hidden ? t('cat.hide.done') : t('cat.show.done'), 'info', 1800);
 }
 
 async function deleteCategory(id) {
