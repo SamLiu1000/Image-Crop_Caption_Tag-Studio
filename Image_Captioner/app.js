@@ -187,6 +187,17 @@ const I18N = {
     chooseCacheFolderBtn: '选择缓存文件夹',
     clearCacheBtn: '删除选中',
     cacheHelper: '选择缓存文件夹后自动识别其中内容：captioner-cache 为单图缓存，其它子目录按文件夹名识别为处理结果。先点击标签高亮要删除的目标，再点「删除选中」；删除为永久删除，不经过回收站，无法恢复。',
+    queueLabel: '处理队列',
+    addToQueueBtn: '加入队列',
+    clearQueueBtn: '清空队列',
+    queueCount: '{count} 个文件夹',
+    queueEmpty: '尚未加入文件夹。先选择目录，再点「加入队列」。',
+    queueAdded: '已加入队列：{name}',
+    queueExists: '该文件夹已在队列中：{name}',
+    queueRemoved: '已从队列移除：{name}',
+    queueCleared: '已清空处理队列。',
+    queueNeedFolder: '请先选择一个目录，再加入队列。',
+    queueProcessing: '正在处理：{name}',
     cacheFolderSet: '已设置缓存文件夹：{name}',
     chooseCacheFolderFailed: '选择缓存文件夹失败：{error}',
     cacheCleared: '已删除缓存。',
@@ -350,6 +361,17 @@ const I18N = {
     chooseCacheFolderBtn: 'Choose Cache Folder',
     clearCacheBtn: 'Delete Selected',
     cacheHelper: 'After choosing a cache folder its contents are auto-detected: captioner-cache is single-image cache, other subfolders are folder results by name. Click a chip to highlight the target, then click "Delete Selected". Deletion is permanent, skips the recycle bin, and cannot be undone.',
+    queueLabel: 'Processing Queue',
+    addToQueueBtn: 'Add to Queue',
+    clearQueueBtn: 'Clear Queue',
+    queueCount: '{count} folder(s)',
+    queueEmpty: 'No folders queued yet. Choose a directory, then click "Add to Queue".',
+    queueAdded: 'Added to queue: {name}',
+    queueExists: 'Folder already in queue: {name}',
+    queueRemoved: 'Removed from queue: {name}',
+    queueCleared: 'Processing queue cleared.',
+    queueNeedFolder: 'Choose a directory first, then add it to the queue.',
+    queueProcessing: 'Processing: {name}',
     cacheFolderSet: 'Cache folder set: {name}',
     chooseCacheFolderFailed: 'Failed to choose cache folder: {error}',
     cacheCleared: 'Cache deleted.',
@@ -429,6 +451,10 @@ const els = {
   clearCacheBtn: document.getElementById('clearCacheBtn'),
   restoreFolderBtn: document.getElementById('restoreFolderBtn'),
   folderChips: document.getElementById('folderChips'),
+  addToQueueBtn: document.getElementById('addToQueueBtn'),
+  clearQueueBtn: document.getElementById('clearQueueBtn'),
+  folderQueueList: document.getElementById('folderQueueList'),
+  queueCountText: document.getElementById('queueCountText'),
 };
 
 const state = {
@@ -466,6 +492,8 @@ const state = {
   pendingFolderHandle: null,
   pendingFolderLabel: '',
   pendingCurrentIndex: 0,
+  folderQueue: [],        // [{ label, handle }] 有序，文件夹批处理的队列
+  activeQueueIndex: -1,   // 批处理队列时当前正在处理的队列项下标，-1 表示非队列处理
 };
 
 function t(key, params = {}) {
@@ -587,6 +615,7 @@ async function saveSessionToCache() {
     resultSeq: state.resultSeq,
     cacheFolderHandle: state.cacheFolderHandle || null,
     activeFolderName: state.activeFolderName || '',
+    folderQueue: (state.folderQueue || []).map((item) => ({ label: item.label, handle: item.handle })),
   };
   await dbPut('session', session, CACHE_SESSION_KEY);
 }
@@ -1106,6 +1135,128 @@ async function deleteFolderView(name) {
   log('folderViewDeleted', { name });
 }
 
+/* ---------- 处理队列 ---------- */
+
+function renderQueue() {
+  if (!els.folderQueueList) return;
+  els.folderQueueList.innerHTML = '';
+  const count = state.folderQueue.length;
+  if (els.queueCountText) els.queueCountText.textContent = t('queueCount', { count });
+
+  if (!count) {
+    const li = document.createElement('li');
+    li.className = 'queue-empty';
+    li.textContent = t('queueEmpty');
+    els.folderQueueList.appendChild(li);
+    return;
+  }
+
+  state.folderQueue.forEach((item, index) => {
+    const li = document.createElement('li');
+    li.className = 'queue-item' + (index === state.activeQueueIndex ? ' active' : '');
+    li.dataset.index = String(index);
+
+    const drag = document.createElement('span');
+    drag.className = 'queue-drag-handle';
+    drag.textContent = '⠿';
+    drag.title = '拖拽排序';
+    li.appendChild(drag);
+
+    const label = document.createElement('span');
+    label.className = 'queue-item-label';
+    label.textContent = item.label;
+    li.appendChild(label);
+
+    if (index === state.activeQueueIndex) {
+      const status = document.createElement('span');
+      status.className = 'queue-item-status';
+      status.textContent = t('queueProcessing', { name: item.label });
+      li.appendChild(status);
+    }
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'queue-item-del';
+    del.innerHTML = '&times;';
+    del.title = '从队列移除';
+    del.disabled = state.isRunning;
+    del.addEventListener('click', (event) => {
+      event.stopPropagation();
+      removeFromQueue(index);
+    });
+    li.appendChild(del);
+
+    if (!state.isRunning) {
+      li.draggable = true;
+      li.addEventListener('dragstart', (event) => {
+        event.dataTransfer.setData('text/queue-index', String(index));
+        event.dataTransfer.effectAllowed = 'move';
+        li.classList.add('drag-source');
+      });
+      li.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        li.classList.add('drag-over');
+      });
+      li.addEventListener('dragleave', () => li.classList.remove('drag-over'));
+      li.addEventListener('drop', (event) => {
+        event.preventDefault();
+        li.classList.remove('drag-over');
+        const from = Number(event.dataTransfer.getData('text/queue-index'));
+        reorderQueue(from, index);
+      });
+      li.addEventListener('dragend', () => li.classList.remove('drag-source'));
+    }
+
+    els.folderQueueList.appendChild(li);
+  });
+}
+
+function addToQueue() {
+  if (state.isRunning) return;
+  if (!state.directoryHandle || !state.directoryLabel) {
+    log('queueNeedFolder');
+    return;
+  }
+  if (state.folderQueue.some((item) => item.label === state.directoryLabel)) {
+    log('queueExists', { name: state.directoryLabel });
+    return;
+  }
+  state.folderQueue.push({ label: state.directoryLabel, handle: state.directoryHandle });
+  renderQueue();
+  saveSessionToCache();
+  log('queueAdded', { name: state.directoryLabel });
+}
+
+function removeFromQueue(index) {
+  if (state.isRunning) return;
+  const removed = state.folderQueue.splice(index, 1)[0];
+  if (index < state.activeQueueIndex) state.activeQueueIndex -= 1;
+  renderQueue();
+  saveSessionToCache();
+  if (removed) log('queueRemoved', { name: removed.label });
+}
+
+function clearQueue() {
+  if (state.isRunning) return;
+  if (!state.folderQueue.length) return;
+  state.folderQueue = [];
+  state.activeQueueIndex = -1;
+  renderQueue();
+  saveSessionToCache();
+  log('queueCleared');
+}
+
+function reorderQueue(from, to) {
+  if (state.isRunning || from === to) return;
+  if (from < 0 || from >= state.folderQueue.length || to < 0 || to >= state.folderQueue.length) return;
+  const [moved] = state.folderQueue.splice(from, 1);
+  const insertAt = from < to ? to - 1 : to;
+  state.folderQueue.splice(insertAt, 0, moved);
+  renderQueue();
+  saveSessionToCache();
+}
+
 function renderFolderChips() {
   if (!els.folderChips) return;
   els.folderChips.innerHTML = '';
@@ -1304,6 +1455,14 @@ async function restoreCachedSession() {
     enterFolderView(cachedSession.activeFolderName);
   }
 
+  // 恢复处理队列（文件夹句柄从 IndexedDB 会话恢复，处理时会重新授权）
+  if (Array.isArray(cachedSession.folderQueue)) {
+    state.folderQueue = cachedSession.folderQueue
+      .filter((item) => item && item.label)
+      .map((item) => ({ label: item.label, handle: item.handle || null }));
+  }
+  renderQueue();
+
   // 恢复完成后同步到 sessionStorage，供 Hub 导出时读取（即使刚打开页面未做任何操作也能导出）
   syncRuntimeToSession();
 }
@@ -1485,6 +1644,7 @@ function applyI18n() {
   updateCacheLocationText();
   renderFolderChips();
   renderModeToggle();
+  renderQueue();
   if (state.pendingFolderLabel && els.restoreFolderBtn && !els.restoreFolderBtn.hidden) {
     els.restoreFolderBtn.textContent = t('restoreFolderBtn', { name: state.pendingFolderLabel || '' });
   }
@@ -2573,140 +2733,149 @@ async function processItem(item, config, combineMode, progressSet, singleExistin
   log('processingFinished', { name: resultName });
 }
 
+// 处理单个文件夹的一批文件（内部包含跳过/进度/合并/写回逻辑），返回该文件夹的统计
+async function processFolderBatch(handle, label, combineMode, config) {
+  state.directoryHandle = handle;
+  state.directoryLabel = label;
+  state.singleFileMode = false;
+  els.folderPathInput.value = label;
+
+  const hasPermission = await ensureDirectoryPermission(handle, 'readwrite');
+  if (!hasPermission) {
+    log('directoryPermissionDenied');
+    return { processed: 0, skipped: 0, failed: 0 };
+  }
+
+  state.files = await collectImageFiles(handle, els.recursiveCheck.checked);
+  state.currentIndex = state.files.length ? 0 : -1;
+  if (!state.files.length) {
+    log('directoryLoaded', { name: label, count: 0 });
+    return { processed: 0, skipped: 0, failed: 0 };
+  }
+  if (isStopRequested()) return { processed: 0, skipped: 0, failed: 0 };
+
+  resetCounters();
+  // 文件夹处理结果单独保存到对应文件夹名下（跨多次处理时结果累积显示）
+  let entry = getFolderEntry(label);
+  if (!entry) {
+    entry = { name: label, results: [] };
+    state.folderResults.push(entry);
+  }
+  entry.directoryHandle = handle;
+  state.activeFolderName = label;
+  state.results = entry.results;
+  state.selectedResultId = null;
+  renderResults();
+  renderFolderChips();
+  saveResultsToCache();
+  saveSessionToCache();
+
+  // 进度记录仅对普通「生成」用于中断续跑；前置/追加总是重新处理全部图片
+  const progressSet = combineMode === 'none' ? loadProgressRecord() : new Set();
+  if (progressSet.size) {
+    log('progressDetected', { count: progressSet.size });
+  }
+
+  const indices = state.files.map((_, i) => i);
+  for (const index of indices) {
+    if (state.stopRequested) break;
+
+    state.currentIndex = index;
+    await renderPreview();
+    const item = state.files[index];
+    const progressName = item.relativePath;
+
+    // 跳过逻辑只对普通「生成」(none) 生效；前置/追加要重新处理并合并已有 txt，因此不跳
+    if (combineMode === 'none') {
+      const hasTxt = await hasExistingCaption(item);
+      if (config.skipExisting && hasTxt) {
+        progressSet.add(progressName);
+        saveProgressRecord(progressSet);
+        state.stats.skipped += 1;
+        syncStats();
+        log('skippedByExisting', { name: progressName });
+        continue;
+      }
+      if (hasTxt && progressSet.has(progressName)) {
+        state.stats.skipped += 1;
+        syncStats();
+        log('skippedByProgress', { name: progressName });
+        continue;
+      }
+      if (!hasTxt && progressSet.has(progressName)) {
+        progressSet.delete(progressName);
+        saveProgressRecord(progressSet);
+      }
+    }
+
+    try {
+      await processItem(item, config, combineMode, progressSet);
+    } catch (error) {
+      if (isStopRequested()) break;
+      state.stats.failed += 1;
+      syncStats();
+      log('processingFailed', { name: progressName, error: error.message || error });
+    }
+  }
+  renderThumbStrip();
+  await renderPreview();
+  return { processed: state.stats.processed, skipped: state.stats.skipped, failed: state.stats.failed };
+}
+
 async function processAll(combineMode = 'none') {
   if (state.isRunning) return;
 
-  // 文件夹全量批处理：必须在文件夹上下文下进行
-  if (!state.directoryHandle) {
+  // 处理目标：队列非空则按队列顺序逐个文件夹处理；否则仅当前文件夹（保留原有单文件夹行为）
+  const hasQueue = state.folderQueue.length > 0;
+  const targets = hasQueue
+    ? state.folderQueue.map((item, i) => ({ index: i, handle: item.handle, label: item.label }))
+    : [{ index: -1, handle: state.directoryHandle, label: state.directoryLabel }];
+
+  if (!hasQueue && !state.directoryHandle) {
     log('chooseDirectoryFirst');
     return;
-  }
-
-  const shouldRestoreSingleFile = false;
-
-  if (shouldRestoreSingleFile && !state.files.length) {
-    state.files = [createVirtualFileItem(state.singleFileSource)];
-    state.currentIndex = 0;
-    await renderPreview();
-  }
-
-  if (!state.files.length) {
-    log('chooseDirectoryFirst');
-    return;
-  }
-
-  if (!state.directoryHandle) {
-    log('chooseDirectoryFirst');
-    return;
-  }
-
-  {
-    const hasPermission = await ensureDirectoryPermission(state.directoryHandle, 'readwrite');
-    if (!hasPermission) {
-      log('directoryPermissionDenied');
-      return;
-    }
   }
 
   const config = getConfig();
   config.serverUrl = sanitizeBaseUrl(config.serverUrl) || LM_STUDIO_DEFAULT_URL;
   if (!config.userPrompt) config.userPrompt = DEFAULT_USER_PROMPT;
-
   persistCurrentConfig(config, false);
+
   state.isRunning = true;
   state.stopRequested = false;
   state.runAbortController = new AbortController();
-  resetCounters();
   state.lastLogLines = [];
   log('taskStarted');
-  if (!state.singleFileMode) {
-    // 文件夹处理结果单独保存到对应文件夹名下
-    // 注意：不在此清空已有结果，多次分开处理同一文件夹时结果累积显示
-    let entry = getFolderEntry(state.directoryLabel);
-    if (!entry) {
-      entry = { name: state.directoryLabel, results: [] };
-      state.folderResults.push(entry);
-    }
-    // 记住该文件夹的目录句柄，点击结果标签时可自动切回对应目录
-    entry.directoryHandle = state.directoryHandle;
-    state.activeFolderName = state.directoryLabel;
-    state.results = entry.results;
-    state.selectedResultId = null;
-    renderResults();
-    renderFolderChips();
-    saveResultsToCache();
-    saveSessionToCache();
-  } else {
-    // 单图模式：结果显示在单图视图
-    enterSingleView();
-  }
   setRuntimeStatus('runtimeRunning');
   setConnectionBadgeByKey('taskRunning');
   setTaskButtonsDisabled(true);
+  if (hasQueue) state.activeQueueIndex = targets[0].index;
+  renderQueue();
 
-  // 进度记录仅对普通「生成」用于中断续跑；前置/追加总是重新处理全部图片
-  const progressSet = state.singleFileMode || combineMode !== 'none'
-    ? new Set()
-    : loadProgressRecord();
-  if (progressSet.size) {
-    log('progressDetected', { count: progressSet.size });
-  }
+  let totalProcessed = 0;
+  let totalSkipped = 0;
+  let totalFailed = 0;
 
   try {
     await detectModelIfNeeded(config);
-    // 单图模式：只生成当前选中的那张（点击哪张就为哪张追加一条结果）；
-    // 文件夹模式仍按全量批处理
-    const indices = state.singleFileMode
-      ? (state.currentIndex >= 0 && state.currentIndex < state.files.length ? [state.currentIndex] : [])
-      : state.files.map((_, i) => i);
-    for (const index of indices) {
+    for (const target of targets) {
       if (state.stopRequested) break;
-
-      state.currentIndex = index;
-      await renderPreview();
-      const item = state.files[index];
-      const progressName = item.relativePath;
-
-      // 跳过逻辑只对普通「生成」(none) 生效；前置/追加要重新处理并合并已有 txt，因此不跳
-      if (!state.singleFileMode && combineMode === 'none') {
-        const hasTxt = await hasExistingCaption(item);
-        if (config.skipExisting && hasTxt) {
-          // 已有 txt 且勾选跳过 → 跳过
-          progressSet.add(progressName);
-          saveProgressRecord(progressSet);
-          state.stats.skipped += 1;
-          syncStats();
-          log('skippedByExisting', { name: progressName });
-          continue;
-        }
-        if (hasTxt && progressSet.has(progressName)) {
-          // txt 仍存在但用户关闭跳过：按进度记录跳过（中断续跑场景）
-          state.stats.skipped += 1;
-          syncStats();
-          log('skippedByProgress', { name: progressName });
-          continue;
-        }
-        // TXT 已被删除（用户想重新生成）→ 清理过期进度记录并处理
-        if (!hasTxt && progressSet.has(progressName)) {
-          progressSet.delete(progressName);
-          saveProgressRecord(progressSet);
-        }
+      state.activeQueueIndex = target.index;
+      if (hasQueue) {
+        log('queueProcessing', { name: target.label });
+        renderQueue();
       }
-
-      try {
-        await processItem(item, config, combineMode, progressSet);
-      } catch (error) {
-        if (isStopRequested()) break;
-        state.stats.failed += 1;
-        syncStats();
-        log('processingFailed', { name: progressName, error: error.message || error });
-      }
+      const stats = await processFolderBatch(target.handle, target.label, combineMode, config);
+      totalProcessed += stats.processed;
+      totalSkipped += stats.skipped;
+      totalFailed += stats.failed;
+      if (state.stopRequested) break;
     }
 
     if (state.stopRequested) {
       log('taskStopped');
-    } else if (state.stats.failed > 0) {
-      log('taskCompletedWithFailure', { count: state.stats.failed });
+    } else if (totalFailed > 0) {
+      log('taskCompletedWithFailure', { count: totalFailed });
     } else {
       log('taskCompleted');
     }
@@ -2723,6 +2892,8 @@ async function processAll(combineMode = 'none') {
     state.isRunning = false;
     state.stopRequested = false;
     state.runAbortController = null;
+    state.activeQueueIndex = -1;
+    renderQueue();
     setTaskButtonsDisabled(false);
     setRuntimeStatus('runtimeIdle');
   }
@@ -2986,6 +3157,8 @@ function bindEvents() {
     }
   });
   els.chooseFolderBtn.addEventListener('click', chooseFolder);
+  els.addToQueueBtn.addEventListener('click', addToQueue);
+  els.clearQueueBtn.addEventListener('click', clearQueue);
   els.modeSingleBtn.addEventListener('click', () => switchMode('single'));
   els.modeFolderBtn.addEventListener('click', () => switchMode('folder'));
   els.generateBtn.addEventListener('click', handleGenerate);

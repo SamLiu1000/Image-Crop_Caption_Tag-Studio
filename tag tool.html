@@ -196,13 +196,14 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 #ctagSelectToggle.active{background:var(--c5)}
 
 /* Manual input */
-.tag-input-row{display:flex;gap:5px;padding:6px 8px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--tag-input-bg)}
+.tag-input-row{display:flex;gap:5px;padding:6px 8px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--tag-input-bg);align-items:center}
 .tag-manual-input{
-  flex:1;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;
-  color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:10px;
-  padding:4px 7px;outline:none;transition:border-color .15s;min-width:0
+  flex:1;min-width:0;resize:vertical;box-sizing:border-box;
+  background:var(--modal-input-bg);border:1px solid var(--border);border-radius:6px;
+  color:var(--white);font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.6;
+  padding:9px 11px;outline:none;transition:border-color .15s;min-height:92px
 }
-.tag-manual-input:focus{border-color:var(--c4)}
+.tag-manual-input:focus{border-color:var(--c5);box-shadow:0 0 0 2px rgba(176,166,204,.15)}
 .tag-manual-input::placeholder{color:var(--muted)}
 .tag-add-btn{
   flex-shrink:0;padding:4px 8px;background:var(--surface);border:1px solid var(--c4);
@@ -219,7 +220,8 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 .tag-search-input,.tag-replace-input{
   flex:1;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;
   color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:10px;
-  padding:3px 6px;outline:none;transition:border-color .15s;min-width:0
+  padding:3px 6px;outline:none;transition:border-color .15s;min-width:0;
+  resize:vertical;line-height:1.4
 }
 .tag-search-input:focus{border-color:var(--c1)}
 .tag-replace-input:focus{border-color:var(--c3)}
@@ -586,6 +588,18 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 .ts-tag-item:active{transform:scale(.95)}
 .ts-tag-item.added{background:var(--added-bg);border-color:var(--added-border);color:var(--added-color)}
 
+/* 侧栏快速标签的预览图缩略图（仅上传过的标签显示） */
+.ts-tag-thumb{width:32px;height:32px;border-radius:4px;object-fit:cover;margin-left:5px;flex:0 0 auto;cursor:pointer;border:1px solid var(--border)}
+
+/* 数据文件夹行（侧栏顶部） */
+.ts-data-row{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--border)}
+.ts-data-row > span{font-size:9px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;white-space:nowrap}
+.ts-data-row > strong{flex:1;font-size:9px;color:var(--c5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+
+/* 长按编辑弹窗里的预览图区 */
+#tagEditImageRow{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.tag-edit-img{width:44px;height:44px;border-radius:6px;object-fit:cover;border:1px solid var(--border);flex:0 0 auto}
+
 /* Sidebar tag inline edit input (long-press rename) — superseded by tag edit modal */
 
 /* Quick-add chip (＋) at the tail of each category's tags */
@@ -677,8 +691,8 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 
 /* Inline popup input */
 .inline-input-popup{
-  position:absolute;bottom:calc(100% + 4px);left:0;
-  display:flex;align-items:center;gap:4px;z-index:20
+  position:fixed;z-index:20;
+  display:flex;align-items:center;gap:4px
 }
 .inline-input-popup input{
   width:220px;padding:5px 10px;background:var(--input-bg);border:1px solid var(--c5);
@@ -690,6 +704,39 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 }
 .inline-input-popup .ip-confirm{background:var(--c5)}
 .inline-input-popup .ip-cancel{background:var(--c4)}
+
+/* Big add-tag window (like the long-press edit popup) */
+.inline-input-popup.big{
+  width:320px;max-width:92vw;
+  flex-direction:column;align-items:stretch;gap:6px;
+  background:var(--modal-bg);border:1px solid var(--c5);border-radius:10px;
+  box-shadow:0 14px 44px rgba(0,0,0,.55);padding:10px;z-index:30
+}
+.inline-input-popup.big textarea{
+  width:100%;min-height:88px;resize:vertical;box-sizing:border-box;
+  background:var(--modal-input-bg);border:1px solid var(--border);border-radius:6px;
+  color:var(--white);font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.6;
+  padding:9px 11px;outline:none;transition:border-color .15s
+}
+.inline-input-popup.big textarea:focus{border-color:var(--c5);box-shadow:0 0 0 2px rgba(176,166,204,.15)}
+.inline-input-popup.big textarea::placeholder{color:var(--muted)}
+.inline-input-popup.big .ip-foot{display:flex;justify-content:flex-end;gap:6px}
+.inline-input-popup.big .ip-foot button{padding:4px 12px;border-radius:4px}
+/* 添加标签弹窗里的图片上传行 */
+.inline-input-popup .ip-img-row{display:flex;align-items:center;gap:6px}
+.inline-input-popup .ip-img-row .ip-img-preview{width:28px;height:28px;border-radius:4px;object-fit:cover;border:1px solid var(--border);flex:0 0 auto}
+/* 统一「上传图片/移除图片」按钮样式（长按编辑弹窗 & 新建标签弹窗保持一致） */
+.inline-input-popup button.ip-img-pick,
+.inline-input-popup button.ip-img-remove,
+#tagEditImageRow button.ip-img-pick,
+#tagEditImageRow button.ip-img-remove{
+  padding:3px 10px;border:1px solid var(--c4);border-radius:4px;
+  background:var(--surface);color:var(--c4);font-size:10px;cursor:pointer;white-space:nowrap
+}
+.inline-input-popup button.ip-img-pick:hover,
+.inline-input-popup button.ip-img-remove:hover,
+#tagEditImageRow button.ip-img-pick:hover,
+#tagEditImageRow button.ip-img-remove:hover{border-color:var(--c4);background:var(--batch-hover-bg);color:var(--c4)}
 
 /* Toast */
 #toast{
@@ -816,18 +863,18 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 
       <!-- Manual input -->
       <div class="tag-input-row">
-        <input class="tag-manual-input" id="tagManualInput" type="text"
-          data-i18n-placeholder="tag.input.placeholder" placeholder="输入 tag，多个用逗号分隔…" autocomplete="off" spellcheck="false">
+        <textarea class="tag-manual-input" id="tagManualInput" rows="4"
+          data-i18n-placeholder="tag.input.placeholder" placeholder="输入 tag，多个用逗号分隔…" autocomplete="off" spellcheck="false"></textarea>
         <button class="tag-add-btn" onclick="addManualTags()" data-i18n="tag.add.btn">＋ 添加</button>
       </div>
 
       <!-- Search / replace -->
       <div class="tag-search-row">
-        <input class="tag-search-input" id="tagSearchInput" type="text"
-          data-i18n-placeholder="tag.search.placeholder" placeholder="搜索…" autocomplete="off" spellcheck="false" oninput="renderCurrentTagsDebounced()">
+        <textarea class="tag-search-input" id="tagSearchInput" rows="2"
+          data-i18n-placeholder="tag.search.placeholder" placeholder="搜索…" autocomplete="off" spellcheck="false" oninput="renderCurrentTagsDebounced()"></textarea>
         <span class="search-sep">→</span>
-        <input class="tag-replace-input" id="tagReplaceInput" type="text"
-          data-i18n-placeholder="tag.replace.placeholder" placeholder="替换为…" autocomplete="off" spellcheck="false">
+        <textarea class="tag-replace-input" id="tagReplaceInput" rows="2"
+          data-i18n-placeholder="tag.replace.placeholder" placeholder="替换为…" autocomplete="off" spellcheck="false"></textarea>
         <button class="tag-replace-btn" onclick="replaceTag()" data-i18n="tag.replace.btn">替换</button>
         <button class="tag-replace-all-btn" onclick="replaceTagAll()" data-i18n="tag.replace.all.btn" data-i18n-title="tag.replace.all.title" title="对全部图片执行">全替</button>
         <button class="tag-delete-all-btn" onclick="deleteTagAll()" data-i18n="tag.delete.all.btn" data-i18n-title="tag.delete.all.title" title="在全部图片中删除">全删</button>
@@ -862,6 +909,12 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 
 <!-- ══════════════════ TAG SIDEBAR ══════════════════ -->
 <aside class="tag-sidebar" id="tagSidebar">
+  <!-- 数据文件夹：可跨浏览器复用的预览图/目录导出 -->
+  <div class="ts-data-row">
+    <span data-i18n="tag.data.folder.label">数据文件</span>
+    <strong id="tagDataFolderText" data-i18n="tag.data.folder.default">浏览器本地</strong>
+    <button class="ts-action-btn" id="chooseDataFolderBtn" style="border-color:var(--c4);color:var(--c4)" onclick="chooseDataFolder()" data-i18n="tag.data.folder.btn">选择数据文件夹</button>
+  </div>
   <!-- Tag Groups Bar (moved from gallery) -->
   <div class="tag-groups-bar-sidebar" id="tagGroupsBarSidebar">
     <div class="tg-header-row" onclick="toggleTagGroupsSidebar()">
@@ -1037,6 +1090,12 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
   <textarea id="tagEditArea" class="tag-edit-area" maxlength="2000" spellcheck="false"
     onkeydown="event.stopPropagation();if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();closeTagEdit(true)}else if(event.key==='Escape'){event.preventDefault();closeTagEdit(false)}"
     oninput="updateTagEditCount()"></textarea>
+  <div id="tagEditImageRow" style="display:none">
+    <img id="tagEditImagePreview" class="tag-edit-img" alt="" style="display:none">
+    <button type="button" class="ip-img-pick" onclick="pickTagImage()" data-i18n="tag.img.pick">上传图片</button>
+    <button type="button" id="tagEditRemoveBtn" class="ip-img-remove" onclick="removeTagImage()" data-i18n="tag.img.remove">移除图片</button>
+    <input type="file" id="tagImageInput" accept="image/*" style="display:none" onchange="onTagImageInputChange(this)">
+  </div>
   <div class="tag-edit-pop-foot">
     <span class="tag-edit-pop-hint" data-i18n="tag.edit.pop.hint">Enter 保存 · Esc 取消 · Shift+Enter 换行</span>
     <span id="tagEditCount" class="tag-edit-pop-count">0/2000</span>
@@ -1096,6 +1155,21 @@ const I18N = {
     'tag.groups.label': '标签组',
     'tag.groups.empty': '暂无标签组',
     'tag.sidebar.title': '快速标签',
+    // 数据文件夹 / 标签预览图
+    'tag.data.folder.label': '数据文件',
+    'tag.data.folder.default': '浏览器本地',
+    'tag.data.folder.btn': '选择数据文件夹',
+    'tag.data.folder.chosen': '文件夹：{name}',
+    'tag.data.folder.set': '已连接数据文件夹：{name}',
+    'tag.data.folder.read.failed': '读取数据文件失败',
+    'tag.data.folder.write.failed': '保存数据文件失败',
+    'tag.data.folder.need.picker': '当前浏览器不支持选择文件夹',
+    'tag.img.pick': '上传图片',
+    'tag.img.remove': '移除图片',
+    'tag.img.upload.ok': '预览图已更新',
+    'tag.img.upload.failed': '上传图片失败',
+    'tag.img.removed': '已移除预览图',
+    'tag.img.need.folder': '请先选择数据文件夹',
     'tag.sidebar.search.placeholder': '搜索标签…',
     'tag.sidebar.search.results': '搜索结果',
     'tag.sidebar.search.noresults': '未找到匹配的标签',
@@ -1246,6 +1320,21 @@ const I18N = {
     'tag.groups.label': 'Tag Groups',
     'tag.groups.empty': 'No tag groups',
     'tag.sidebar.title': 'Quick Tags',
+    // Data folder / tag preview
+    'tag.data.folder.label': 'Data File',
+    'tag.data.folder.default': 'Browser Local',
+    'tag.data.folder.btn': 'Choose Data Folder',
+    'tag.data.folder.chosen': 'Folder: {name}',
+    'tag.data.folder.set': 'Data folder connected: {name}',
+    'tag.data.folder.read.failed': 'Failed to read data file',
+    'tag.data.folder.write.failed': 'Failed to save data file',
+    'tag.data.folder.need.picker': 'Folder picker not supported in this browser',
+    'tag.img.pick': 'Upload Image',
+    'tag.img.remove': 'Remove Image',
+    'tag.img.upload.ok': 'Preview updated',
+    'tag.img.upload.failed': 'Failed to upload image',
+    'tag.img.removed': 'Preview removed',
+    'tag.img.need.folder': 'Please choose a data folder first',
     'tag.sidebar.search.placeholder': 'Search tags…',
     'tag.sidebar.search.results': 'Search Results',
     'tag.sidebar.search.noresults': 'No matching tags found',
@@ -1476,8 +1565,7 @@ function saveInputsState() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  tgLoad();
-  catLoad();
+  initDataState();
   renderTagGroups();
   renderTagSidebar();
 
@@ -1527,6 +1615,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $('tagManualInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); addManualTags(); }
+  });
+
+  // 搜索框/替换框均为 2 行，防止回车插入换行
+  $('tagSearchInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); }
+  });
+  $('tagReplaceInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); }
   });
 
   // Enter in gallery search: select the first matching image
@@ -1896,11 +1992,16 @@ function updateTagEditCount() {
   if (area && counter) counter.textContent = area.value.length + '/' + area.maxLength;
 }
 
-function openTagEditModal(value, onSubmit, anchorEl) {
+function openTagEditModal(value, onSubmit, anchorEl, opts = {}) {
   tagEditSubmit = onSubmit;
+  editImageTag = opts.showImage ? (opts.tag || value) : null;
   const pop = $('tagEditPop');
   const area = $('tagEditArea');
   area.value = value;
+  // 仅侧栏快速标签显示图片上传/移除区，其它编辑保持原样
+  const row = $('tagEditImageRow');
+  if (row) row.style.display = opts.showImage ? 'flex' : 'none';
+  updateTagImagePreview();
   pop.style.display = 'block';
   // 长按触发刚打开，忽略紧随其后的合成 mousedown，避免一打开就被"框外点击"关闭
   tagEditJustOpened = true;
@@ -2271,7 +2372,8 @@ async function addManualTags() {
   const raw = $('tagManualInput').value;
   if (!raw.trim()) return;
   const suffix = getSuffix();
-  const newTags = raw.split(',').map(t => t.trim()).filter(Boolean);
+  // 支持逗号或换行分隔（4 行输入框常粘贴多行标签）
+  const newTags = raw.split(/[\n\r,]+/).map(t => t.trim()).filter(Boolean);
   if (newTags.length === 0) return;
 
   const item = imageFiles[selectedIdx];
@@ -2598,6 +2700,255 @@ function catLoad() {
   try { const raw = localStorage.getItem(CAT_STORAGE_KEY); if (raw) categories = JSON.parse(raw); } catch { categories = []; }
 }
 
+// ═══════════════════ TAG IMAGE PREVIEW / DATA FOLDER ═══════════════════
+// 标签预览图（标签字符串 → 小尺寸 base64），可跨浏览器通过数据文件夹 tag-data.json 复用
+let tagImages        = {};
+let dataFolderHandle = null;
+let editImageTag     = null; // 长按编辑弹窗当前针对的标签（侧栏快速标签才会注入图片区）
+
+// 浏览器本地兜底（未连接数据文件夹时，预览图先存这里，保证可用）
+const TAG_IMG_KEY = 'anatomy_tag_images_v1';
+function saveTagImagesLocal() { try { localStorage.setItem(TAG_IMG_KEY, JSON.stringify(tagImages)); } catch {} }
+function loadTagImagesLocal() {
+  try { const raw = localStorage.getItem(TAG_IMG_KEY); if (raw) tagImages = JSON.parse(raw) || {}; } catch { tagImages = {}; }
+}
+
+// 极简 IndexedDB：仅用于持久化数据文件夹句柄（FileSystemDirectoryHandle 可结构化克隆）
+const TDataDB = 'tag-tool-data';
+function idbOpen() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(TDataDB, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('kv');
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+async function idbSet(key, val) {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('kv', 'readwrite');
+    tx.objectStore('kv').put(val, key);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+async function idbGet(key) {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('kv', 'readonly');
+    const q = tx.objectStore('kv').get(key);
+    q.onsuccess = () => res(q.result);
+    q.onerror = () => rej(q.error);
+  });
+}
+
+// 启动：加载 localStorage 目录与本地预览图，并尝试用 IndexedDB 里的文件夹句柄自动重连（同浏览器）
+async function initDataState() {
+  tgLoad();
+  catLoad();
+  loadTagImagesLocal();
+  try {
+    const h = await idbGet('dataFolderHandle');
+    if (h) { dataFolderHandle = h; await connectDataFolder(); }
+  } catch {}
+  updateDataFolderText();
+}
+
+function ensureDataPermission(handle, mode) {
+  mode = mode || 'readwrite';
+  if (!handle || !handle.queryPermission) return false;
+  return (async () => {
+    try {
+      const opt = { mode };
+      if ((await handle.queryPermission(opt)) === 'granted') return true;
+      if ((await handle.requestPermission(opt)) === 'granted') return true;
+    } catch {}
+    return false;
+  })();
+}
+
+function updateDataFolderText() {
+  const el = $('tagDataFolderText');
+  if (!el) return;
+  el.textContent = dataFolderHandle
+    ? t('tag.data.folder.chosen', { name: dataFolderHandle.name })
+    : t('tag.data.folder.default');
+}
+
+async function readDataFolderFile() {
+  if (!dataFolderHandle) return null;
+  try {
+    const fh = await dataFolderHandle.getFileHandle('tag-data.json');
+    const file = await fh.getFile();
+    const text = await file.text();
+    if (!text) return null;
+    return JSON.parse(text);
+  } catch { return null; }
+}
+
+async function saveDataFolder() {
+  if (!dataFolderHandle) return;
+  try {
+    const fh = await dataFolderHandle.getFileHandle('tag-data.json', { create: true });
+    const w = await fh.createWritable();
+    await w.write(JSON.stringify({ categories, tagGroups, tagImages }), { type: 'application/json' });
+    await w.close();
+  } catch {
+    showToast(t('tag.data.folder.write.failed'), 'warn');
+  }
+}
+
+async function chooseDataFolder() {
+  if (typeof window.showDirectoryPicker !== 'function') {
+    showToast(t('tag.data.folder.need.picker'), 'warn');
+    return;
+  }
+  try {
+    const h = await window.showDirectoryPicker({ mode: 'readwrite' });
+    dataFolderHandle = h;
+    await idbSet('dataFolderHandle', h);
+    showToast(t('tag.data.folder.set', { name: h.name }), 'info', 1800);
+    await connectDataFolder(true);
+  } catch (e) {
+    if (e && e.name !== 'AbortError') console.warn('chooseDataFolder', e);
+  }
+}
+
+// 连接数据文件夹：读取 tag-data.json 覆盖内存并镜像 localStorage；新建时写入当前数据
+async function connectDataFolder(save) {
+  if (!dataFolderHandle) return false;
+  const granted = await ensureDataPermission(dataFolderHandle);
+  if (!granted) { showToast(t('tag.data.folder.read.failed'), 'warn'); return false; }
+  try {
+    const read = await readDataFolderFile();
+    if (read) {
+      if (Array.isArray(read.categories)) categories = read.categories;
+      if (Array.isArray(read.tagGroups)) tagGroups = read.tagGroups;
+      if (read.tagImages && typeof read.tagImages === 'object') tagImages = read.tagImages;
+      catSave(); tgSave(); saveTagImagesLocal();
+    }
+    if (save) await saveDataFolder();
+    renderTagSidebar();
+    renderTagGroups();
+    onTagSidebarSearch();
+    updateDataFolderText();
+    return true;
+  } catch (e) {
+    console.warn('connectDataFolder', e);
+    showToast(t('tag.data.folder.read.failed'), 'warn');
+    return false;
+  }
+}
+
+// 给指定标签写入/更新预览图（添加标签弹窗附带上传时使用）
+function applyTagPreview(tag, imgUrl) {
+  if (!tag || !imgUrl) return;
+  tagImages[tag] = imgUrl;
+  saveTagImagesLocal();
+  if (dataFolderHandle) saveDataFolder();
+  renderTagSidebar();
+  onTagSidebarSearch();
+}
+
+// 预览图上传：缩放至最长边 64px 的 JPEG 小图（base64）
+function fileToThumbDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 64;
+        let w = img.width, h = img.height;
+        if (w > 0 && h > 0 && Math.max(w, h) > max) {
+          const r = max / Math.max(w, h);
+          w = Math.round(w * r); h = Math.round(h * r);
+        }
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL('image/jpeg', 0.8));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function onTagImageInputChange(el) {
+  const f = el.files && el.files[0];
+  el.value = '';
+  if (!f) return;
+  handleTagImagePicked(f);
+}
+
+async function handleTagImagePicked(file) {
+  if (!editImageTag) return; // 非侧栏快速标签上下文忽略
+  try {
+    const dataUrl = await fileToThumbDataUrl(file);
+    tagImages[editImageTag] = dataUrl;
+    saveTagImagesLocal();
+    if (dataFolderHandle) await saveDataFolder();
+    updateTagImagePreview();
+    renderTagSidebar();
+    onTagSidebarSearch();
+    showToast(t('tag.img.upload.ok'), 'info', 1800);
+  } catch (e) {
+    console.warn('handleTagImagePicked', e);
+    showToast(t('tag.img.upload.failed'), 'warn');
+  }
+}
+
+async function removeTagImage() {
+  if (!editImageTag) return;
+  if (!tagImages[editImageTag]) { showToast(t('tag.img.removed'), 'warn'); return; }
+  delete tagImages[editImageTag];
+  saveTagImagesLocal();
+  if (dataFolderHandle) await saveDataFolder();
+  updateTagImagePreview();
+  renderTagSidebar();
+  onTagSidebarSearch();
+  showToast(t('tag.img.removed'), 'info', 1800);
+}
+
+function pickTagImage() {
+  const input = $('tagImageInput');
+  if (!input) return;
+  // 始终打开图片文件选择器；无数据文件夹时预览图暂存浏览器本地，连了文件夹才写盘
+  input.click();
+}
+
+function updateTagImagePreview() {
+  const img = $('tagEditImagePreview');
+  const removeBtn = $('tagEditRemoveBtn');
+  if (!img || !removeBtn) return;
+  const url = editImageTag ? tagImages[editImageTag] : null;
+  if (url) {
+    img.src = url;
+    img.style.display = 'block';
+    removeBtn.style.display = 'inline-block';
+  } else {
+    img.style.display = 'none';
+    removeBtn.style.display = 'none';
+  }
+}
+
+// 侧栏快速标签右侧的小缩略图（有图才生成）
+function tagThumbEl(tag, catId, inSearch) {
+  const url = tagImages[tag];
+  if (!url) return null;
+  const img = document.createElement('img');
+  img.className = 'ts-tag-thumb';
+  img.src = url;
+  img.addEventListener('mousedown', e => e.stopPropagation());
+  img.addEventListener('click', e => {
+    e.stopPropagation();
+    editSidebarTag(catId, tag, img, inSearch);
+  });
+  return img;
+}
+
 function renderTagGroups() {
   const list = $('tagGroupsList');
   list.innerHTML = '';
@@ -2689,6 +3040,8 @@ function onTagSidebarSearch() {
       tagEl.style.cursor = 'pointer';
       tagEl.textContent = tag.name;
       tagEl.title = `${tag.category} · ${t('tag.sidebar.item.hint')}`;
+      const thumb = tagThumbEl(tag.name, tag.catId, true);
+      if (thumb) tagEl.appendChild(thumb);
       tagEl.addEventListener('click', () => handleTagClick(tag.name));
       // 长按编辑标签
       bindLongPress(tagEl, () => editSidebarTag(tag.catId, tag.name, tagEl, true));
@@ -2733,6 +3086,9 @@ function renderCategoriesSidebar() {
         tagEl.dataset.tag = tag;
         tagEl.textContent = tag;
         tagEl.title = t('tag.sidebar.item.hint');
+        // 有预览图的标签：右侧追加小缩略图
+        const thumb = tagThumbEl(tag, cat.id);
+        if (thumb) tagEl.appendChild(thumb);
         tagEl.addEventListener('click', () => addTagFromSidebar(tag, tagEl));
         // 长按编辑标签
         bindLongPress(tagEl, () => editSidebarTag(cat.id, tag, tagEl));
@@ -3093,18 +3449,46 @@ function createInlinePopup(btn, placeholder, onSubmit, opts = {}) {
   parentBtn.onclick = null;
 
   const popup = document.createElement('div');
-  popup.className = 'inline-input-popup';
-  popup.innerHTML = '<input type="text" placeholder="' + placeholder + '" /><button class="ip-confirm">确认</button><button class="ip-cancel">取消</button>';
-  if (opts.below) { popup.style.bottom = 'auto'; popup.style.top = 'calc(100% + 4px)'; }
-  if (opts.inputWidth) popup.querySelector('input').style.width = opts.inputWidth + 'px';
+  popup.className = 'inline-input-popup' + (opts.textarea ? ' big' : '');
+  const imgRow = opts.image
+    ? `<div class="ip-img-row"><img class="ip-img-preview" alt="" style="display:none"><button type="button" class="ip-img-pick">上传图片</button><button type="button" class="ip-img-remove" style="display:none">移除图片</button><input type="file" class="ip-img-input" accept="image/*" style="display:none"></div>`
+    : '';
+  popup.innerHTML = opts.textarea
+    ? '<textarea rows="3" placeholder="' + placeholder + '" spellcheck="false"></textarea>' + imgRow + '<div class="ip-foot"><button type="button" class="ip-confirm">确认</button><button type="button" class="ip-cancel">取消</button></div>'
+    : '<input type="text" placeholder="' + placeholder + '" /><button class="ip-confirm">确认</button><button class="ip-cancel">取消</button>';
+  if (opts.inputWidth) popup.querySelector('input, textarea').style.width = opts.inputWidth + 'px';
 
   popup.addEventListener('click', e => e.stopPropagation());
   popup.addEventListener('mousedown', e => e.stopPropagation());
   popup.addEventListener('keydown', e => e.stopPropagation());
 
-  const input = popup.querySelector('input');
+  const input = popup.querySelector('input, textarea');
   const confirmBtn = popup.querySelector('.ip-confirm');
   const cancelBtn = popup.querySelector('.ip-cancel');
+
+  // 可选：图片上传（添加标签时附带预览图）
+  let pickedImage = null;
+  const imgRowEl = popup.querySelector('.ip-img-row');
+  if (imgRowEl) {
+    const imgEl = imgRowEl.querySelector('.ip-img-preview');
+    const pickBtn = imgRowEl.querySelector('.ip-img-pick');
+    const rmBtn = imgRowEl.querySelector('.ip-img-remove');
+    const fileInput = imgRowEl.querySelector('.ip-img-input');
+    const applyPicked = (dataUrl) => {
+      pickedImage = dataUrl || null;
+      if (pickedImage) { imgEl.src = pickedImage; imgEl.style.display = 'block'; rmBtn.style.display = 'inline-block'; }
+      else { imgEl.style.display = 'none'; rmBtn.style.display = 'none'; }
+    };
+    pickBtn.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); });
+    pickBtn.addEventListener('click', e => { e.stopPropagation(); fileInput.click(); });
+    rmBtn.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); applyPicked(null); });
+    fileInput.addEventListener('change', async () => {
+      const f = fileInput.files && fileInput.files[0];
+      fileInput.value = '';
+      if (!f) return;
+      try { applyPicked(await fileToThumbDataUrl(f)); } catch {}
+    });
+  }
 
   const cleanup = () => {
     popup._cleanup = null;
@@ -3115,12 +3499,19 @@ function createInlinePopup(btn, placeholder, onSubmit, opts = {}) {
 
   const submit = () => {
     cleanup();
-    onSubmit(input.value.trim());
+    onSubmit(input.value.trim(), pickedImage);
   };
 
   input.addEventListener('keydown', e => {
     e.stopPropagation();
-    if (e.key === 'Enter') { e.preventDefault(); submit(); }
+    if (e.key === 'Enter') {
+      if (opts.textarea) {
+        // 大窗口：Enter 提交，Shift+Enter 换行
+        if (!e.shiftKey) { e.preventDefault(); submit(); }
+      } else {
+        e.preventDefault(); submit();
+      }
+    }
     if (e.key === 'Escape') { e.preventDefault(); cleanup(); }
     if (e.key === ' ') e.stopPropagation();
   });
@@ -3128,14 +3519,39 @@ function createInlinePopup(btn, placeholder, onSubmit, opts = {}) {
   confirmBtn.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); submit(); });
   cancelBtn.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); cleanup(); });
 
-  btn.appendChild(popup);
-  setTimeout(() => { input.focus(); input.select(); }, 0);
+  // 挂到 body 顶层而非按钮内：避开按钮/遮罩层上的 transform，保证 fixed 是真实视口定位，不跳动
+  document.body.appendChild(popup);
+  // fixed 定位 + 视窗内夹取：先藏到屏幕外，同步算好坐标再落到最终位置，避免闪动/跳位
+  popup.style.left = '0px';
+  popup.style.top = '-9999px';
+  const btnRect = btn.getBoundingClientRect();
+  const vw = document.documentElement.clientWidth;
+  const vh = document.documentElement.clientHeight;
+  const pw = popup.offsetWidth;
+  const ph = popup.offsetHeight;
+
+  // 默认显示在按钮上方；opts.below 则显示在下方
+  let left = btnRect.left;
+  let top = opts.below ? btnRect.bottom + 4 : btnRect.top - ph - 4;
+
+  // 水平方向夹取：贴近右边界时左移，贴近左边界时右移
+  if (left + pw > vw - 4) left = vw - pw - 4;
+  if (left < 4) left = 4;
+
+  // 垂直方向：上方放不下翻到下方，下方也放不下再翻回上方
+  if (top < 4) top = btnRect.bottom + 4;
+  else if (top + ph > vh - 4) top = btnRect.top - ph - 4;
+
+  popup.style.left = left + 'px';
+  popup.style.top = top + 'px';
+  input.focus();
+  input.select();
 }
 
 function showCustomTagPopup(event) {
-  createInlinePopup(event.currentTarget, t('toast.tg.custom.prompt'), value => {
-    addCustomTagToGroup(value);
-  });
+  createInlinePopup(event.currentTarget, t('toast.tg.custom.prompt'), (value, imgUrl) => {
+    if (value) { addCustomTagToGroup(value); applyTagPreview(value, imgUrl); }
+  }, { textarea: true, image: true });
 }
 
 function showCategoryPopup(event) {
@@ -3145,9 +3561,9 @@ function showCategoryPopup(event) {
 }
 
 function showCatTagPopup(event) {
-  createInlinePopup(event.currentTarget, t('toast.cat.tag.add.prompt'), value => {
-    addNewTagToCategory(value);
-  });
+  createInlinePopup(event.currentTarget, t('toast.cat.tag.add.prompt'), (value, imgUrl) => {
+    if (value) { addNewTagToCategory(value); applyTagPreview(value, imgUrl); }
+  }, { textarea: true, image: true });
 }
 
 function addCustomTagToGroup(tag) {
@@ -3464,9 +3880,9 @@ function addTagToCategory(catId, trimmedTag) {
 
 function showSidebarCatTagPopup(catId, event) {
   event.stopPropagation();
-  createInlinePopup(event.currentTarget, t('toast.cat.tag.add.prompt'), value => {
-    if (value) addTagToCategory(catId, value);
-  });
+  createInlinePopup(event.currentTarget, t('toast.cat.tag.add.prompt'), (value, imgUrl) => {
+    if (value) { addTagToCategory(catId, value); applyTagPreview(value, imgUrl); }
+  }, { textarea: true, image: true });
 }
 
 // 重命名栏目中的标签（栏目标签库共用）
@@ -3492,7 +3908,7 @@ function editSidebarTag(catId, tag, el, inSearch) {
     renderTagSidebar();
     if (inSearch) onTagSidebarSearch();
     setTimeout(() => { renderCatList(); }, 0);
-  }, el);
+  }, el, { tag, showImage: true });
 }
 
 function appendCatTagElement(tag) {

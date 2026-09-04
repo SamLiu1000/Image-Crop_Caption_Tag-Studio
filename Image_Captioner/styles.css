@@ -720,6 +720,144 @@ textarea {
   color: var(--danger);
 }
 
+/* ---- 处理队列 ---- */
+.queue-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.queue-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.queue-header > span {
+  color: var(--text-soft);
+}
+
+.queue-header .muted {
+  color: var(--text-dim);
+}
+
+.queue-header .ghost-btn {
+  padding: 4px 9px;
+  font-size: 11px;
+}
+
+.folder-queue-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.folder-queue-list .queue-empty {
+  margin: 0;
+  padding: 12px 14px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-dim);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+}
+
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+  font-size: 12px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.queue-item:hover {
+  border-color: var(--border-strong);
+}
+
+.queue-item.active {
+  border-color: var(--seg-active-border);
+  background: var(--seg-active-bg);
+  color: var(--primary);
+}
+
+.queue-item.drag-over {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--seg-active-border);
+}
+
+.queue-item.drag-source {
+  opacity: 0.5;
+}
+
+.queue-drag-handle {
+  flex: 0 0 auto;
+  cursor: grab;
+  color: var(--text-dim);
+  user-select: none;
+}
+
+.queue-item.dragging .queue-drag-handle {
+  cursor: grabbing;
+}
+
+.queue-item-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-item-status {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--primary);
+}
+
+.queue-item-del {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.queue-item-del:hover {
+  color: #fff;
+  border-color: var(--danger);
+  background: var(--danger);
+}
+
+.queue-item-del:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
 .cache-section .helper-text {
   margin-top: 0;
   font-size: 10px;
