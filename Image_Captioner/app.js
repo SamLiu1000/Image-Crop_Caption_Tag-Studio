@@ -96,8 +96,9 @@ const I18N = {
     clearPromptsBtn: '清空',
     systemPromptPlaceholder: '系统提示词',
     userPromptPlaceholder: '例如：Describe this image in one detailed English paragraph。',
-    startBtn: '生成（文件夹）',
-    generateCurrentBtn: '生成（单图）',
+    modeSingleBtn: '单图',
+    modeFolderBtn: '文件夹',
+    generateBtn: '生成',
     stopBtn: '停止任务',
     prependBtn: '生成（前置）',
     appendBtn: '生成（追加）',
@@ -153,7 +154,10 @@ const I18N = {
     unknownRequestError: '未知请求错误',
     taskCompletedWithFailure: '任务已结束，但有 {count} 张图片处理失败。',
     chooseDirectoryFirst: '请先选择图片目录。',
-    useSingleGenerateButton: '单图模式下，请使用「生成（单图）」按钮。',
+    loadSingleFirst: '请先在预览中拖入或加载一张图片。',
+    useSingleGenerateButton: '单图模式下，请使用「生成」按钮。',
+    modeSwitchedSingle: '已切换到单图模式。',
+    modeSwitchedFolder: '已切换到文件夹模式。',
     directoryPermissionDenied: '目录读写权限被拒绝。',
     progressDetected: '检测到历史进度记录：{count} 项。',
     skippedByProgress: '跳过（进度记录）：{name}',
@@ -255,8 +259,9 @@ const I18N = {
     clearPromptsBtn: 'Clear',
     systemPromptPlaceholder: 'System prompt',
     userPromptPlaceholder: 'Example: Describe this image in one detailed English paragraph.',
-    startBtn: 'Generate (Folder)',
-    generateCurrentBtn: 'Generate (Single)',
+    modeSingleBtn: 'Single',
+    modeFolderBtn: 'Folder',
+    generateBtn: 'Generate',
     stopBtn: 'Stop Task',
     prependBtn: 'Generate (Prepend)',
     appendBtn: 'Generate (Append)',
@@ -313,7 +318,10 @@ const I18N = {
     unknownRequestError: 'Unknown request error',
     taskCompletedWithFailure: 'Task finished, but {count} image(s) failed.',
     chooseDirectoryFirst: 'Please choose an image directory first.',
-    useSingleGenerateButton: 'In single image mode, please use the "Generate (Single)" button.',
+    loadSingleFirst: 'Drop or load a single image in the preview first.',
+    useSingleGenerateButton: 'In single image mode, please use the "Generate" button.',
+    modeSwitchedSingle: 'Switched to single-image mode.',
+    modeSwitchedFolder: 'Switched to folder mode.',
     directoryPermissionDenied: 'Directory read/write permission was denied.',
     progressDetected: 'Detected historical progress records: {count}.',
     skippedByProgress: 'Skipped (progress record): {name}',
@@ -394,8 +402,9 @@ const els = {
   clearPromptsBtn: document.getElementById('clearPromptsBtn'),
   systemPromptInput: document.getElementById('systemPromptInput'),
   userPromptInput: document.getElementById('userPromptInput'),
-  startBtn: document.getElementById('startBtn'),
-  generateCurrentBtn: document.getElementById('generateCurrentBtn'),
+  modeSingleBtn: document.getElementById('modeSingleBtn'),
+  modeFolderBtn: document.getElementById('modeFolderBtn'),
+  generateBtn: document.getElementById('generateBtn'),
   prependBtn: document.getElementById('prependBtn'),
   appendBtn: document.getElementById('appendBtn'),
   stopBtn: document.getElementById('stopBtn'),
@@ -612,9 +621,9 @@ async function chooseCacheFolder() {
 async function writeResultToCacheFolder(item, file, caption, nameOverride = '') {
   if (!state.cacheFolderHandle) return;
   try {
-    const subDir = !state.singleFileMode && state.directoryLabel
-      ? state.directoryLabel
-      : 'captioner-cache';
+    // 缓存位置跟随「所在文件夹上下文」：有文件夹（无论单图/文件夹模式）缓存在该文件夹同名子目录，
+    // 独立拖入的单图（无文件夹）缓存在 captioner-cache
+    const subDir = state.directoryLabel ? state.directoryLabel : 'captioner-cache';
     const cacheRoot = await state.cacheFolderHandle.getDirectoryHandle(subDir, { create: true });
     // nameOverride 用于单图多次生成（已带 _N 后缀），此时直接作为缓存内的结果文件名
     const rel = nameOverride || item.relativePath || item.name || `result-${state.resultSeq}`;
@@ -733,11 +742,16 @@ async function scanCacheFolderContent() {
     state.folderResults = folders.map((folder) => ({ ...folder, results: withIds(folder.results) }));
     state.resultSeq = seq;
 
-    // 预览恢复：用缓存中的原图重建单图预览（若当前预览还是其它文件夹的图片则自动切换；
-    // 若已有单图缓存文件或缓存为空则保持不变）
-    await restoreSinglePreviewFromCache();
-
-    enterSingleView();
+    // 预览恢复：有文件夹上下文时保持当前文件夹（不因扫描缓存而切换模式/视图）；
+    // 独立单图（无文件夹）则恢复单图缓存预览。
+    if (!state.directoryHandle) {
+      await restoreSinglePreviewFromCache();
+      enterSingleView();
+    } else if (state.directoryLabel && getFolderEntry(state.directoryLabel)) {
+      enterFolderView(state.directoryLabel);
+    } else {
+      enterSingleView();
+    }
     renderFolderChips();
     saveResultsToCache();
     saveSessionToCache();
@@ -1032,6 +1046,7 @@ async function restoreSinglePreviewFromCache() {
   state.files = files.map((fileObj) => createVirtualFileItem(fileObj));
   state.currentIndex = 0;
   syncStats();
+  renderModeToggle();
   renderThumbStrip();
   await renderPreview();
   log('cachePreviewRestored', { count: files.length });
@@ -1050,6 +1065,7 @@ async function restoreFolderPreviewFromCache(name) {
   state.files = files.map((fileObj) => createVirtualFileItem(fileObj));
   state.currentIndex = 0;
   syncStats();
+  renderModeToggle();
   renderThumbStrip();
   await renderPreview();
   log('cachePreviewRestored', { count: files.length });
@@ -1180,6 +1196,7 @@ async function restoreFolderDirectory(name) {
   state.currentIndex = state.files.length ? 0 : -1;
   resetCounters();
   syncStats();
+  renderModeToggle();
   renderThumbStrip();
   await renderPreview();
   saveSessionToCache();
@@ -1259,15 +1276,18 @@ async function restoreCachedSession() {
       state.singleFileSource = singleFiles[singleFiles.length - 1];
       state.files = singleFiles.map((file) => createVirtualFileItem(file));
       state.currentIndex = Math.min(cachedSession.currentIndex || 0, state.files.length - 1);
+      renderModeToggle();
       renderThumbStrip();
       await renderPreview();
       log('singlePreviewRestored');
     }
   } else if (cachedSession.mode === 'folder' && cachedSession.directoryHandle) {
+    state.singleFileMode = false;
     state.pendingFolderHandle = cachedSession.directoryHandle;
     state.pendingFolderLabel = cachedSession.directoryLabel || '';
     state.pendingCurrentIndex = cachedSession.currentIndex || 0;
-    tryRestoreFolderSession();
+    await tryRestoreFolderSession();
+    renderModeToggle();
   }
 
   // 恢复上次查看的文件夹结果视图（若仍存在）
@@ -1406,7 +1426,7 @@ function renderResults() {
 }
 
 function getActiveResultsTarget() {
-  if (!state.singleFileMode && state.directoryLabel) {
+  if (state.directoryLabel) {
     let entry = getFolderEntry(state.directoryLabel);
     if (!entry) {
       entry = { name: state.directoryLabel, results: [] };
@@ -1455,6 +1475,7 @@ function applyI18n() {
   updatePresetSelectOptions();
   updateCacheLocationText();
   renderFolderChips();
+  renderModeToggle();
   if (state.pendingFolderLabel && els.restoreFolderBtn && !els.restoreFolderBtn.hidden) {
     els.restoreFolderBtn.textContent = t('restoreFolderBtn', { name: state.pendingFolderLabel || '' });
   }
@@ -1934,6 +1955,67 @@ async function chooseFolder() {
   }
 }
 
+// 手动切换操作模式（单图 / 文件夹）：单图模式保留文件夹上下文——
+// 单图模式也能作用于当前文件夹里的文件（缓存仍写该文件夹同名子目录、合并其 txt）。
+async function switchMode(mode) {
+  if (state.isRunning) return;
+
+  if (mode === 'single') {
+    if (state.singleFileMode) return;
+    state.singleFileMode = true;
+    // 保留文件夹上下文（不清空 directoryHandle/Label），仅改变处理范围
+    if (!state.files.length) {
+      // 无任何内容时尝试恢复单图源/单图缓存，否则置空
+      if (state.singleFileSource && SUPPORTED_EXTENSIONS.has(getExtension(state.singleFileSource.name || ''))) {
+        state.files = [createVirtualFileItem(state.singleFileSource)];
+        state.currentIndex = 0;
+      } else if (state.singleResults.length && state.singleResults[state.singleResults.length - 1].file) {
+        const cachedFile = state.singleResults[state.singleResults.length - 1].file;
+        state.singleFileSource = cachedFile;
+        state.files = [createVirtualFileItem(cachedFile)];
+        state.currentIndex = 0;
+      } else {
+        state.files = [];
+        state.currentIndex = -1;
+      }
+    }
+    resetCounters();
+    // 结果视图：有文件夹上下文且已有结果 → 该文件夹视图；否则单图视图
+    if (state.directoryLabel && getFolderEntry(state.directoryLabel)) {
+      enterFolderView(state.directoryLabel);
+    } else {
+      enterSingleView();
+    }
+    renderModeToggle();
+    renderThumbStrip();
+    await renderPreview();
+    setTaskButtonsDisabled(state.isRunning);
+    saveSessionToCache();
+    log('modeSwitchedSingle');
+  } else {
+    if (!state.singleFileMode) return;
+    state.singleFileMode = false;
+    // 切到文件夹批量需要目录上下文；独立单图无法批处理，提示选择目录
+    if (!state.directoryHandle) {
+      state.files = [];
+      state.currentIndex = -1;
+      log('chooseDirectoryFirst');
+    }
+    resetCounters();
+    if (state.directoryLabel && getFolderEntry(state.directoryLabel)) {
+      enterFolderView(state.directoryLabel);
+    } else {
+      enterSingleView();
+    }
+    renderModeToggle();
+    renderThumbStrip();
+    await renderPreview();
+    setTaskButtonsDisabled(state.isRunning);
+    saveSessionToCache();
+    log('modeSwitchedFolder');
+  }
+}
+
 async function ensureDirectoryPermission(handle, mode = 'readwrite') {
   if (!handle) return false;
   const options = { mode };
@@ -2360,7 +2442,7 @@ async function hasExistingCaption(item) {
 }
 
 async function readExistingCaption(item) {
-  if (state.singleFileMode || !state.directoryHandle) return '';
+  if (!state.directoryHandle) return '';
   try {
     const relativePath = item.relativePath.replace(/\.[^.]+$/, '.txt');
     const parts = relativePath.split('/');
@@ -2377,9 +2459,17 @@ async function readExistingCaption(item) {
   }
 }
 
+// 让模式切换器（单图/文件夹）高亮当前操作模式
+function renderModeToggle() {
+  if (!els.modeSingleBtn || !els.modeFolderBtn) return;
+  const single = state.singleFileMode;
+  els.modeSingleBtn.classList.toggle('active', single);
+  els.modeFolderBtn.classList.toggle('active', !single);
+}
+
 function setTaskButtonsDisabled(disabled) {
-  els.startBtn.disabled = disabled || state.singleFileMode; // 单图模式下禁用"生成（文件夹）"按钮
-  els.generateCurrentBtn.disabled = disabled;
+  renderModeToggle();
+  els.generateBtn.disabled = disabled;
   els.prependBtn.disabled = disabled;
   els.appendBtn.disabled = disabled;
   els.stopBtn.disabled = !disabled;
@@ -2397,24 +2487,63 @@ function nextSingleResultName(baseName) {
   return `${stem}_${n}${ext}`;
 }
 
-async function processItem(item, config, combineMode, progressSet) {
+// 单图合并：前置/追加应合并进该图原有的同名结果（原来的 txt），而不是编号副本
+// 取 name === baseName 的那条结果的 caption 作为基准；尚无则该图没有旧话，返回空
+function getSingleBaseCaption(baseName) {
+  const base = state.singleResults.find((item) => item.name === baseName);
+  return base?.caption || '';
+}
+
+// 独立单图：从 captioner-cache 读该图同名 txt 的真实内容，作为前置/追加合并基准。
+// 未设置缓存文件夹或该 txt 不存在时返回空（再由调用方回退到内存同名结果）。
+async function readSingleCacheCaption(baseName) {
+  if (!state.cacheFolderHandle) return '';
+  try {
+    const cacheRoot = await state.cacheFolderHandle.getDirectoryHandle('captioner-cache', { create: false });
+    const parts = String(baseName).split('/');
+    const fileName = parts.pop();
+    const stem = fileName.replace(/\.[^.]+$/, '');
+    let dir = cacheRoot;
+    for (const part of parts) {
+      dir = await dir.getDirectoryHandle(part, { create: false });
+    }
+    const txtHandle = await dir.getFileHandle(`${stem}.txt`);
+    const file = await txtHandle.getFile();
+    return (await file.text()).trim();
+  } catch {
+    return '';
+  }
+}
+
+async function processItem(item, config, combineMode, progressSet, singleExistingCaption = '') {
   const baseName = item.relativePath;
-  // 单图模式：同一张图多次生成时递增序号，使每次结果独立成条（多生成挑一条）
-  const resultName = state.singleFileMode ? nextSingleResultName(baseName) : baseName;
+  // 文件夹上下文（无论单图/文件夹模式）：始终用原图同名文件名，缓存/写回都在该文件夹同名子目录；
+  // 独立单图（无文件夹）：普通「生成」递增序号（多生成挑一条），前置/追加则合并进原图同名结果
+  const resultName = state.directoryHandle
+    ? baseName
+    : (combineMode !== 'none' ? baseName : nextSingleResultName(baseName));
   const file = await item.handle.getFile();
   log('processingStarted', { name: resultName });
   if (isStopRequested()) return;
   const newCaption = await requestCaption(config, item, file);
   let finalCaption = newCaption;
-  if (combineMode !== 'none' && !state.singleFileMode) {
-    const existing = await readExistingCaption(item);
-    if (existing) {
+  if (combineMode !== 'none') {
+    if (state.directoryHandle) {
+      // 文件夹上下文：与这张图自己的 txt 合并
+      const existing = await readExistingCaption(item);
+      if (existing) {
+        finalCaption = combineMode === 'prepend'
+          ? `${newCaption}, ${existing}`
+          : `${existing}, ${newCaption}`;
+      }
+    } else if (singleExistingCaption) {
+      // 独立单图：与这张图原有的同名结果合并
       finalCaption = combineMode === 'prepend'
-        ? `${newCaption}, ${existing}`
-        : `${existing}, ${newCaption}`;
+        ? `${newCaption}, ${singleExistingCaption}`
+        : `${singleExistingCaption}, ${newCaption}`;
     }
   }
-  if (!state.singleFileMode) {
+  if (state.directoryHandle) {
     await writeCaptionFile(item, finalCaption);
   }
   let thumbUrl = '';
@@ -2426,7 +2555,7 @@ async function processItem(item, config, combineMode, progressSet) {
   if (isStopRequested()) return;
   addResultEntry(resultName, finalCaption, thumbUrl);
   writeResultToCacheFolder(item, file, finalCaption, resultName);
-  if (!state.singleFileMode && progressSet) {
+  if (state.directoryHandle && progressSet) {
     progressSet.add(baseName);
     saveProgressRecord(progressSet);
   }
@@ -2438,18 +2567,15 @@ async function processItem(item, config, combineMode, progressSet) {
 async function processAll(combineMode = 'none') {
   if (state.isRunning) return;
 
-  // 单图模式下，生成（文件夹）按钮应该被禁用或提示用户
-  if (state.singleFileMode) {
-    log('useSingleGenerateButton');
+  // 文件夹全量批处理：必须在文件夹上下文下进行
+  if (!state.directoryHandle) {
+    log('chooseDirectoryFirst');
     return;
   }
 
-  const shouldRestoreSingleFile = state.singleFileMode
-    && !state.files.length
-    && state.singleFileSource
-    && SUPPORTED_EXTENSIONS.has(getExtension(state.singleFileSource.name || ''));
+  const shouldRestoreSingleFile = false;
 
-  if (shouldRestoreSingleFile) {
+  if (shouldRestoreSingleFile && !state.files.length) {
     state.files = [createVirtualFileItem(state.singleFileSource)];
     state.currentIndex = 0;
     await renderPreview();
@@ -2460,12 +2586,12 @@ async function processAll(combineMode = 'none') {
     return;
   }
 
-  if (!state.singleFileMode && !state.directoryHandle) {
+  if (!state.directoryHandle) {
     log('chooseDirectoryFirst');
     return;
   }
 
-  if (!state.singleFileMode) {
+  {
     const hasPermission = await ensureDirectoryPermission(state.directoryHandle, 'readwrite');
     if (!hasPermission) {
       log('directoryPermissionDenied');
@@ -2589,21 +2715,19 @@ async function processAll(combineMode = 'none') {
   }
 }
 
-async function processCurrent() {
+// 单图模式（作用于当前选中图）：无论该图来自文件夹还是独立拖入，都只处理当前这张。
+// 有文件夹上下文时，结果写入该文件夹同名子目录、并与该图自己的 txt 合并/写回；
+// 独立单图则写入 captioner-cache，前置/追加与它原有的同名结果合并。
+async function processSingleImage(combineMode = 'none') {
   if (state.isRunning) return;
 
   const hasCurrent = state.currentIndex >= 0 && state.currentIndex < state.files.length;
   if (!hasCurrent) {
-    log('chooseDirectoryFirst');
+    log(state.singleFileMode ? 'loadSingleFirst' : 'chooseDirectoryFirst');
     return;
   }
 
-  if (!state.singleFileMode && !state.directoryHandle) {
-    log('chooseDirectoryFirst');
-    return;
-  }
-
-  if (!state.singleFileMode) {
+  if (state.directoryHandle) {
     const hasPermission = await ensureDirectoryPermission(state.directoryHandle, 'readwrite');
     if (!hasPermission) {
       log('directoryPermissionDenied');
@@ -2624,8 +2748,9 @@ async function processCurrent() {
   setRuntimeStatus('runtimeRunning');
   setConnectionBadgeByKey('taskRunning');
   setTaskButtonsDisabled(true);
-  if (!state.singleFileMode) {
-    // 文件夹模式：结果归入当前文件夹
+
+  // 结果视图：有文件夹上下文 → 显示该文件夹结果；独立单图 → 单图视图
+  if (state.directoryLabel) {
     let entry = getFolderEntry(state.directoryLabel);
     if (!entry) {
       entry = { name: state.directoryLabel, results: [] };
@@ -2647,8 +2772,12 @@ async function processCurrent() {
   const itemName = targetItem.relativePath;
   try {
     await detectModelIfNeeded(config);
-    const progressSet = state.singleFileMode ? null : loadProgressRecord();
-    await processItem(targetItem, config, 'none', progressSet);
+    // 独立单图的前置/追加：合并基准优先取 captioner-cache 里该图的真实 txt，其次内存同名结果；
+    // 文件夹上下文由 processItem 读取该图自己的 txt。
+    const existingCaption = combineMode !== 'none' && !state.directoryHandle
+      ? (await readSingleCacheCaption(itemName)) || getSingleBaseCaption(itemName)
+      : '';
+    await processItem(targetItem, config, combineMode, null, existingCaption);
     setConnectionBadgeByKey('taskFinished');
   } catch (error) {
     if (isStopRequested()) {
@@ -2665,6 +2794,31 @@ async function processCurrent() {
     state.runAbortController = null;
     setTaskButtonsDisabled(false);
     setRuntimeStatus('runtimeIdle');
+  }
+}
+
+// 生成按钮入口：单图模式→处理当前图；文件夹模式→全量批处理
+function handleGenerate() {
+  if (state.singleFileMode) {
+    processSingleImage('none');
+  } else {
+    processAll('none');
+  }
+}
+
+function handlePrepend() {
+  if (state.singleFileMode) {
+    processSingleImage('prepend');
+  } else {
+    processAll('prepend');
+  }
+}
+
+function handleAppend() {
+  if (state.singleFileMode) {
+    processSingleImage('append');
+  } else {
+    processAll('append');
   }
 }
 
@@ -2819,10 +2973,11 @@ function bindEvents() {
     }
   });
   els.chooseFolderBtn.addEventListener('click', chooseFolder);
-  els.startBtn.addEventListener('click', () => processAll('none'));
-  els.generateCurrentBtn.addEventListener('click', processCurrent);
-  els.prependBtn.addEventListener('click', () => processAll('prepend'));
-  els.appendBtn.addEventListener('click', () => processAll('append'));
+  els.modeSingleBtn.addEventListener('click', () => switchMode('single'));
+  els.modeFolderBtn.addEventListener('click', () => switchMode('folder'));
+  els.generateBtn.addEventListener('click', handleGenerate);
+  els.prependBtn.addEventListener('click', handlePrepend);
+  els.appendBtn.addEventListener('click', handleAppend);
   els.stopBtn.addEventListener('click', stopProcessing);
   els.previewStage.addEventListener('dragenter', (event) => {
     event.preventDefault();
