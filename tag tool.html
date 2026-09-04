@@ -2775,15 +2775,26 @@ function updateDataFolderText() {
     : t('tag.data.folder.default');
 }
 
+// 读取 tag-data.json；返回 { found, data? }：found=false 表示文件不存在或读取失败
 async function readDataFolderFile() {
-  if (!dataFolderHandle) return null;
+  if (!dataFolderHandle) return { found: false };
+  let fh;
   try {
-    const fh = await dataFolderHandle.getFileHandle('tag-data.json');
+    fh = await dataFolderHandle.getFileHandle('tag-data.json');
+  } catch {
+    return { found: false }; // 文件不存在
+  }
+  let text = '';
+  try {
     const file = await fh.getFile();
-    const text = await file.text();
-    if (!text) return null;
-    return JSON.parse(text);
-  } catch { return null; }
+    text = await file.text();
+  } catch {}
+  if (!text) return { found: true, data: null }; // 存在但为空
+  try {
+    return { found: true, data: JSON.parse(text) };
+  } catch {
+    return { found: true, data: null }; // 解析失败：有文件但无效，保留不覆盖
+  }
 }
 
 async function saveDataFolder() {
@@ -2791,7 +2802,7 @@ async function saveDataFolder() {
   try {
     const fh = await dataFolderHandle.getFileHandle('tag-data.json', { create: true });
     const w = await fh.createWritable();
-    await w.write(JSON.stringify({ categories, tagGroups, tagImages }), { type: 'application/json' });
+    await w.write(JSON.stringify({ categories, tagGroups, tagImages }));
     await w.close();
   } catch {
     showToast(t('tag.data.folder.write.failed'), 'warn');
@@ -2814,20 +2825,22 @@ async function chooseDataFolder() {
   }
 }
 
-// 连接数据文件夹：读取 tag-data.json 覆盖内存并镜像 localStorage；新建时写入当前数据
+// 连接数据文件夹：读取 tag-data.json 覆盖内存并镜像 localStorage；仅当文件夹里还没有数据文件时才新建
 async function connectDataFolder(save) {
   if (!dataFolderHandle) return false;
   const granted = await ensureDataPermission(dataFolderHandle);
   if (!granted) { showToast(t('tag.data.folder.read.failed'), 'warn'); return false; }
   try {
-    const read = await readDataFolderFile();
-    if (read) {
-      if (Array.isArray(read.categories)) categories = read.categories;
-      if (Array.isArray(read.tagGroups)) tagGroups = read.tagGroups;
-      if (read.tagImages && typeof read.tagImages === 'object') tagImages = read.tagImages;
+    const res = await readDataFolderFile();
+    if (res.found && res.data) {
+      if (Array.isArray(res.data.categories)) categories = res.data.categories;
+      if (Array.isArray(res.data.tagGroups)) tagGroups = res.data.tagGroups;
+      if (res.data.tagImages && typeof res.data.tagImages === 'object') tagImages = res.data.tagImages;
       catSave(); tgSave(); saveTagImagesLocal();
+    } else if (!res.found && save) {
+      // 文件夹里还没有数据文件：用当前数据创建，便于跨浏览器复用
+      await saveDataFolder();
     }
-    if (save) await saveDataFolder();
     renderTagSidebar();
     renderTagGroups();
     onTagSidebarSearch();
