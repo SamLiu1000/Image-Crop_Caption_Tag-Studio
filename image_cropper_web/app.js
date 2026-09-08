@@ -68,11 +68,12 @@ const I18N = {
     cropInfoTitle: '裁切信息',
     cropInfoWaiting: '等待加载图片',
     tipsTitle: '操作提示',
-    tipsText: '裁切框模式：\n• 拖动框内移动裁切框\n• 拖动边或角调整裁切框\n• Ctrl + 拖动可锁定比例\n• 滚轮缩放裁切框\n• 拖动底部缩放条调整预览缩放（双击恢复 100%）\n• 图片放大超出画布时，拖动遮罩区域平移取景\n\n快捷键：\n• WASD 切换上一张 / 下一张\n• 方向键微调裁切框位置\n• R 交换宽高\n• Q 勾选固定导出尺寸\n• E 保存\n\n参考线：\n• 点击"竖边界 / 横边界"添加参考线\n• 拖动参考线调整位置\n• 右键点击参考线可删除\n• 裁切框不会越过参考线\n• 参考线会保留到切换后的图片\n\n图片自由变换模式：\n• 裁切框可自由拖动、拉伸，与普通模式一致\n• 框外拖动图片移动取景\n• Shift + 滚轮旋转图片\n• 拖动底部缩放条缩放图片（双击恢复 100%）\n• 导出结果与框内内容保持一致',
+    tipsText: '裁切框模式：\n• 拖动框内移动裁切框\n• 拖动边或角调整裁切框\n• Ctrl + 拖动可锁定比例\n• 滚轮缩放裁切框\n• 拖动底部缩放条调整预览缩放（双击恢复 100%）\n• 图片放大超出画布时，拖动遮罩区域平移取景\n\n快捷键：\n• WASD 切换上一张 / 下一张\n• 方向键微调裁切框位置\n• R 交换宽高\n• Q 勾选固定导出尺寸\n• E 切换预设尺寸\n\n参考线：\n• 点击"竖边界 / 横边界"添加参考线\n• 拖动参考线调整位置\n• 右键点击参考线可删除\n• 裁切框不会越过参考线\n• 参考线会保留到切换后的图片\n\n图片自由变换模式：\n• 裁切框可自由拖动、拉伸，与普通模式一致\n• 框外拖动图片移动取景\n• Shift + 滚轮旋转图片\n• 拖动底部缩放条缩放图片（双击恢复 100%）\n• 导出结果与框内内容保持一致',
     zoomInLabel: '放大',
     zoomResetLabel: '重置缩放',
     zoomOutLabel: '缩小',
     deletedPreset: '已删除预设：{size}',
+    presetSwitched: '已切换到预设尺寸：{size}',
     waitingForImage: '等待加载图片',
     infoModeFree: '模式：自由变换',
     infoModeCrop: '模式：裁切框',
@@ -179,11 +180,12 @@ const I18N = {
     cropInfoTitle: 'Crop Info',
     cropInfoWaiting: 'Waiting for image',
     tipsTitle: 'Tips',
-    tipsText: 'Crop box mode:\n• Drag inside the box to move it\n• Drag edges or corners to resize it\n• Hold Ctrl while dragging to lock aspect ratio\n• Use the mouse wheel to scale the crop box\n• Drag the bottom zoom slider to adjust preview zoom (double-click to reset to 100%)\n• When zoomed beyond the canvas, drag the masked area to pan the view\n\nShortcuts:\n• WASD to switch previous / next image\n• Arrow keys to nudge the crop box\n• R to swap width / height\n• Q to toggle fixed output size\n• E to save\n\nGuides:\n• Click "Vertical / Horizontal Boundary" to place a guide\n• Drag a guide to move it\n• Right-click a guide to remove it\n• The crop box will not cross guide lines\n• Guides persist when switching images\n\nFree transform mode:\n• The crop box can be freely dragged and resized, same as crop mode\n• Drag outside the box to move the image\n• Shift + mouse wheel rotates the image\n• Drag the bottom zoom slider to scale the image (double-click to reset to 100%)\n• Exported output matches the framed content',
+    tipsText: 'Crop box mode:\n• Drag inside the box to move it\n• Drag edges or corners to resize it\n• Hold Ctrl while dragging to lock aspect ratio\n• Use the mouse wheel to scale the crop box\n• Drag the bottom zoom slider to adjust preview zoom (double-click to reset to 100%)\n• When zoomed beyond the canvas, drag the masked area to pan the view\n\nShortcuts:\n• WASD to switch previous / next image\n• Arrow keys to nudge the crop box\n• R to swap width / height\n• Q to toggle fixed output size\n• E to cycle preset size\n\nGuides:\n• Click "Vertical / Horizontal Boundary" to place a guide\n• Drag a guide to move it\n• Right-click a guide to remove it\n• The crop box will not cross guide lines\n• Guides persist when switching images\n\nFree transform mode:\n• The crop box can be freely dragged and resized, same as crop mode\n• Drag outside the box to move the image\n• Shift + mouse wheel rotates the image\n• Drag the bottom zoom slider to scale the image (double-click to reset to 100%)\n• Exported output matches the framed content',
     zoomInLabel: 'Zoom in',
     zoomResetLabel: 'Reset zoom',
     zoomOutLabel: 'Zoom out',
     deletedPreset: 'Deleted preset: {size}',
+    presetSwitched: 'Switched to preset size: {size}',
     waitingForImage: 'Waiting for image',
     infoModeFree: 'Mode: Free transform',
     infoModeCrop: 'Mode: Crop box',
@@ -567,6 +569,30 @@ function syncSizeInputs() {
   renderPresets();
 }
 
+function applyPresetSize(w, h) {
+  state.targetW = w;
+  state.targetH = h;
+  syncSizeInputs();
+  if (state.currentBitmap) {
+    if (state.freeTransform || state.useActualSize) {
+      fitImageToCanvas(true);
+    } else {
+      applyAspectToBox();
+      constrainBox();
+      scheduleRedraw();
+    }
+  }
+}
+
+function cyclePresetSize() {
+  if (state.presets.length === 0) return;
+  let idx = state.presets.findIndex(([w, h]) => w === state.targetW && h === state.targetH);
+  const nextIdx = idx < 0 ? 0 : (idx + 1) % state.presets.length;
+  const [w, h] = state.presets[nextIdx];
+  applyPresetSize(w, h);
+  setStatus(t('presetSwitched', { size: `${w} x ${h}` }));
+}
+
 function renderPresets() {
   els.presetList.innerHTML = '';
   for (const [w, h] of state.presets) {
@@ -579,18 +605,7 @@ function renderPresets() {
     if (state.targetW === w && state.targetH === h) main.classList.add('active');
     main.textContent = `${w} x ${h}`;
     main.addEventListener('click', () => {
-      state.targetW = w;
-      state.targetH = h;
-      syncSizeInputs();
-      if (state.currentBitmap) {
-        if (state.freeTransform || state.useActualSize) {
-          fitImageToCanvas(true);
-        } else {
-          applyAspectToBox();
-          constrainBox();
-          scheduleRedraw();
-        }
-      }
+      applyPresetSize(w, h);
     });
 
     const remove = document.createElement('button');
@@ -2491,13 +2506,14 @@ function bindEvents() {
       const key = event.key.toLowerCase();
       if (key === 'w' || key === 'a') els.prevBtn.click();
       if (key === 's' || key === 'd') els.nextBtn.click();
-      // R/Q/E：交换宽高 / 勾选固定导出尺寸 / 保存（一次性操作，长按不重复）
-      if (!event.repeat) {
+      // E/R/Q：切换预设尺寸 / 交换宽高 / 勾选固定导出尺寸（一次性操作，长按不重复）
+      if (!event.repeat && !state.doodleMode) {
         if (key === 'e') {
-          saveCrop();
-        } else if (!state.doodleMode) {
-          if (key === 'r') els.swapSizeBtn.click();
-          else if (key === 'q') els.fixedOutputSizeCheck.click();
+          cyclePresetSize();
+        } else if (key === 'r') {
+          els.swapSizeBtn.click();
+        } else if (key === 'q') {
+          els.fixedOutputSizeCheck.click();
         }
       }
     }
