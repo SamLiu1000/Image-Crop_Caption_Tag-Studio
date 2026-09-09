@@ -541,7 +541,8 @@ input[type="color"] {
 .thumbnail-item img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* 完整显示整张图，不裁切（宽高比不同时留边），避免画面被切掉看不全 */
+  object-fit: contain;
   display: block;
 }
 

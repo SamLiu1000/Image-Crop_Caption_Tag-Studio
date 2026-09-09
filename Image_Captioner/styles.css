@@ -1113,8 +1113,8 @@ textarea {
   border-radius: var(--radius-md);
   flex: 0 0 auto;
   max-height: 100%;
-  width: 106px;
-  scrollbar-gutter: stable;
+  /* 与图片裁切工具的缩略条同宽（160px 列宽 → 142px 方格） */
+  width: 160px;
 }
 
 .thumb-strip[hidden] {
@@ -1123,8 +1123,9 @@ textarea {
 
 .thumb-strip .thumb-cell {
   flex: 0 0 auto;
-  width: 72px;
-  height: 72px;
+  /* 宽度撑满缩略条、高度按 1:1 撑开，尺寸与图片裁切工具的缩略图一致 */
+  width: 100%;
+  aspect-ratio: 1;
   padding: 0;
   border: 2px solid var(--border);
   border-radius: var(--radius-sm);

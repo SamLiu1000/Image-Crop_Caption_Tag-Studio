@@ -688,7 +688,10 @@ async function applyCacheFolder(handle, force = false) {
   } catch {
     // 忽略：扫描自身会处理权限不足的情况
   }
-  await scanCacheFolderContent();
+  const ok = await scanCacheFolderContent();
+  // 扫描失败（如权限未授予）时不留标记，让 Hub 的重播或下一次点击还能重试
+  if (!ok) scannedCacheFolderEntry = null;
+  return ok;
 }
 
 // 未嵌入 Hub（直接打开本页）时的本地兜底入口；嵌入时按钮由顶部公共栏代替
@@ -922,8 +925,10 @@ async function scanCacheFolderContent() {
     log('cacheScanned', { single: state.singleResults.length, folders: state.folderResults.length });
     // 缩略图后台填充：预览条没有引用到的结果（如只读文件夹视图）也在后台补上
     fillUnreferencedResultThumbs();
+    return true;
   } catch (error) {
     log('cacheScanFailed', { error: error.message || error });
+    return false;
   }
 }
 
@@ -1204,14 +1209,21 @@ async function toggleFolderView(name) {
   if (state.activeFolderName === name) {
     enterSingleView();
     // 切回单图视图时，若无真实文件列表则尝试从缓存恢复单图预览
-    await restoreSinglePreviewFromCache();
+    const restored = await restoreSinglePreviewFromCache();
+    if (!restored && state.cacheFolderHandle) {
+      await applyCacheFolder(state.cacheFolderHandle, true).catch(() => {});
+    }
   } else {
     enterFolderView(name);
     // 点击文件夹结果标签时，自动把预览切回该文件夹目录
     const restored = await restoreFolderDirectory(name);
     if (!restored) {
       // 无真实目录句柄（如其它浏览器导入配置后）→ 用缓存中的原图副本恢复预览
-      await restoreFolderPreviewFromCache(name);
+      const fromCache = await restoreFolderPreviewFromCache(name);
+      // 缓存条目也还没有文件句柄（本会话尚未扫描缓存目录）→ 先扫描再重建一次
+      if (!fromCache && state.cacheFolderHandle) {
+        await applyCacheFolder(state.cacheFolderHandle, true).catch(() => {});
+      }
     }
   }
 }
@@ -1223,7 +1235,11 @@ async function restoreSinglePreviewFromCache(index = 0) {
   const files = entries.map((item) => item.file);
   const unchanged = state.files.length === files.length
     && state.files.every((item, index) => item.sourceFile === files[index]);
-  if (unchanged) return true;
+  if (unchanged) {
+    // 文件列表相同也确保缩略条可见（例如刚从文件夹模式切回单图视图）
+    if (els.thumbStrip && els.thumbStrip.hidden) renderThumbStrip();
+    return true;
+  }
   state.singleFileMode = true;
   state.directoryHandle = null;
   state.directoryLabel = '';
@@ -1442,7 +1458,11 @@ function renderFolderChips() {
     chip.addEventListener('click', async () => {
       enterSingleView();
       // 点击单图缓存标签时恢复单图缓存的图片预览（若当前预览还是其它文件夹的图片）
-      await restoreSinglePreviewFromCache();
+      const restored = await restoreSinglePreviewFromCache();
+      // 结果条目还没有文件句柄（本会话尚未扫描缓存目录）→ 先扫描再重建一次预览条
+      if (!restored && state.cacheFolderHandle) {
+        await applyCacheFolder(state.cacheFolderHandle, true).catch(() => {});
+      }
       setTaskButtonsDisabled(state.isRunning);
     });
     els.folderChips.appendChild(chip);
@@ -3786,6 +3806,9 @@ async function init() {
   // 先应用 Hub 通过 sessionStorage 传来的待导入数据，再恢复会话，避免读取时序问题
   await applyPendingImportFromSession();
   await restoreCachedSession();
+  // 会话恢复出来的缓存文件夹也要扫描一次：否则结果条目没有文件句柄（file 不持久化），
+  // 点击「单图缓存」标签无法重建预览条，只能靠刷新时 Hub 重播目录才恢复。
+  if (state.cacheFolderHandle) applyCacheFolder(state.cacheFolderHandle).catch(() => {});
   setupHubBridge();
 }
 
