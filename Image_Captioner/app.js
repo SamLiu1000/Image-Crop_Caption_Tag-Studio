@@ -17,10 +17,10 @@ const RESIZE_FACTOR = 0.75;
 const MAX_PIXELS = 1120 * 1120;
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 5000;
-// 预览条缩略图（显示框 ~64px）
-const THUMB_STRIP_DIMENSION = 160;
-// 结果列表缩略图：显示框 120px，在 125%~200% 显示缩放/高 DPI 下需要 150~240 设备像素，
-// 160px 会被放大而发虚，因此结果图单独用 320px 源。
+// 预览条缩略图：格子已放大到约 143px，在 2 倍像素密度下需要 ~286px，故用 320px 源。
+// 与结果列表缩略图同尺寸 → 一次解码即可同时供两处使用。
+const THUMB_STRIP_DIMENSION = 320;
+// 结果列表缩略图：显示框 120px，同样取 320px 以免高分屏/显示缩放下发虚。
 const RESULT_THUMB_DIMENSION = 320;
 // 缩略图规格版本：调整尺寸/质量后递增，让已持久化的旧缩略图自动失效并重新生成
 const THUMB_VERSION = 2;
