@@ -589,10 +589,16 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 .ts-tag-item.added{background:var(--added-bg);border-color:var(--added-border);color:var(--added-color)}
 
 /* 侧栏快速标签的预览图缩略图（仅上传过的标签显示） */
-.ts-tag-thumb{width:32px;height:32px;border-radius:4px;object-fit:cover;margin-left:5px;flex:0 0 auto;cursor:pointer;border:1px solid var(--border)}
+.ts-tag-thumb{width:32px;height:32px;border-radius:4px;object-fit:cover;margin-left:5px;flex:0 0 auto;cursor:pointer;border:1px solid var(--border);-webkit-user-drag:none;user-select:none}
+
+/* 关闭标签工具内预览图的原生拖拽，避免点击被误判成拖动 */
+#tagEditImagePreview,
+.img-preview-box img{-webkit-user-drag:none;user-select:none}
 
 /* 数据文件夹行（侧栏顶部） */
 .ts-data-row{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--border)}
+/* 作者样式的 display:flex 会覆盖 HTML hidden 属性，需显式补回隐藏规则（嵌入 Hub 时入口在顶部公共栏） */
+.ts-data-row[hidden]{display:none}
 .ts-data-row > span{font-size:9px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;white-space:nowrap}
 .ts-data-row > strong{flex:1;font-size:9px;color:var(--c5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
 
@@ -921,8 +927,8 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 
 <!-- ══════════════════ TAG SIDEBAR ══════════════════ -->
 <aside class="tag-sidebar" id="tagSidebar">
-  <!-- 数据文件夹：可跨浏览器复用的预览图/目录导出 -->
-  <div class="ts-data-row">
+  <!-- 数据文件夹：可跨浏览器复用的预览图/目录导出（嵌入 Hub 时入口统一到顶部公共栏） -->
+  <div class="ts-data-row" id="tagDataRow">
     <span data-i18n="tag.data.folder.label">数据文件</span>
     <strong id="tagDataFolderText" data-i18n="tag.data.folder.default">浏览器本地</strong>
     <button class="ts-action-btn" id="chooseDataFolderBtn" style="border-color:var(--c4);color:var(--c4)" onclick="chooseDataFolder()" data-i18n="tag.data.folder.btn">选择数据文件夹</button>
@@ -1477,6 +1483,9 @@ const I18N = {
 
 const LANGUAGE_SYNC_MESSAGE = 'web-tools-hub:set-language';
 const THEME_SYNC_MESSAGE = 'web-tools-hub:set-theme';
+// Hub 顶部公共栏：统一数据文件夹
+const HUB_SET_DATA_FOLDER = 'studio:set-data-folder';
+const HUB_FRAME_READY = 'studio:frame-ready';
 let currentLang = localStorage.getItem('app_language') || 'zh';
 let currentTheme = localStorage.getItem('web-tools-hub-theme') || 'dark';
 
@@ -1631,6 +1640,28 @@ document.addEventListener('DOMContentLoaded', () => {
     if (event.data?.type === THEME_SYNC_MESSAGE) {
       applyTheme(event.data.theme);
     }
+    if (event.data?.type === HUB_SET_DATA_FOLDER) {
+      // Hub 顶部公共栏选定了统一数据文件夹
+      if (event.data.handle) applyDataFolderFromHub(event.data.handle).catch(() => {});
+    }
+  });
+
+  // 嵌入 Hub 时数据文件夹入口统一到顶部公共栏，本页只保留显示（单独打开本页时仍可用）
+  const embeddedInHub = window.parent && window.parent !== window;
+  const dataRow = $('tagDataRow');
+  if (dataRow) dataRow.hidden = embeddedInHub;
+
+  // 通知 Hub 本页已就绪，索取当前统一数据文件夹（避免加载时序导致漏发）
+  if (embeddedInHub) {
+    try {
+      window.parent.postMessage({ type: HUB_FRAME_READY }, '*');
+    } catch {}
+  }
+
+  // 关闭以图片为源的原生拖拽（点击预览图轻微移动不应变成拖动）
+  document.addEventListener('dragstart', e => {
+    const t = e.target;
+    if (t && (t.tagName === 'IMG' || t.tagName === 'VIDEO')) e.preventDefault();
   });
 
   $('charidInput').addEventListener('input', () => {
@@ -2792,7 +2823,8 @@ async function initDataState() {
   loadCollapsedCats();
   try {
     const h = await idbGet('dataFolderHandle');
-    if (h) { dataFolderHandle = h; await connectDataFolder(); }
+    // Hub 顶部公共栏可能已先下发统一数据文件夹，此时不再用本页旧句柄覆盖
+    if (h && !dataFolderHandle) { dataFolderHandle = h; await connectDataFolder(); }
   } catch {}
   updateDataFolderText();
 }
@@ -2866,6 +2898,20 @@ async function chooseDataFolder() {
   } catch (e) {
     if (e && e.name !== 'AbortError') console.warn('chooseDataFolder', e);
   }
+}
+
+// 应用 Hub 顶部公共栏下发的统一数据文件夹（与图片描述的缓存共用一个目录）
+async function applyDataFolderFromHub(handle) {
+  if (!handle) return;
+  if (dataFolderHandle && typeof dataFolderHandle.isSameEntry === 'function') {
+    try {
+      if (await dataFolderHandle.isSameEntry(handle)) { updateDataFolderText(); return; }
+    } catch {}
+  }
+  dataFolderHandle = handle;
+  try { await idbSet('dataFolderHandle', handle); } catch {}
+  await connectDataFolder(true);
+  updateDataFolderText();
 }
 
 // 连接数据文件夹：读取 tag-data.json 覆盖内存并镜像 localStorage；仅当文件夹里还没有数据文件时才新建

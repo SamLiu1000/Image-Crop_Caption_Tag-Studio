@@ -139,6 +139,58 @@ button {
   opacity: 1;
 }
 
+/* 顶部公共栏右上角：统一数据文件夹（图片描述缓存 + 标签工具数据），整体是一个按钮 */
+.data-folder-group {
+  display: inline-flex;
+  align-items: center;
+}
+
+.data-folder-group .df-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: 0;
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--tab-text);
+  padding: 2px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1.1;
+  transition: background 0.18s ease, color 0.18s ease, opacity 0.18s ease;
+  backdrop-filter: blur(6px);
+  opacity: 0.78;
+  white-space: nowrap;
+}
+
+.data-folder-group .df-btn:hover {
+  background: var(--tab-hover-bg);
+  color: var(--tab-text-hover);
+  opacity: 1;
+}
+
+.data-folder-group .df-icon {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.data-folder-group .df-label {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.data-folder-group .df-path {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--tab-active-text);
+}
+
 .hub-gh-link {
   display: inline-flex;
   align-items: center;
@@ -345,5 +397,9 @@ button {
     flex: 0 1 auto;
     padding: 2px 7px;
     font-size: 10px;
+  }
+
+  .data-folder-group .df-path {
+    max-width: 60px;
   }
 }

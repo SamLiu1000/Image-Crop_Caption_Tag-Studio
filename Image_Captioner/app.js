@@ -17,6 +17,13 @@ const RESIZE_FACTOR = 0.75;
 const MAX_PIXELS = 1120 * 1120;
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 5000;
+// 预览条缩略图（显示框 ~64px）
+const THUMB_STRIP_DIMENSION = 160;
+// 结果列表缩略图：显示框 120px，在 125%~200% 显示缩放/高 DPI 下需要 150~240 设备像素，
+// 160px 会被放大而发虚，因此结果图单独用 320px 源。
+const RESULT_THUMB_DIMENSION = 320;
+// 缩略图规格版本：调整尺寸/质量后递增，让已持久化的旧缩略图自动失效并重新生成
+const THUMB_VERSION = 2;
 const CACHE_DB_NAME = 'image-captioner-cache';
 const CACHE_RESULTS_KEY = 'all';
 const CACHE_FOLDERS_KEY = 'folders';
@@ -107,6 +114,10 @@ const I18N = {
     prevPreviewBtn: '上一张',
     nextPreviewBtn: '下一张',
     previewImageAlt: '预览图',
+    thumbSortName: '名称',
+    thumbSortTime: '时间',
+    thumbSortNameHint: '按名称排序（再次点击切换升序 / 降序）',
+    thumbSortTimeHint: '按时间排序（文件修改时间，再次点击切换升序 / 降序）',
     previewPlaceholder: '选择图片目录后，可在这里查看当前处理图片。',
     previewDropHint: '支持拖入单张图片或视频进行导入，并直接生成描述/反推提示词。',
     currentFileLabel: '当前文件',
@@ -281,6 +292,10 @@ const I18N = {
     prevPreviewBtn: 'Previous',
     nextPreviewBtn: 'Next',
     previewImageAlt: 'Preview image',
+    thumbSortName: 'Name',
+    thumbSortTime: 'Time',
+    thumbSortNameHint: 'Sort by name (click again to toggle ascending / descending)',
+    thumbSortTimeHint: 'Sort by time (file modified time; click again to toggle ascending / descending)',
     previewPlaceholder: 'After selecting an image folder, the current image will be previewed here.',
     previewDropHint: 'This area also supports dragging in a single image or video for direct import and caption/prompt generation.',
     currentFileLabel: 'Current File',
@@ -406,7 +421,9 @@ const els = {
   toggleApiKeyBtn: document.getElementById('toggleApiKeyBtn'),
   testConnectionBtn: document.getElementById('testConnectionBtn'),
   saveConfigBtn: document.getElementById('saveConfigBtn'),
-  configPresetSelect: document.getElementById('configPresetSelect'),
+  presetDropdownBtn: document.getElementById('presetDropdownBtn'),
+  presetSelectText: document.getElementById('presetSelectText'),
+  presetDropdown: document.getElementById('presetDropdown'),
   presetNameInput: document.getElementById('presetNameInput'),
   loadPresetBtn: document.getElementById('loadPresetBtn'),
   copyPresetBtn: document.getElementById('copyPresetBtn'),
@@ -455,12 +472,20 @@ const els = {
   clearQueueBtn: document.getElementById('clearQueueBtn'),
   folderQueueList: document.getElementById('folderQueueList'),
   queueCountText: document.getElementById('queueCountText'),
+  thumbSortBar: document.getElementById('thumbSortBar'),
+  thumbSortNameBtn: document.getElementById('thumbSortNameBtn'),
+  thumbSortTimeBtn: document.getElementById('thumbSortTimeBtn'),
 };
+
+// 预览条排序状态：key 为 '' / 'name' / 'time'，dir 为 1（升序）或 -1（降序）
+// listRef 记录被排序的那个数组，用于在换文件夹 / 重新导入时自动复位排序标记
+const thumbSort = { key: '', dir: 1, listRef: null };
 
 const state = {
   files: [],
   currentIndex: -1,
   currentObjectUrl: '',
+  currentPreviewItem: null,
   directoryHandle: null,
   directoryLabel: '',
   singleFileMode: false,
@@ -594,6 +619,16 @@ async function saveResultsToCache() {
   await dbPut('results', stripResultFiles(state.folderResults.map((entry) => ({ ...entry, results: entry.results }))), CACHE_FOLDERS_KEY);
 }
 
+// 后台补齐缩略图后延迟回存：让下次刷新直接命中，不必整目录重新解码
+let saveResultsTimer = 0;
+function scheduleSaveResults(delay = 1200) {
+  if (saveResultsTimer) window.clearTimeout(saveResultsTimer);
+  saveResultsTimer = window.setTimeout(() => {
+    saveResultsTimer = 0;
+    saveResultsToCache();
+  }, delay);
+}
+
 async function loadResultsFromCache() {
   const [single, folders] = await Promise.all([
     dbGet('results', CACHE_RESULTS_KEY),
@@ -616,6 +651,8 @@ async function saveSessionToCache() {
     cacheFolderHandle: state.cacheFolderHandle || null,
     activeFolderName: state.activeFolderName || '',
     folderQueue: (state.folderQueue || []).map((item) => ({ label: item.label, handle: item.handle })),
+    // 浏览状态持久化：缩略条滚动位置（比例），刷新后恢复到上次浏览位置
+    thumbScrollRatio: sessionThumbRatio,
   };
   await dbPut('session', session, CACHE_SESSION_KEY);
 }
@@ -626,6 +663,35 @@ async function loadSessionFromCache() {
 
 /* ---------- 可选缓存文件夹 ---------- */
 
+// 本次页面会话里已扫描过的数据文件夹（Hub 加载与握手时会各下发一次，避免重复扫描）
+let scannedCacheFolderEntry = null;
+
+// 应用统一数据文件夹（由 Hub 顶部公共栏下发，与标签工具的数据文件共用一个目录）。
+// 每次应用都要重新扫描目录：里面有缓存数据时恢复结果列表、文件夹标签与预览条，
+// 与原来面板内「选择缓存文件夹」的行为保持一致。
+async function applyCacheFolder(handle, force = false) {
+  if (!handle) return;
+  state.cacheFolderHandle = handle;
+  updateCacheLocationText();
+  await saveSessionToCache();
+  if (!force && scannedCacheFolderEntry && typeof handle.isSameEntry === 'function') {
+    try {
+      if (await handle.isSameEntry(scannedCacheFolderEntry)) return;
+    } catch {
+      // isSameEntry 不可用/抛错时按新文件夹处理
+    }
+  }
+  scannedCacheFolderEntry = handle;
+  // 无用户手势时 requestPermission 可能失败，这里只做尽力授权，不阻止后面的扫描
+  try {
+    await ensureDirectoryPermission(handle, 'readwrite');
+  } catch {
+    // 忽略：扫描自身会处理权限不足的情况
+  }
+  await scanCacheFolderContent();
+}
+
+// 未嵌入 Hub（直接打开本页）时的本地兜底入口；嵌入时按钮由顶部公共栏代替
 async function chooseCacheFolder() {
   if (typeof window.showDirectoryPicker !== 'function') {
     log('browserNoDirectoryPicker');
@@ -633,11 +699,8 @@ async function chooseCacheFolder() {
   }
   try {
     const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
-    state.cacheFolderHandle = handle;
-    updateCacheLocationText();
-    await saveSessionToCache();
     log('cacheFolderSet', { name: handle.name });
-    await scanCacheFolderContent();
+    await applyCacheFolder(handle, true);
   } catch (error) {
     if (error?.name !== 'AbortError') {
       log('chooseCacheFolderFailed', { error: error.message || error });
@@ -734,15 +797,20 @@ async function collectCacheResults(dirHandle, relPath = '') {
       const txtFile = await (await txtEntry.getFile()).text();
       const caption = (txtFile || '').trim();
       const imageFile = await imageEntry.getFile();
-      let thumbUrl = '';
-      try {
-        thumbUrl = await makeThumbnail(imageFile);
-      } catch {
-        thumbUrl = '';
-      }
       const name = relPath ? `${relPath}/${baseName}` : baseName;
-      // file 仅用于内存中恢复预览，持久化前会被剥离
-      results.push({ name, caption, thumbUrl, file: imageFile });
+      // 缩略图不在此处生成：逐张解码大图会长时间阻塞界面（缩略条迟迟不出现）。
+      // 改为扫描只读字幕 + 保留文件句柄，UI 立即渲染，缩略图由后台任务填充。
+      // size/mtime 作为文件指纹，用于下次刷新时复用已持久化的缩略图（文件没变就不必重新解码）
+      results.push({
+        name,
+        caption,
+        thumbUrl: '',
+        file: imageFile,
+        size: imageFile.size,
+        mtime: imageFile.lastModified,
+        thumbVer: THUMB_VERSION,
+      });
+      await sleep(0); // 大目录扫描时让出主线程，保持界面可响应
     } catch {
       // 单个文件读取失败则跳过
     }
@@ -773,27 +841,87 @@ async function scanCacheFolderContent() {
       }
     }
 
+    // 复用上次已持久化的缩略图：扫描出来的条目本身不带缩略图，若直接覆盖会把
+    // IndexedDB 里存好的缩略图抹掉，导致每次刷新结果区先变空、再整目录重解码。
+    // 只有文件指纹（大小/修改时间）一致时才复用，文件变了仍会重新生成。
+    const priorResults = await loadResultsFromCache().catch(() => ({ single: [], folders: [] }));
+    const priorThumbMap = new Map();
+    const rememberThumb = (item) => {
+      if (item && typeof item.name === 'string' && item.thumbUrl) priorThumbMap.set(item.name, item);
+    };
+    for (const item of priorResults.single) rememberThumb(item);
+    for (const folder of priorResults.folders) {
+      for (const item of folder.results || []) rememberThumb(item);
+    }
+    const reusePriorThumb = (item) => {
+      const prev = priorThumbMap.get(item.name);
+      // 规格版本不一致（缩略图尺寸/质量改过）时不复用，强制重新生成
+      if (!prev || prev.thumbVer !== THUMB_VERSION) return item;
+      if (typeof prev.size !== 'number' || prev.size !== item.size) return item;
+      if (typeof prev.mtime === 'number' && prev.mtime !== item.mtime) return item;
+      return { ...item, thumbUrl: prev.thumbUrl };
+    };
+
     // 以缓存为准覆盖当前结果，并为恢复的条目分配递增 id
     let seq = 0;
-    const withIds = (results) => results.map((item) => ({ ...item, id: ++seq }));
+    const withIds = (results) => results.map((item) => ({ ...reusePriorThumb(item), id: ++seq }));
     state.singleResults = withIds(single);
     state.folderResults = folders.map((folder) => ({ ...folder, results: withIds(folder.results) }));
     state.resultSeq = seq;
 
-    // 预览恢复：有文件夹上下文时保持当前文件夹（不因扫描缓存而切换模式/视图）；
-    // 独立单图（无文件夹）则恢复单图缓存预览。
-    if (!state.directoryHandle) {
-      await restoreSinglePreviewFromCache();
-      enterSingleView();
-    } else if (state.directoryLabel && getFolderEntry(state.directoryLabel)) {
-      enterFolderView(state.directoryLabel);
-    } else {
-      enterSingleView();
+    // 读取刷新前的会话，恢复用户上次所在的视图/当前图片/缩略条滚动位置
+    const prior = await loadSessionFromCache().catch(() => null);
+    const priorActive = prior && typeof prior.activeFolderName === 'string' ? prior.activeFolderName : null;
+    const priorIndex = Number(prior?.currentIndex) || 0;
+    const priorRatio = Number(prior?.thumbScrollRatio) || 0;
+
+    try {
+      if (state.directoryHandle) {
+        // 正在处理真实文件夹：state.files 是该目录的真实列表，保留不动，只还原视图与当前图片
+        if (priorActive && getFolderEntry(priorActive)) {
+          enterFolderView(priorActive);
+        } else if (priorActive === '') {
+          enterSingleView();
+        } else if (state.directoryLabel && getFolderEntry(state.directoryLabel)) {
+          enterFolderView(state.directoryLabel);
+        } else {
+          enterSingleView();
+        }
+        if (state.files.length && priorIndex < state.files.length) state.currentIndex = priorIndex;
+        renderThumbStrip();
+        await renderPreview();
+      } else if (priorActive && getFolderEntry(priorActive)) {
+        // 上次在看某个文件夹结果：用缓存副本重建该文件夹预览
+        enterFolderView(priorActive);
+        await restoreFolderPreviewFromCache(priorActive, priorIndex);
+      } else if (priorActive === '') {
+        // 上次在单图视图：恢复单图缓存预览
+        await restoreSinglePreviewFromCache(priorIndex);
+        enterSingleView();
+      } else if (state.directoryLabel && getFolderEntry(state.directoryLabel)) {
+        enterFolderView(state.directoryLabel);
+      } else {
+        await restoreSinglePreviewFromCache(0);
+        enterSingleView();
+      }
+    } finally {
+      // 还原缩略条滚动位置（不强制滚回当前选中项）
+      sessionThumbRatio = priorRatio;
+      applyThumbScrollRatio(priorRatio);
     }
+    // 首帧渲染后可能被滚动定位再次改写，等布局稳定后重放一次并补存会话
+    const settleApply = () => requestAnimationFrame(() => requestAnimationFrame(() => {
+      applyThumbScrollRatio(priorRatio);
+      sessionThumbRatio = priorRatio;
+      saveSessionToCache();
+    }));
     renderFolderChips();
+    settleApply();
     saveResultsToCache();
     saveSessionToCache();
     log('cacheScanned', { single: state.singleResults.length, folders: state.folderResults.length });
+    // 缩略图后台填充：预览条没有引用到的结果（如只读文件夹视图）也在后台补上
+    fillUnreferencedResultThumbs();
   } catch (error) {
     log('cacheScanFailed', { error: error.message || error });
   }
@@ -803,6 +931,9 @@ async function scanCacheFolderContent() {
 
 const HUB_EXPORT_MESSAGE = 'captioner:export-data';
 const HUB_IMPORT_MESSAGE = 'captioner:import-data';
+// Hub 顶部公共栏：统一数据文件夹（缓存目录）
+const HUB_SET_DATA_FOLDER = 'studio:set-data-folder';
+const HUB_FRAME_READY = 'studio:frame-ready';
 const PENDING_IMPORT_KEY = 'captioner-pending-import';
 
 function buildExportData() {
@@ -979,9 +1110,13 @@ function setupHubBridge() {
   window.addEventListener('message', (event) => {
     const { type } = event.data || {};
     if (type === HUB_EXPORT_MESSAGE) {
-      // Hub 请求导出数据
+      // Hub 请求导出数据：回带 requestId 让 Hub 能配对到本次请求
       event.source?.postMessage(
-        { type: `${HUB_EXPORT_MESSAGE}:reply`, payload: buildExportData() },
+        {
+          type: `${HUB_EXPORT_MESSAGE}:reply`,
+          requestId: event.data.requestId,
+          payload: buildExportData(),
+        },
         { targetOrigin: '*' },
       );
     } else if (type === HUB_IMPORT_MESSAGE) {
@@ -992,8 +1127,20 @@ function setupHubBridge() {
           { targetOrigin: '*' },
         );
       });
+    } else if (type === HUB_SET_DATA_FOLDER) {
+      // Hub 顶部公共栏选定了统一数据文件夹
+      if (event.data.handle) applyCacheFolder(event.data.handle).catch(() => {});
     }
   });
+
+  // 通知 Hub 本页已就绪，索取当前统一数据文件夹（避免加载时序导致漏发）
+  if (window.parent && window.parent !== window) {
+    try {
+      window.parent.postMessage({ type: HUB_FRAME_READY }, '*');
+    } catch {
+      // 忽略跨域同步失败
+    }
+  }
 }
 
 // 把当前导出数据同步到 sessionStorage，供 Hub 导出时读取（同源共享，规避 postMessage 时序）
@@ -1070,9 +1217,10 @@ async function toggleFolderView(name) {
 }
 
 // 用缓存扫描得到的单图结果文件重建预览列表（跨浏览器导入配置后的恢复路径）
-async function restoreSinglePreviewFromCache() {
-  const files = state.singleResults.map((item) => item.file).filter(Boolean);
-  if (!files.length) return false;
+async function restoreSinglePreviewFromCache(index = 0) {
+  const entries = state.singleResults.filter((item) => item.file);
+  if (!entries.length) return false;
+  const files = entries.map((item) => item.file);
   const unchanged = state.files.length === files.length
     && state.files.every((item, index) => item.sourceFile === files[index]);
   if (unchanged) return true;
@@ -1081,8 +1229,15 @@ async function restoreSinglePreviewFromCache() {
   state.directoryLabel = '';
   els.folderPathInput.value = '';
   state.singleFileSource = files[files.length - 1];
-  state.files = files.map((fileObj) => createVirtualFileItem(fileObj));
-  state.currentIndex = 0;
+  // 复用扫描时已生成的缩略图（entry.thumbUrl），避免恢复后再整张解码一次；
+  // _entry 让后台缩略图任务解码一次即可同时更新结果列表与预览条
+  state.files = entries.map((entry) => {
+    const v = createVirtualFileItem(entry.file);
+    v._entry = entry;
+    if (entry.thumbUrl) v.thumbUrl = entry.thumbUrl;
+    return v;
+  });
+  state.currentIndex = Math.min(Math.max(0, Number(index) || 0), state.files.length - 1);
   syncStats();
   renderModeToggle();
   renderThumbStrip();
@@ -1092,21 +1247,28 @@ async function restoreSinglePreviewFromCache() {
 }
 
 // 用文件夹结果在缓存中的原图副本重建预览列表
-async function restoreFolderPreviewFromCache(name) {
+async function restoreFolderPreviewFromCache(name, index = 0) {
   const entry = getFolderEntry(name);
-  const files = (entry?.results || []).map((item) => item.file).filter(Boolean);
-  if (!files.length) return false;
+  const entries = (entry?.results || []).filter((item) => item.file);
+  if (!entries.length) return false;
   state.singleFileMode = false;
   state.directoryHandle = null;
   state.directoryLabel = entry.name;
   els.folderPathInput.value = entry.name;
-  state.files = files.map((fileObj) => createVirtualFileItem(fileObj));
-  state.currentIndex = 0;
+  // 复用扫描时已生成的缩略图（entry.thumbUrl），避免恢复后再整张解码一次；
+  // _entry 让后台缩略图任务解码一次即可同时更新结果列表与预览条
+  state.files = entries.map((item) => {
+    const v = createVirtualFileItem(item.file);
+    v._entry = item;
+    if (item.thumbUrl) v.thumbUrl = item.thumbUrl;
+    return v;
+  });
+  state.currentIndex = Math.min(Math.max(0, Number(index) || 0), state.files.length - 1);
   syncStats();
   renderModeToggle();
   renderThumbStrip();
   await renderPreview();
-  log('cachePreviewRestored', { count: files.length });
+  log('cachePreviewRestored', { count: entries.length });
   return true;
 }
 
@@ -1410,6 +1572,10 @@ async function restoreCachedSession() {
     loadResultsFromCache(),
     loadSessionFromCache(),
   ]);
+  // 记住上次的滚动位置，供本会话内其它保存沿用（避免初始化中间态覆盖成 0）
+  if (cachedSession && typeof cachedSession.thumbScrollRatio === 'number') {
+    sessionThumbRatio = cachedSession.thumbScrollRatio;
+  }
 
   state.singleResults = Array.isArray(cachedResults.single) ? cachedResults.single : [];
   state.folderResults = Array.isArray(cachedResults.folders) ? cachedResults.folders : [];
@@ -1487,8 +1653,17 @@ function buildResultItem(entry) {
   item.dataset.resultName = entry.name;
 
   const thumb = document.createElement('img');
+  thumb.draggable = false; // 关闭原生图片拖拽
   if (entry.thumbUrl) {
     thumb.src = entry.thumbUrl;
+    // 兜底：持久化的缩略图若损坏（刷新后偶发破图），退回占位并让后台重新生成
+    thumb.addEventListener('error', () => {
+      thumb.removeAttribute('src');
+      thumb.classList.add('result-thumb-missing');
+      entry.thumbUrl = '';
+      scheduleSaveResults();
+      fillUnreferencedResultThumbs();
+    }, { once: true });
   } else {
     thumb.className = 'result-thumb-missing';
   }
@@ -1609,7 +1784,7 @@ function getActiveResultsTarget() {
 
 function addResultEntry(name, caption, thumbUrl) {
   state.resultSeq += 1;
-  const entry = { id: state.resultSeq, name, caption, thumbUrl };
+  const entry = { id: state.resultSeq, name, caption, thumbUrl, thumbVer: THUMB_VERSION };
   const target = getActiveResultsTarget();
   // 同一文件名已存在结果时（多次处理同一文件夹），替换旧条目避免重复
   const existingIndex = target.findIndex((item) => item.name === name);
@@ -1644,6 +1819,7 @@ function applyI18n() {
   updateCacheLocationText();
   renderFolderChips();
   renderModeToggle();
+  updateThumbSortButtons();
   renderQueue();
   if (state.pendingFolderLabel && els.restoreFolderBtn && !els.restoreFolderBtn.hidden) {
     els.restoreFolderBtn.textContent = t('restoreFolderBtn', { name: state.pendingFolderLabel || '' });
@@ -1709,30 +1885,65 @@ function persistPresets() {
   localStorage.setItem(PRESETS_KEY, JSON.stringify(state.presets));
 }
 
-function updatePresetSelectOptions() {
-  if (!els.configPresetSelect) return;
-  const previousValue = state.activePresetName || els.configPresetSelect.value;
-  els.configPresetSelect.innerHTML = '';
-
-  const placeholderOption = document.createElement('option');
-  placeholderOption.value = '';
-  placeholderOption.textContent = t('presetSelectPlaceholder');
-  els.configPresetSelect.appendChild(placeholderOption);
-
-  for (const preset of state.presets) {
-    const option = document.createElement('option');
-    option.value = preset.name;
-    option.textContent = preset.name;
-    els.configPresetSelect.appendChild(option);
+// 已保存配置的自定义下拉列表（原生 select 的弹出层跟随系统样式，无法与主题统一）
+function renderPresetDropdownList() {
+  const list = els.presetDropdown;
+  if (!list) return;
+  list.innerHTML = '';
+  const entries = [{ name: '', label: t('presetSelectPlaceholder'), placeholder: true }]
+    .concat(state.presets.map((preset) => ({ name: preset.name, label: preset.name })));
+  for (const entry of entries) {
+    const item = document.createElement('div');
+    item.className = 'combobox-option';
+    if (entry.placeholder) item.classList.add('preset-option-placeholder');
+    if (state.activePresetName === entry.name) item.classList.add('active');
+    item.textContent = entry.label;
+    item.addEventListener('mousedown', (event) => {
+      event.preventDefault(); // 先于外部点击关闭逻辑处理
+      selectPresetOption(entry.name);
+    });
+    list.appendChild(item);
   }
+}
 
-  const nextValue = state.presets.some((preset) => preset.name === previousValue) ? previousValue : '';
+function selectPresetOption(name) {
+  state.activePresetName = name;
+  closePresetDropdown();
+  updatePresetSelectOptions();
+  // 与原来原生下拉的 change 行为一致：选中即载入该配置
+  if (name) loadSelectedPreset({ shouldLog: false });
+}
+
+function closePresetDropdown() {
+  if (!els.presetDropdown || els.presetDropdown.hidden) return;
+  els.presetDropdown.hidden = true;
+  els.presetDropdownBtn?.setAttribute('aria-expanded', 'false');
+}
+
+function togglePresetDropdown() {
+  if (!els.presetDropdown || !els.presetDropdownBtn) return;
+  if (!els.presetDropdown.hidden) {
+    closePresetDropdown();
+    return;
+  }
+  renderPresetDropdownList();
+  els.presetDropdown.hidden = false;
+  els.presetDropdownBtn.setAttribute('aria-expanded', 'true');
+}
+
+function updatePresetSelectOptions() {
+  const nextValue = state.presets.some((preset) => preset.name === state.activePresetName)
+    ? state.activePresetName
+    : '';
   state.activePresetName = nextValue;
-  els.configPresetSelect.value = nextValue;
 
+  if (els.presetSelectText) {
+    els.presetSelectText.textContent = nextValue || t('presetSelectPlaceholder');
+  }
   if (els.presetNameInput) {
     els.presetNameInput.value = nextValue;
   }
+  renderPresetDropdownList();
 }
 
 function applyConfig(config) {
@@ -1779,7 +1990,7 @@ function saveConfigAsPreset() {
 
 function loadSelectedPreset(options = {}) {
   const { shouldLog = true } = options;
-  const presetName = els.configPresetSelect.value;
+  const presetName = state.activePresetName;
   if (!presetName) {
     if (shouldLog) log('presetLoadMissing');
     return;
@@ -1801,7 +2012,7 @@ function loadSelectedPreset(options = {}) {
 }
 
 function deleteSelectedPreset() {
-  const presetName = els.configPresetSelect.value;
+  const presetName = state.activePresetName;
   if (!presetName) {
     log('presetDeleteMissing');
     return;
@@ -1816,7 +2027,7 @@ function deleteSelectedPreset() {
 }
 
 function copySelectedPreset() {
-  const sourceName = els.configPresetSelect.value;
+  const sourceName = state.activePresetName;
   if (!sourceName) {
     log('presetLoadMissing');
     return;
@@ -2197,13 +2408,126 @@ function buildThumbImage(thumbUrl, name) {
   const img = document.createElement('img');
   img.src = thumbUrl;
   img.alt = name;
+  img.draggable = false; // 关闭原生图片拖拽，避免点击时轻微移动被当成拖动
   return img;
 }
 
+// 刷新排序按钮文案与箭头（语言切换时也要重跑，因此不依赖 data-i18n）
+function updateThumbSortButtons() {
+  if (!els.thumbSortNameBtn || !els.thumbSortTimeBtn) return;
+  const arrowFor = (key) => (thumbSort.key === key ? (thumbSort.dir > 0 ? ' ↑' : ' ↓') : '');
+  els.thumbSortNameBtn.textContent = t('thumbSortName') + arrowFor('name');
+  els.thumbSortTimeBtn.textContent = t('thumbSortTime') + arrowFor('time');
+  els.thumbSortNameBtn.classList.toggle('active', thumbSort.key === 'name');
+  els.thumbSortTimeBtn.classList.toggle('active', thumbSort.key === 'time');
+  els.thumbSortNameBtn.title = t('thumbSortNameHint');
+  els.thumbSortTimeBtn.title = t('thumbSortTimeHint');
+}
+
+// 读取每个文件的修改时间并缓存到 item.mtime（浏览器不提供真正的「创建时间」）
+async function ensureFileTimestamps() {
+  for (const item of state.files) {
+    if (typeof item.mtime === 'number') continue;
+    try {
+      const file = item.sourceFile || await item.handle.getFile();
+      item.mtime = file.lastModified || 0;
+    } catch {
+      item.mtime = 0;
+    }
+  }
+}
+
+// 排序偏好持久化：刷新页面后继续沿用上次的名称 / 时间排序
+const THUMB_SORT_STORAGE_KEY = 'image-captioner-thumb-sort';
+
+function loadThumbSort() {
+  try {
+    const raw = localStorage.getItem(THUMB_SORT_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (parsed && (parsed.key === 'name' || parsed.key === 'time')) {
+      thumbSort.key = parsed.key;
+      thumbSort.dir = parsed.dir === -1 ? -1 : 1;
+    }
+  } catch {
+    // 读取失败时保持默认顺序
+  }
+}
+
+function saveThumbSort() {
+  try {
+    localStorage.setItem(
+      THUMB_SORT_STORAGE_KEY,
+      JSON.stringify({ key: thumbSort.key, dir: thumbSort.dir }),
+    );
+  } catch {
+    // 忽略存储不可用
+  }
+}
+
+// 同步重排 state.files。缓存恢复的条目带 sourceFile，可同步读修改时间；
+// 只有目录句柄类文件才需要异步读盘。返回是否已同步排好。
+function sortThumbFilesSync() {
+  if (!thumbSort.key || state.files.length < 2) return true;
+  for (const item of state.files) {
+    if (item.sourceFile && typeof item.mtime !== 'number') {
+      item.mtime = item.sourceFile.lastModified || 0;
+    }
+  }
+  const key = thumbSort.key;
+  const factor = thumbSort.dir;
+  const needMtime = key === 'time' && state.files.some((item) => typeof item.mtime !== 'number');
+  if (needMtime) return false;
+  const current = state.files[state.currentIndex];
+  state.files.sort((a, b) => {
+    const diff = key === 'time'
+      ? (a.mtime || 0) - (b.mtime || 0)
+      : String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true, sensitivity: 'base' });
+    return diff * factor;
+  });
+  if (current) {
+    const index = state.files.indexOf(current);
+    state.currentIndex = index >= 0 ? index : Math.max(0, state.files.length - 1);
+  }
+  thumbSort.listRef = state.files;
+  return true;
+}
+
+// 把记住的排序偏好应用到最新文件列表；时间排序缺修改时间时先异步补齐再重绘一次
+function applyThumbSortToFiles() {
+  if (!thumbSort.key || thumbSort.listRef === state.files) return;
+  thumbSort.listRef = state.files;
+  if (sortThumbFilesSync()) return;
+  const filesRef = state.files;
+  ensureFileTimestamps().then(() => {
+    if (thumbSort.listRef !== filesRef) return; // 期间列表又换了，交由下一次渲染
+    sortThumbFilesSync();
+    if (thumbSort.listRef === state.files) renderThumbStrip();
+  });
+}
+
+// 按名称 / 时间排序预览条（同一个按钮再次点击切换升序与降序）
+function sortThumbStrip(key) {
+  if (!state.files.length) return;
+  if (thumbSort.key === key) {
+    thumbSort.dir = -thumbSort.dir;
+  } else {
+    thumbSort.key = key;
+    thumbSort.dir = 1;
+  }
+  saveThumbSort();
+  thumbSort.listRef = null; // 让 renderThumbStrip 在绘制前按新偏好重排
+  updateThumbSortButtons();
+  renderThumbStrip();
+}
+
 function renderThumbStrip() {
+  // 文件列表被整体替换（换文件夹 / 重新导入 / 刷新后恢复）时，按记住的排序偏好重排
+  if (thumbSort.key) applyThumbSortToFiles();
   state.thumbToken += 1;
   els.thumbStrip.innerHTML = '';
   els.thumbStrip.hidden = !state.files.length;
+  if (els.thumbSortBar) els.thumbSortBar.hidden = !state.files.length;
   state.files.forEach((item, index) => {
     const cell = document.createElement('button');
     cell.type = 'button';
@@ -2218,23 +2542,57 @@ function renderThumbStrip() {
       pending.textContent = '…';
       cell.appendChild(pending);
     }
-    cell.addEventListener('click', () => {
-      state.currentIndex = index;
-      renderPreview();
+    cell.addEventListener('pointerdown', (event) => {
+      // 记录按下位置；selection 由容器级 pointerup 统一判定（避免 click 被取消/被重建吞掉）
+      thumbPress = { index, x: event.clientX, y: event.clientY };
     });
     els.thumbStrip.appendChild(cell);
   });
   updateThumbStripCurrent();
   generateThumbnailsInBackground();
+  // 重建后按记住的滚动位置定位；用户滚动时 captureThumbScrollRatio 会实时更新该值
+  applyThumbScrollRatio(sessionThumbRatio);
+}
+
+// 浏览状态持久化：恢复上次视图 / 当前图片时，不要强制把缩略条滚回当前项，
+// 而是按上次的滚动比例还原（渲染阶段不自动滚动，滚动只发生在用户点击缩略图时）
+// sessionThumbRatio 只在用户滚动或恢复时更新；保存会话时用它，避免初始化阶段的
+// 中间渲染把已保存的滚动位置覆盖成 0。
+let sessionThumbRatio = 0;
+
+function captureThumbScrollRatio() {
+  const s = els.thumbStrip;
+  if (!s || s.scrollHeight <= s.clientHeight) {
+    sessionThumbRatio = 0;
+    return 0;
+  }
+  sessionThumbRatio = Math.min(1, Math.max(0, s.scrollTop / (s.scrollHeight - s.clientHeight)));
+  return sessionThumbRatio;
+}
+
+// 缩略图选择：用 pointerdown/up 判定（微小的按下移动不会让浏览器取消 click），
+// 并容忍缩略条在按下与抬起之间被重建（记录按下的目标，抬起时仍执行）
+let thumbPress = null;
+let previewSeq = 0;
+
+function activateThumbIndex(index) {
+  if (index < 0 || index >= state.files.length) return;
+  state.currentIndex = index;
+  renderPreview();
+  const cell = els.thumbStrip.querySelector(`.thumb-cell[data-index="${index}"]`);
+  if (cell) cell.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
+function applyThumbScrollRatio(ratio) {
+  const s = els.thumbStrip;
+  if (!s || !ratio || s.scrollHeight <= s.clientHeight) return;
+  s.scrollTop = ratio * (s.scrollHeight - s.clientHeight);
 }
 
 function updateThumbStripCurrent() {
   for (const cell of els.thumbStrip.querySelectorAll('.thumb-cell')) {
     const index = Number(cell.dataset.index);
     cell.classList.toggle('current', index === state.currentIndex);
-    if (index === state.currentIndex) {
-      cell.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    }
   }
 }
 
@@ -2244,13 +2602,31 @@ async function generateThumbnailsInBackground() {
     if (token !== state.thumbToken) return; // 文件列表已更换，中止旧任务
     const item = state.files[index];
     if (item.thumbUrl !== undefined) continue;
+    let pair = null;
     try {
-      const file = await item.handle.getFile();
-      item.thumbUrl = await makeThumbnail(file);
+      // 会话内复用已取到的 File：后台缩略图取过后，预览大图不必再 getFile 一次
+      let file = item.file;
+      if (!file) {
+        file = await item.handle.getFile();
+        item.file = file;
+      }
+      // 一次解码同时得到预览条缩略图与结果列表缩略图（后者更大，避免高分屏下发虚）
+      pair = await makeThumbnailPair(file, THUMB_STRIP_DIMENSION, RESULT_THUMB_DIMENSION);
+      item.thumbUrl = pair.small;
     } catch {
       item.thumbUrl = '';
     }
     if (token !== state.thumbToken) return;
+    // 结果列表条目若还没有缩略图，用同一张位图产出的结果尺寸版本补上
+    if (item._entry) {
+      const entry = item._entry;
+      if (!entry.thumbUrl && pair && pair.big) {
+        entry.thumbUrl = pair.big;
+        entry.thumbVer = THUMB_VERSION;
+        refreshResultThumb(entry);
+        scheduleSaveResults();
+      }
+    }
     const cell = els.thumbStrip.querySelector(`.thumb-cell[data-index="${index}"]`);
     if (cell) {
       const pending = cell.querySelector('.thumb-pending');
@@ -2263,12 +2639,74 @@ async function generateThumbnailsInBackground() {
   }
 }
 
-async function renderPreview() {
-  if (state.currentObjectUrl) {
-    URL.revokeObjectURL(state.currentObjectUrl);
-    state.currentObjectUrl = '';
+// 结果列表里 <img> 的缩略图更新（result 条目可能尚未渲染，因此找不到就跳过）
+function refreshResultThumb(entry) {
+  if (!els.resultList || !entry.thumbUrl) return;
+  const node = els.resultList.querySelector(
+    `.result-item[data-result-name="${CSS.escape(entry.name)}"]`,
+  );
+  if (!node) return;
+  const img = node.querySelector('img');
+  if (img && !img.src) {
+    img.src = entry.thumbUrl;
+    img.classList.remove('result-thumb-missing');
   }
+}
+
+// 扫描后没有被预览条引用的结果（例如只读文件夹视图的结果）在此后台补缩略图。
+// 若已有一次填充在跑，只登记「待补」，等它跑完再接着补——直接返回会让这批条目永远空着。
+async function fillUnreferencedResultThumbs() {
+  if (state._thumbFillBusy) {
+    state._thumbFillPending = true;
+    return;
+  }
+  state._thumbFillBusy = true;
+  try {
+    for (let round = 0; round < 4; round += 1) {
+      state._thumbFillPending = false;
+      const targets = [];
+      for (const entry of state.singleResults) {
+        if (!entry.thumbUrl && entry.file) targets.push(entry);
+      }
+      for (const folder of state.folderResults) {
+        for (const entry of folder.results) {
+          if (!entry.thumbUrl && entry.file) targets.push(entry);
+        }
+      }
+      // 已被预览条 item 引用（item._entry === entry）的由 generateThumbnailsInBackground 处理
+      const referenced = new Set(
+        state.files.filter((item) => item._entry).map((item) => item._entry),
+      );
+      let filled = 0;
+      for (const entry of targets) {
+        if (referenced.has(entry)) continue;
+        if (!entry.file || entry.thumbUrl) continue;
+        try {
+          entry.thumbUrl = await makeThumbnail(entry.file, RESULT_THUMB_DIMENSION);
+          entry.thumbVer = THUMB_VERSION;
+          refreshResultThumb(entry);
+          filled += 1;
+        } catch {
+          entry.thumbUrl = '';
+        }
+        await sleep(0);
+      }
+      // 回存补齐的缩略图，下次刷新直接命中（否则每次刷新都会把整目录重新解码一遍）
+      if (filled) scheduleSaveResults();
+      if (!state._thumbFillPending) break;
+    }
+  } finally {
+    state._thumbFillBusy = false;
+  }
+}
+
+async function renderPreview() {
   if (state.currentIndex < 0 || state.currentIndex >= state.files.length) {
+    if (state.currentObjectUrl) {
+      URL.revokeObjectURL(state.currentObjectUrl);
+      state.currentObjectUrl = '';
+    }
+    state.currentPreviewItem = null;
     els.previewImage.removeAttribute('src');
     els.previewImage.hidden = true;
     els.previewVideo.removeAttribute('src');
@@ -2280,8 +2718,30 @@ async function renderPreview() {
     syncStats();
     return;
   }
+  // 快速连点/切换时，只让最后一次渲染生效（前面的异步读取结果作废）
+  const seq = ++previewSeq;
   const item = state.files[state.currentIndex];
-  const file = await item.handle.getFile();
+  // 当前预览的就是这一条：不必重复读盘/解码（再次点击当前缩略图、刷新中间态时）
+  if (state.currentPreviewItem === item && state.currentObjectUrl) {
+    els.previewPlaceholder.hidden = true;
+    els.thumbStrip.hidden = false;
+    els.currentFileText.textContent = item.relativePath;
+    syncStats();
+    updateThumbStripCurrent();
+    return;
+  }
+  if (state.currentObjectUrl) {
+    URL.revokeObjectURL(state.currentObjectUrl);
+    state.currentObjectUrl = '';
+  }
+  // 会话内复用已取过的 File（后台缩略图或上次预览已读过就不再 getFile）
+  let file = item.file;
+  if (!file) {
+    file = await item.handle.getFile();
+    if (seq !== previewSeq) return; // 已有更新的选择
+    item.file = file;
+  }
+  state.currentPreviewItem = item;
   state.currentObjectUrl = URL.createObjectURL(file);
   els.previewPlaceholder.hidden = true;
   els.thumbStrip.hidden = false;
@@ -2292,6 +2752,8 @@ async function renderPreview() {
   const isVideo = isVideoName(item.name);
   els.previewImage.hidden = isVideo;
   els.previewVideo.hidden = !isVideo;
+  els.previewImage.draggable = false;
+  els.previewVideo.draggable = false;
   if (isVideo) {
     els.previewVideo.src = state.currentObjectUrl;
     // 生成首帧海报，确保未播放时也能看到画面（解码失败则忽略）
@@ -2440,20 +2902,61 @@ async function makeVideoThumbnail(file, maxDimension = 160) {
   }
 }
 
-async function makeThumbnail(file, maxDimension = 160) {
-  if (isVideoName(file.name)) {
-    return makeVideoThumbnail(file, maxDimension);
-  }
-  const imageUrl = await fileToDataUrl(file);
-  const image = await loadImage(imageUrl);
-  const ratio = Math.min(1, maxDimension / image.width, maxDimension / image.height);
-  const width = Math.max(1, Math.round(image.width * ratio));
-  const height = Math.max(1, Math.round(image.height * ratio));
+// 把已解码的源（ImageBitmap 或 HTMLImageElement）缩到最长边 maxDimension 并编码成 JPEG
+function drawThumbFromSource(source, maxDimension) {
+  const ratio = Math.min(1, maxDimension / source.width, maxDimension / source.height);
+  const width = Math.max(1, Math.round(source.width * ratio));
+  const height = Math.max(1, Math.round(source.height * ratio));
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
-  canvas.getContext('2d').drawImage(image, 0, 0, width, height);
+  canvas.getContext('2d').drawImage(source, 0, 0, width, height);
   return canvas.toDataURL('image/jpeg', 0.8);
+}
+
+// 优先用 createImageBitmap 解码（解码在浏览器解码线程，主线程只做一次小尺寸绘制），
+// 不支持或失败时退回「读成 base64 → <img>」的兼容路径
+async function decodeImageSource(file) {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      return { source: await createImageBitmap(file), owned: true };
+    } catch {
+      // 该格式不支持 createImageBitmap（或解码失败）时走兼容路径
+    }
+  }
+  return { source: await loadImage(await fileToDataUrl(file)), owned: false };
+}
+
+function releaseImageSource({ source, owned }) {
+  if (owned && source && typeof source.close === 'function') source.close();
+}
+
+async function makeThumbnail(file, maxDimension = THUMB_STRIP_DIMENSION) {
+  if (isVideoName(file.name)) {
+    return makeVideoThumbnail(file, maxDimension);
+  }
+  const decoded = await decodeImageSource(file);
+  try {
+    return drawThumbFromSource(decoded.source, maxDimension);
+  } finally {
+    releaseImageSource(decoded);
+  }
+}
+
+// 一次解码同时产出预览条（小）与结果列表（大）两种缩略图，避免同一张图解码两次
+async function makeThumbnailPair(file, smallDim, bigDim) {
+  if (isVideoName(file.name)) {
+    const small = await makeVideoThumbnail(file, smallDim);
+    return { small, big: smallDim === bigDim ? small : await makeVideoThumbnail(file, bigDim) };
+  }
+  const decoded = await decodeImageSource(file);
+  try {
+    const small = drawThumbFromSource(decoded.source, smallDim);
+    const big = smallDim === bigDim ? small : drawThumbFromSource(decoded.source, bigDim);
+    return { small, big };
+  } finally {
+    releaseImageSource(decoded);
+  }
 }
 
 function buildAbortSignal(timeoutSeconds) {
@@ -2717,7 +3220,7 @@ async function processItem(item, config, combineMode, progressSet, singleExistin
   }
   let thumbUrl = '';
   try {
-    thumbUrl = await makeThumbnail(file);
+    thumbUrl = await makeThumbnail(file, RESULT_THUMB_DIMENSION);
   } catch {
     thumbUrl = '';
   }
@@ -3150,11 +3653,15 @@ function bindEvents() {
   els.loadPresetBtn.addEventListener('click', () => loadSelectedPreset());
   els.copyPresetBtn.addEventListener('click', copySelectedPreset);
   els.deletePresetBtn.addEventListener('click', deleteSelectedPreset);
-  els.configPresetSelect.addEventListener('change', () => {
-    state.activePresetName = els.configPresetSelect.value;
-    if (state.activePresetName) {
-      loadSelectedPreset({ shouldLog: false });
-    }
+  els.presetDropdownBtn.addEventListener('click', togglePresetDropdown);
+  document.addEventListener('mousedown', (event) => {
+    if (!els.presetDropdown || els.presetDropdown.hidden) return;
+    if (els.presetDropdownBtn?.contains(event.target)) return;
+    if (els.presetDropdown.contains(event.target)) return;
+    closePresetDropdown();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closePresetDropdown();
   });
   els.chooseFolderBtn.addEventListener('click', chooseFolder);
   els.addToQueueBtn.addEventListener('click', addToQueue);
@@ -3216,11 +3723,57 @@ function bindEvents() {
   els.chooseCacheFolderBtn.addEventListener('click', chooseCacheFolder);
   els.clearCacheBtn.addEventListener('click', clearCache);
   els.restoreFolderBtn.addEventListener('click', tryRestoreFolderSession);
+
+  // 嵌入 Hub 时「选择缓存文件夹」入口在顶部公共栏；「删除选中」要先在本面板高亮目标，故留在原位
+  const embeddedInHub = window.parent && window.parent !== window;
+  els.chooseCacheFolderBtn.hidden = embeddedInHub;
+
+  els.thumbSortNameBtn.addEventListener('click', () => { sortThumbStrip('name'); });
+  els.thumbSortTimeBtn.addEventListener('click', () => { sortThumbStrip('time'); });
+  updateThumbSortButtons();
+
+  // 缩略条滚动时记住位置（比例），滚停后写入会话，供刷新后恢复浏览位置
+  let thumbScrollTimer = null;
+  els.thumbStrip.addEventListener('scroll', () => {
+    captureThumbScrollRatio();
+    if (thumbScrollTimer) window.clearTimeout(thumbScrollTimer);
+    thumbScrollTimer = window.setTimeout(() => saveSessionToCache(), 350);
+  });
+
+  // 缩略图选择（容器级委托）：抬起且移动很小时触发；即使列表在按下后重建也不会丢
+  els.thumbStrip.addEventListener('pointerdown', (event) => {
+    // 按在单元格以外的区域（缝隙/滚动条）时清空，避免误选上一次的按下
+    if (!event.target.closest || !event.target.closest('.thumb-cell')) thumbPress = null;
+  });
+  els.thumbStrip.addEventListener('pointerup', (event) => {
+    if (!thumbPress) return;
+    const dx = event.clientX - thumbPress.x;
+    const dy = event.clientY - thumbPress.y;
+    if (dx * dx + dy * dy > 100) {
+      // 移动超过阈值，视为拖拽/滑动，不做选择
+      thumbPress = null;
+      return;
+    }
+    activateThumbIndex(thumbPress.index);
+    thumbPress = null;
+  });
+  els.thumbStrip.addEventListener('pointercancel', () => {
+    thumbPress = null;
+  });
+
+  // 兜底：任何以 <img>/<video> 为源的原生拖拽一律取消（防止点击带出图片幽灵拖拽）
+  document.addEventListener('dragstart', (event) => {
+    const t = event.target;
+    if (t && (t.tagName === 'IMG' || t.tagName === 'VIDEO')) {
+      event.preventDefault();
+    }
+  });
 }
 
 async function init() {
   loadPresets();
   loadConfig();
+  loadThumbSort();
   resetCounters();
   renderPreview();
   renderResults();

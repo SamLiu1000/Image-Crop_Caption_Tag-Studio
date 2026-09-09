@@ -13,6 +13,8 @@ const langToggleBtn = document.getElementById('langToggleBtn');
 const themeToggleBtn = document.getElementById('themeToggleBtn');
 const exportConfigBtn = document.getElementById('exportConfigBtn');
 const importConfigBtn = document.getElementById('importConfigBtn');
+const dataFolderText = document.getElementById('dataFolderText');
+const chooseDataFolderBtn = document.getElementById('chooseDataFolderBtn');
 
 const I18N = {
   zh: {
@@ -45,10 +47,15 @@ const I18N = {
     catCaptioner: '图片描述',
     catCaptionerDesc: '配置 / 提示词 / 预设 / 进度 / 结果',
     catTagtool: '标签工具',
-    catTagtoolDesc: '分组与标签',
+    catTagtoolDesc: '分组 / 标签 / 预览图',
     importError: '❌ 配置导入失败',
     exportError: '❌ 配置导出失败',
     importInvalid: '❌ 无效的配置文件',
+    dataFolderLabel: '选择数据缓存位置：',
+    dataFolderDefault: '浏览器本地',
+    chooseDataFolder: '选择数据缓存位置（图片描述的缓存与标签工具的数据文件共用）',
+    dataFolderUnsupported: '当前浏览器不支持选择文件夹',
+    dataFolderFailed: '❌ 选择文件夹失败',
   },
   en: {
     toggle: '中文',
@@ -80,10 +87,15 @@ const I18N = {
     catCaptioner: 'Image Captioner',
     catCaptionerDesc: 'Config / Prompts / Presets / Progress / Results',
     catTagtool: 'Tag Tool',
-    catTagtoolDesc: 'Groups and tags',
+    catTagtoolDesc: 'Groups / tags / preview images',
     importError: '❌ Configuration import failed',
     exportError: '❌ Configuration export failed',
     importInvalid: '❌ Invalid configuration file',
+    dataFolderLabel: 'Choose data cache location: ',
+    dataFolderDefault: 'Browser Storage',
+    chooseDataFolder: 'Choose data cache location (shared by the captioner cache and tag tool data file)',
+    dataFolderUnsupported: 'This browser does not support choosing a folder',
+    dataFolderFailed: '❌ Failed to choose folder',
   },
 };
 
@@ -219,7 +231,14 @@ if (themeToggleBtn) {
 const TOOL_STORAGE_KEYS = {
   cropper: ['image_cropper_web_sizes', 'image-cropper-web-language'],
   captioner: ['image-captioner-config', 'image-captioner-config-presets', 'image-captioner-language'],
-  tagtool: ['anatomy_tag_groups_v1', 'anatomy_categories_v1', 'app_language'],
+  // 标签预览图（anatomy_tag_images_v1）与输入框内容一并导出，换设备时不丢
+  tagtool: [
+    'anatomy_tag_groups_v1',
+    'anatomy_categories_v1',
+    'anatomy_tag_images_v1',
+    'tag_tool_inputs_state',
+    'app_language',
+  ],
 };
 
 // 数据种类定义：id 用于勾选过滤，i18nKey/i18nDescKey 提供多语言标签
@@ -287,7 +306,14 @@ function postToCaptioner(type, payload, mode) {
 }
 
 async function collectCaptionerRuntimeData() {
-  // 优先从 sessionStorage 读取 captioner 实时同步的导出数据（同源共享，最可靠）
+  // 向 iframe 实时请求最新运行数据（buildExportData 读的是当前表单/状态）。
+  // 不用 sessionStorage 兜底缓存：captioner 只在特定时刻同步它，里面可能是过期的
+  // 配置快照，导入时会把刚写入的新 API 配置覆盖掉。
+  const reply = await postToCaptioner(CAPTIONER_EXPORT_MESSAGE);
+  if (reply && reply.payload && typeof reply.payload === 'object') {
+    return reply.payload;
+  }
+  // 回退：iframe 不可达时才读同源 sessionStorage
   try {
     const raw = sessionStorage.getItem(CAPTIONER_RUNTIME_KEY);
     if (raw) {
@@ -296,11 +322,6 @@ async function collectCaptionerRuntimeData() {
     }
   } catch {
     // ignore
-  }
-  // 回退：postMessage 请求 iframe
-  const reply = await postToCaptioner(CAPTIONER_EXPORT_MESSAGE);
-  if (reply && reply.payload && typeof reply.payload === 'object') {
-    return reply.payload;
   }
   return null;
 }
@@ -628,6 +649,16 @@ function updateConfigButtons() {
     importConfigBtn.title = t('importConfig');
   }
 
+  updateDataFolderText();
+  const dataFolderLabelEl = document.getElementById('dataFolderLabel');
+  if (dataFolderLabelEl) {
+    dataFolderLabelEl.textContent = t('dataFolderLabel');
+  }
+  if (chooseDataFolderBtn) {
+    chooseDataFolderBtn.title = t('chooseDataFolder');
+    chooseDataFolderBtn.setAttribute('aria-label', t('chooseDataFolder'));
+  }
+
   const privacyNotice = document.getElementById('privacyNotice');
   if (privacyNotice) {
     privacyNotice.textContent = t('privacyNotice');
@@ -656,6 +687,146 @@ if (exportConfigBtn) {
 if (importConfigBtn) {
   importConfigBtn.addEventListener('click', importConfig);
 }
+
+// ═══════════════════════════════════════════════════════════
+//  Unified data folder (captioner cache + tag tool data file)
+//  Hub 顶部公共栏是唯一入口：选中的目录同时下发给图片描述（缓存）
+//  与标签工具（tag-data.json），两侧数据仍在每次变更时实时写盘。
+// ═══════════════════════════════════════════════════════════
+
+const HUB_DB_NAME = 'web-tools-hub';
+const HUB_DB_STORE = 'kv';
+const HUB_DATA_FOLDER_KEY = 'dataFolderHandle';
+const STUDIO_SET_DATA_FOLDER = 'studio:set-data-folder';
+const STUDIO_FRAME_READY = 'studio:frame-ready';
+
+let hubDataFolderHandle = null;
+
+function openHubDb() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(HUB_DB_NAME, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(HUB_DB_STORE);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function hubDbSet(key, value) {
+  const db = await openHubDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(HUB_DB_STORE, 'readwrite');
+    tx.objectStore(HUB_DB_STORE).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function hubDbGet(key) {
+  const db = await openHubDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(HUB_DB_STORE, 'readonly');
+    const request = tx.objectStore(HUB_DB_STORE).get(key);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function updateDataFolderText() {
+  if (!dataFolderText) return;
+  const label = hubDataFolderHandle ? hubDataFolderHandle.name : t('dataFolderDefault');
+  dataFolderText.textContent = label;
+  dataFolderText.title = label;
+}
+
+// 向工具页投递消息；targetWindow 为空时广播给所有工具页
+function postToToolFrames(message, targetWindow) {
+  if (targetWindow) {
+    try {
+      targetWindow.postMessage(message, '*');
+    } catch {
+      // Ignore cross-frame sync errors.
+    }
+    return;
+  }
+  for (const frame of getToolFrames()) {
+    try {
+      frame.contentWindow?.postMessage(message, '*');
+    } catch {
+      // Ignore cross-frame sync errors.
+    }
+  }
+}
+
+function broadcastDataFolder(targetWindow) {
+  postToToolFrames({ type: STUDIO_SET_DATA_FOLDER, handle: hubDataFolderHandle }, targetWindow);
+}
+
+async function chooseDataFolder() {
+  if (typeof window.showDirectoryPicker !== 'function') {
+    alert(t('dataFolderUnsupported'));
+    return;
+  }
+  try {
+    const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    hubDataFolderHandle = handle;
+    updateDataFolderText();
+    try {
+      await hubDbSet(HUB_DATA_FOLDER_KEY, handle);
+    } catch {
+      // 句柄无法持久化时仍可用，仅刷新后需重新选择
+    }
+    broadcastDataFolder();
+    scheduleDataFolderRebroadcast();
+  } catch (error) {
+    if (error?.name === 'AbortError') return;
+    alert(t('dataFolderFailed') + ': ' + (error?.message || error));
+  }
+}
+
+async function restoreDataFolder() {
+  try {
+    const handle = await hubDbGet(HUB_DATA_FOLDER_KEY);
+    if (!handle) return;
+    hubDataFolderHandle = handle;
+    updateDataFolderText();
+    broadcastDataFolder();
+  } catch {
+    // IndexedDB 不可用时忽略，用户重新选择即可
+  }
+}
+
+// 延迟补发：工具页在 iframe load 之后还要经过 init 才会注册监听，
+// 单次广播可能发在它注册之前。这里在启动/选择后多补几次，保证刷新后能恢复。
+function scheduleDataFolderRebroadcast() {
+  [600, 1500, 3000].forEach((delay) => {
+    window.setTimeout(() => {
+      if (hubDataFolderHandle) broadcastDataFolder();
+    }, delay);
+  });
+}
+
+if (chooseDataFolderBtn) {
+  chooseDataFolderBtn.addEventListener('click', chooseDataFolder);
+}
+
+// 工具页每次加载完成后补发一次句柄（Hub 恢复句柄可能早于 iframe 注册监听）
+for (const frame of getToolFrames()) {
+  frame.addEventListener('load', () => {
+    if (hubDataFolderHandle) broadcastDataFolder(frame.contentWindow);
+  });
+}
+
+// 工具页就绪握手：无论 Hub 恢复与 iframe 加载谁先完成，都能拿到当前句柄
+window.addEventListener('message', (event) => {
+  if (event.data?.type !== STUDIO_FRAME_READY) return;
+  // 只回应本页自己的工具页，避免把目录句柄交给第三方页面
+  if (event.origin !== window.location.origin) return;
+  const isToolFrame = getToolFrames().some((frame) => frame.contentWindow === event.source);
+  if (!isToolFrame) return;
+  broadcastDataFolder(event.source);
+});
+
+restoreDataFolder().then(() => scheduleDataFolderRebroadcast());
 
 applyLanguage();
 applyTheme();

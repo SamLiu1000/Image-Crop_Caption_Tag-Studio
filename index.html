@@ -13,7 +13,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>网页工具合集</title>
-  <link rel="stylesheet" href="styles.css?v=1.6.0" />
+  <link rel="stylesheet" href="styles.css?v=1.6.18" />
 </head>
 <body>
   <div class="hub-shell">
@@ -27,6 +27,18 @@
         🔒 所有数据仅保存在你的浏览器和本地磁盘上，本站点永远不会获得你的数据
       </div>
       <div class="header-actions">
+        <!-- 统一数据文件夹：图片描述的缓存与标签工具的数据文件共用同一个目录 -->
+        <span class="data-folder-group">
+          <button id="chooseDataFolderBtn" class="config-btn df-btn" type="button" data-i18n-title="chooseDataFolder" title="选择数据缓存位置">
+            <span class="df-icon" aria-hidden="true">📁</span>
+            <span class="df-label" id="dataFolderLabel" data-i18n="dataFolderLabel">选择数据缓存位置：</span>
+            <strong id="dataFolderText" class="df-path" data-i18n="dataFolderDefault">浏览器本地</strong>
+          </button>
+        </span>
+        <button id="exportConfigBtn" class="config-btn" type="button" data-i18n="exportConfig" title="导出所有工具配置">📥 导出配置</button>
+        <button id="importConfigBtn" class="config-btn" type="button" data-i18n="importConfig" title="导入配置文件">📤 导入配置</button>
+        <button id="themeToggleBtn" class="config-btn" type="button" data-i18n="themeToggle" title="切换浅色/暗色主题">🌙</button>
+        <button id="langToggleBtn" class="lang-toggle" type="button" aria-label="切换到英文" title="切换到英文">EN</button>
         <span class="hub-brand">
           <a id="githubLink" class="hub-gh-link" href="https://github.com/SamLiu1000/Image-Crop_Caption_Tag-Studio"
             target="_blank" rel="noopener noreferrer" title="GitHub 项目主页" aria-label="GitHub 项目主页">
@@ -36,22 +48,18 @@
           </a>
           <span class="hub-version">V1.6.0</span>
         </span>
-        <button id="themeToggleBtn" class="config-btn" type="button" data-i18n="themeToggle" title="切换浅色/暗色主题">🌙</button>
-        <button id="exportConfigBtn" class="config-btn" type="button" data-i18n="exportConfig" title="导出所有工具配置">📥 导出配置</button>
-        <button id="importConfigBtn" class="config-btn" type="button" data-i18n="importConfig" title="导入配置文件">📤 导入配置</button>
-        <button id="langToggleBtn" class="lang-toggle" type="button" aria-label="切换到英文" title="切换到英文">EN</button>
       </div>
     </header>
 
     <main class="panel-stack">
       <section class="tool-panel active" id="panel-cropper" role="tabpanel" aria-labelledby="tab-cropper">
-        <iframe class="tool-frame" src="image_cropper_web/index.html" title="图片裁切工具"></iframe>
+        <iframe class="tool-frame" src="image_cropper_web/index.html?v=1.6.18" title="图片裁切工具"></iframe>
       </section>
       <section class="tool-panel" id="panel-captioner" role="tabpanel" aria-labelledby="tab-captioner" hidden>
-        <iframe class="tool-frame" src="Image_Captioner/index.html" title="图片描述工具"></iframe>
+        <iframe class="tool-frame" src="Image_Captioner/index.html?v=1.6.18" title="图片描述工具"></iframe>
       </section>
       <section class="tool-panel" id="panel-tagtool" role="tabpanel" aria-labelledby="tab-tagtool" hidden>
-        <iframe class="tool-frame" src="tag tool.html" title="标签工具"></iframe>
+        <iframe class="tool-frame" src="tag tool.html?v=1.6.18" title="标签工具"></iframe>
       </section>
     </main>
   </div>
@@ -79,6 +87,6 @@
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=1.6.18"></script>
 </body>
 </html>
