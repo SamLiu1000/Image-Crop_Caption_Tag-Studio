@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="./styles.css?v=1.6.23" />
+  <link rel="stylesheet" href="./styles.css?v=1.6.24" />
 </head>
 <body>
   <div class="page-shell">
@@ -127,10 +127,11 @@
           <span class="meta-label" data-i18n="progressLabel">进度</span>
           <strong id="progressText">0 / 0</strong>
         </div>
-        <!-- 预览条排序：名称 / 时间，再次点击切换升序与降序；右对齐到缩略图条正上方 -->
+        <!-- 预览条排序：名称 / 时间 / 导入时间，再次点击切换升序与降序；右对齐到缩略图条正上方 -->
         <span id="thumbSortBar" class="thumb-sort-bar" hidden>
           <button id="thumbSortNameBtn" class="thumb-sort-btn" type="button">名称</button>
           <button id="thumbSortTimeBtn" class="thumb-sort-btn" type="button">时间</button>
+          <button id="thumbSortImportBtn" class="thumb-sort-btn" type="button">导入时间</button>
         </span>
       </div>
 
@@ -267,6 +268,6 @@
     </aside>
   </div>
 
-  <script type="module" src="./app.js?v=1.6.23"></script>
+  <script type="module" src="./app.js?v=1.6.24"></script>
 </body>
 </html>

@@ -154,8 +154,10 @@ const I18N = {
     previewImageAlt: '预览图',
     thumbSortName: '名称',
     thumbSortTime: '时间',
+    thumbSortImport: '导入时间',
     thumbSortNameHint: '按名称排序（再次点击切换升序 / 降序）',
     thumbSortTimeHint: '按时间排序（文件修改时间，再次点击切换升序 / 降序）',
+    thumbSortImportHint: '按拖入/导入的先后时间排序，最新的在上（再次点击切换）',
     previewPlaceholder: '选择图片目录后，可在这里查看当前处理图片。',
     previewDropHint: '支持拖入单张图片或视频进行导入，并直接生成描述/反推提示词。',
     currentFileLabel: '当前文件',
@@ -333,8 +335,10 @@ const I18N = {
     previewImageAlt: 'Preview image',
     thumbSortName: 'Name',
     thumbSortTime: 'Time',
+    thumbSortImport: 'Imported',
     thumbSortNameHint: 'Sort by name (click again to toggle ascending / descending)',
     thumbSortTimeHint: 'Sort by time (file modified time; click again to toggle ascending / descending)',
+    thumbSortImportHint: 'Sort by drag/import time, newest on top (click again to toggle)',
     previewPlaceholder: 'After selecting an image folder, the current image will be previewed here.',
     previewDropHint: 'This area also supports dragging in a single image or video for direct import and caption/prompt generation.',
     currentFileLabel: 'Current File',
@@ -515,11 +519,41 @@ const els = {
   thumbSortBar: document.getElementById('thumbSortBar'),
   thumbSortNameBtn: document.getElementById('thumbSortNameBtn'),
   thumbSortTimeBtn: document.getElementById('thumbSortTimeBtn'),
+  thumbSortImportBtn: document.getElementById('thumbSortImportBtn'),
 };
 
-// 预览条排序状态：key 为 '' / 'name' / 'time'，dir 为 1（升序）或 -1（降序）
-// listRef 记录被排序的那个数组，用于在换文件夹 / 重新导入时自动复位排序标记
-const thumbSort = { key: '', dir: 1, listRef: null };
+// 预览条排序状态：key 为 'imported' / 'name' / 'time'，dir 为 1（升序）或 -1（降序）
+// 默认按导入时间、最新在上；listRef 记录被排序的那个数组，用于在换文件夹 / 重新导入时自动复位排序标记
+const thumbSort = { key: 'imported', dir: -1, listRef: null };
+
+// 导入时间登记表：记录每张图被拖入/导入工具的时刻（键为 "文件名:大小"），
+// 随会话快照持久化，保证重开页面后「导入时间」排序稳定不变
+const importTimes = new Map();
+const IMPORT_TIMES_MAX = 1000;
+
+function importTimeKey(file) {
+  return `${file?.name || ''}:${file?.size || 0}`;
+}
+
+function recordImportTime(file, timestamp = Date.now()) {
+  if (!file?.name) return;
+  importTimes.set(importTimeKey(file), timestamp);
+  if (importTimes.size > IMPORT_TIMES_MAX) {
+    const oldest = importTimes.keys().next().value;
+    importTimes.delete(oldest);
+  }
+}
+
+// 排序用的导入时间：优先登记表，其次文件修改时间，最后 0
+function itemImportTime(item) {
+  if (typeof item.importedAt === 'number') return item.importedAt;
+  if (item.sourceFile) {
+    const recorded = importTimes.get(importTimeKey(item.sourceFile));
+    if (typeof recorded === 'number') return recorded;
+    if (item.sourceFile.lastModified) return item.sourceFile.lastModified;
+  }
+  return 0;
+}
 
 const state = {
   files: [],
@@ -666,6 +700,8 @@ async function saveSessionToCache() {
     cacheFolderHandle: state.cacheFolderHandle || null,
     activeFolderName: state.activeFolderName || '',
     folderQueue: (state.folderQueue || []).map((item) => ({ label: item.label, handle: item.handle })),
+    // 导入时间登记表：拖入顺序的持久化依据，重开页面后「导入时间」排序仍稳定
+    importTimes: Object.fromEntries(importTimes),
     // 浏览状态持久化：缩略条滚动位置（比例），刷新后恢复到上次浏览位置
     thumbScrollRatio: sessionThumbRatio,
   };
@@ -1661,6 +1697,13 @@ async function restoreCachedSession() {
 
   if (!cachedSession) return;
 
+  importTimes.clear();
+  if (cachedSession.importTimes && typeof cachedSession.importTimes === 'object') {
+    for (const [key, ts] of Object.entries(cachedSession.importTimes)) {
+      if (typeof ts === 'number') importTimes.set(key, ts);
+    }
+  }
+
   state.cacheFolderHandle = cachedSession.cacheFolderHandle || null;
   updateCacheLocationText();
 
@@ -2338,10 +2381,16 @@ async function loadSingleFile(file) {
   state.directoryLabel = '';
   els.folderPathInput.value = '';
   if (switchingFromFolder) {
-    state.files = [createVirtualFileItem(file)];
+    const item = createVirtualFileItem(file);
+    item.importedAt = Date.now();
+    recordImportTime(file, item.importedAt);
+    state.files = [item];
     state.currentIndex = 0;
   } else {
-    state.files.push(createVirtualFileItem(file));
+    const item = createVirtualFileItem(file);
+    item.importedAt = Date.now();
+    recordImportTime(file, item.importedAt);
+    state.files.push(item);
     state.currentIndex = state.files.length - 1;
   }
   enterSingleView();
@@ -2474,10 +2523,13 @@ function updateThumbSortButtons() {
   const arrowFor = (key) => (thumbSort.key === key ? (thumbSort.dir > 0 ? ' ↑' : ' ↓') : '');
   els.thumbSortNameBtn.textContent = t('thumbSortName') + arrowFor('name');
   els.thumbSortTimeBtn.textContent = t('thumbSortTime') + arrowFor('time');
+  if (els.thumbSortImportBtn) els.thumbSortImportBtn.textContent = t('thumbSortImport') + arrowFor('imported');
   els.thumbSortNameBtn.classList.toggle('active', thumbSort.key === 'name');
   els.thumbSortTimeBtn.classList.toggle('active', thumbSort.key === 'time');
+  if (els.thumbSortImportBtn) els.thumbSortImportBtn.classList.toggle('active', thumbSort.key === 'imported');
   els.thumbSortNameBtn.title = t('thumbSortNameHint');
   els.thumbSortTimeBtn.title = t('thumbSortTimeHint');
+  if (els.thumbSortImportBtn) els.thumbSortImportBtn.title = t('thumbSortImportHint');
 }
 
 // 读取每个文件的修改时间并缓存到 item.mtime（浏览器不提供真正的「创建时间」）
@@ -2501,7 +2553,7 @@ function loadThumbSort() {
     const raw = localStorage.getItem(THUMB_SORT_STORAGE_KEY);
     if (!raw) return;
     const parsed = JSON.parse(raw);
-    if (parsed && (parsed.key === 'name' || parsed.key === 'time')) {
+    if (parsed && (parsed.key === 'name' || parsed.key === 'time' || parsed.key === 'imported')) {
       thumbSort.key = parsed.key;
       thumbSort.dir = parsed.dir === -1 ? -1 : 1;
     }
@@ -2536,9 +2588,18 @@ function sortThumbFilesSync() {
   if (needMtime) return false;
   const current = state.files[state.currentIndex];
   state.files.sort((a, b) => {
-    const diff = key === 'time'
-      ? (a.mtime || 0) - (b.mtime || 0)
-      : String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true, sensitivity: 'base' });
+    let diff = 0;
+    if (key === 'time') {
+      diff = (a.mtime || 0) - (b.mtime || 0);
+    } else if (key === 'imported') {
+      diff = itemImportTime(a) - itemImportTime(b);
+    } else {
+      diff = String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true, sensitivity: 'base' });
+    }
+    // 同键值时按名称稳定排列，避免重开页面后同级条目来回换位
+    if (!diff) {
+      diff = String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true, sensitivity: 'base' }) * (key === 'name' ? factor : 1);
+    }
     return diff * factor;
   });
   if (current) {
@@ -2569,7 +2630,8 @@ function sortThumbStrip(key) {
     thumbSort.dir = -thumbSort.dir;
   } else {
     thumbSort.key = key;
-    thumbSort.dir = 1;
+    // 导入时间默认最新在上（降序），其余默认升序
+    thumbSort.dir = key === 'imported' ? -1 : 1;
   }
   saveThumbSort();
   thumbSort.listRef = null; // 让 renderThumbStrip 在绘制前按新偏好重排
@@ -3795,6 +3857,7 @@ function bindEvents() {
 
   els.thumbSortNameBtn.addEventListener('click', () => { sortThumbStrip('name'); });
   els.thumbSortTimeBtn.addEventListener('click', () => { sortThumbStrip('time'); });
+  els.thumbSortImportBtn?.addEventListener('click', () => { sortThumbStrip('imported'); });
   updateThumbSortButtons();
 
   // 缩略条滚动时记住位置（比例），滚停后写入会话，供刷新后恢复浏览位置
