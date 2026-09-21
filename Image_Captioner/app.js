@@ -24,9 +24,9 @@ const THUMB_STRIP_DIMENSION = 320;
 const RESULT_THUMB_DIMENSION = 320;
 // 缩略图规格版本：调整尺寸/质量后递增，让已持久化的旧缩略图自动失效并重新生成
 const THUMB_VERSION = 2;
+// 缩略图落盘文件后缀：带版本号，缩略图规格变更后旧文件自然失效并重新生成
+const THUMB_FILE_SUFFIX = `.thumb.v${THUMB_VERSION}.webp`;
 const CACHE_DB_NAME = 'image-captioner-cache';
-const CACHE_RESULTS_KEY = 'all';
-const CACHE_FOLDERS_KEY = 'folders';
 const CACHE_SESSION_KEY = 'current';
 
 const DEFAULT_SYSTEM_PROMPT = `You are an image analysis assistant that describes images containing adult human characters. Your task is to observe the image and generate a single, complete English caption that clearly and accurately describes the visual content.
@@ -51,6 +51,43 @@ Output requirement:
 Generate exactly one complete English image description paragraph.`;
 
 const DEFAULT_USER_PROMPT = 'Describe this image in one complete English paragraph.';
+
+const DEFAULT_SYSTEM_PROMPT_TAGS = `You are a tagging system, NOT a caption writer.
+
+Your task is to analyze the image and output ONLY a list of tags.
+
+CRITICAL RULES:
+
+DO NOT write sentences.
+DO NOT write a description.
+DO NOT use grammar like a caption.
+ONLY output tags.
+
+Tag rules:
+
+Use short English keywords or phrases (1–3 words per tag).
+Separate tags with commas.
+No periods, no full sentences.
+No explanations, no extra text.
+No line breaks.
+
+Content rules:
+
+Only describe visible content.
+Focus on: person, body, clothing, nudity, pose, expression, actions.
+Include: hair, body type, skin tone, camera angle, accessories.
+Include environment only if clearly visible.
+
+Formatting rules (STRICT):
+
+Output EXACTLY one line.
+Output format example:
+1girl, solo, long hair, blonde hair, nude, sitting, looking at viewer
+Your output MUST look like the example above.
+
+If you produce a sentence or paragraph, your answer is WRONG.`;
+
+const DEFAULT_USER_PROMPT_TAGS = 'Analyze this image and output only a comma-separated list of tags on a single line.';
 
 const I18N = {
   zh: {
@@ -99,7 +136,8 @@ const I18N = {
     statSkipped: '已跳过',
     statFailed: '失败',
     sectionPromptTitle: '提示词',
-    fillDefaultPromptBtn: '填入默认提示',
+    fillDefaultCaptionBtn: '填入默认提示（自然语言）',
+    fillDefaultTagBtn: '填入默认提示（Tag）',
     clearPromptsBtn: '清空',
     systemPromptPlaceholder: '系统提示词',
     userPromptPlaceholder: '例如：Describe this image in one detailed English paragraph。',
@@ -277,7 +315,8 @@ const I18N = {
     statSkipped: 'Skipped',
     statFailed: 'Failed',
     sectionPromptTitle: 'Prompts',
-    fillDefaultPromptBtn: 'Fill Default Prompts',
+    fillDefaultCaptionBtn: 'Fill Default (Caption)',
+    fillDefaultTagBtn: 'Fill Default (Tags)',
     clearPromptsBtn: 'Clear',
     systemPromptPlaceholder: 'System prompt',
     userPromptPlaceholder: 'Example: Describe this image in one detailed English paragraph.',
@@ -437,7 +476,8 @@ const els = {
   processedCountText: document.getElementById('processedCountText'),
   skippedCountText: document.getElementById('skippedCountText'),
   failedCountText: document.getElementById('failedCountText'),
-  fillDefaultPromptBtn: document.getElementById('fillDefaultPromptBtn'),
+  fillDefaultCaptionBtn: document.getElementById('fillDefaultCaptionBtn'),
+  fillDefaultTagBtn: document.getElementById('fillDefaultTagBtn'),
   clearPromptsBtn: document.getElementById('clearPromptsBtn'),
   systemPromptInput: document.getElementById('systemPromptInput'),
   userPromptInput: document.getElementById('userPromptInput'),
@@ -611,43 +651,18 @@ async function dbClear(storeName) {
 
 // 剥离结果条目中的内存级 File 引用，避免持久化图片本体
 function stripResultFiles(results) {
-  return results.map((item) => ({ ...item, file: undefined }));
+  return results.map((item) => ({ ...item, file: undefined, dir: undefined }));
 }
 
-async function saveResultsToCache() {
-  await dbPut('results', stripResultFiles(state.singleResults), CACHE_RESULTS_KEY);
-  await dbPut('results', stripResultFiles(state.folderResults.map((entry) => ({ ...entry, results: entry.results }))), CACHE_FOLDERS_KEY);
-}
-
-// 后台补齐缩略图后延迟回存：让下次刷新直接命中，不必整目录重新解码
-let saveResultsTimer = 0;
-function scheduleSaveResults(delay = 1200) {
-  if (saveResultsTimer) window.clearTimeout(saveResultsTimer);
-  saveResultsTimer = window.setTimeout(() => {
-    saveResultsTimer = 0;
-    saveResultsToCache();
-  }, delay);
-}
-
-async function loadResultsFromCache() {
-  const [single, folders] = await Promise.all([
-    dbGet('results', CACHE_RESULTS_KEY),
-    dbGet('results', CACHE_FOLDERS_KEY),
-  ]);
-  return {
-    single: Array.isArray(single) ? single : [],
-    folders: Array.isArray(folders) ? folders : [],
-  };
-}
+// 结果数据不再缓存在浏览器（IndexedDB）里：唯一来源是数据文件夹扫描。
+// 会话快照只保留目录句柄与轻量状态，图片/结果/缩略图一律落盘在缓存文件夹。
 
 async function saveSessionToCache() {
   const session = {
     mode: state.singleFileMode ? 'single' : 'folder',
-    singleFiles: state.singleFileMode ? state.files.map((item) => item.sourceFile).filter(Boolean) : [],
     directoryHandle: state.directoryHandle || null,
     directoryLabel: state.directoryLabel || '',
     currentIndex: state.currentIndex,
-    resultSeq: state.resultSeq,
     cacheFolderHandle: state.cacheFolderHandle || null,
     activeFolderName: state.activeFolderName || '',
     folderQueue: (state.folderQueue || []).map((item) => ({ label: item.label, handle: item.handle })),
@@ -746,8 +761,10 @@ async function writeResultToCacheFolder(item, file, caption, nameOverride = '') 
     const txtWritable = await txtHandle.createWritable();
     await txtWritable.write(caption || '');
     await txtWritable.close();
+    return targetDir;
   } catch {
     log('cacheFolderWriteFailed');
+    return null;
   }
 }
 
@@ -809,6 +826,10 @@ async function collectCacheResults(dirHandle, relPath = '') {
         caption,
         thumbUrl: '',
         file: imageFile,
+        // 结果所在目录与缩略图文件名：缩略图持久化在缓存文件夹里（与原图同目录），
+        // 刷新后直接读文件，不必整目录重新解码原图
+        dir: dirHandle,
+        thumbName: `${baseName}${THUMB_FILE_SUFFIX}`,
         size: imageFile.size,
         mtime: imageFile.lastModified,
         thumbVer: THUMB_VERSION,
@@ -824,6 +845,77 @@ async function collectCacheResults(dirHandle, relPath = '') {
     results.push(...nested);
   }
   return results;
+}
+
+// ---------- 缩略图持久化（缓存文件夹内，与原图同目录） ----------
+
+function dataUrlToBlob(dataUrl) {
+  const commaIndex = dataUrl.indexOf(',');
+  if (commaIndex < 0) return null;
+  const header = dataUrl.slice(0, commaIndex);
+  const mime = (header.match(/^data:([^;,]+)/) || [])[1] || 'application/octet-stream';
+  const binary = atob(dataUrl.slice(commaIndex + 1));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+// 把缩略图 dataURL 写入缓存文件夹（与原图同目录的 <名字>.thumb.vN.webp），失败静默
+async function persistThumbFile(entry, thumbUrl) {
+  if (!entry || !entry.dir || !entry.thumbName || !thumbUrl || !thumbUrl.startsWith('data:')) return;
+  try {
+    const blob = dataUrlToBlob(thumbUrl);
+    if (!blob) return;
+    const handle = await entry.dir.getFileHandle(entry.thumbName, { create: true });
+    const writable = await handle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+  } catch {
+    // 写失败不影响界面，下次刷新会重新生成
+  }
+}
+
+// 从缓存文件夹读取持久化的缩略图；没有或读取失败返回空串
+async function readThumbFile(entry) {
+  if (!entry || !entry.dir || !entry.thumbName) return '';
+  try {
+    const handle = await entry.dir.getFileHandle(entry.thumbName);
+    const file = await handle.getFile();
+    if (!file.size) return '';
+    return await blobToDataUrl(file);
+  } catch {
+    return '';
+  }
+}
+
+// 扫描后异步补齐条目缩略图：优先读已落盘的缩略图文件，缺失的按需解码原图再落盘。
+// 逐条让出主线程，避免大目录时阻塞界面。
+async function hydrateEntryThumbs() {
+  const allEntries = [
+    ...state.singleResults,
+    ...state.folderResults.flatMap((folder) => folder.results || []),
+  ];
+  for (const entry of allEntries) {
+    if (entry.thumbUrl || !entry.file) continue;
+    const cached = await readThumbFile(entry);
+    if (cached) {
+      entry.thumbUrl = cached;
+      entry.thumbVer = THUMB_VERSION;
+      refreshResultThumb(entry);
+      await sleep(0);
+    }
+  }
+  // 没有落盘缩略图的条目（旧缓存/规格升级）：解码原图生成并落盘
+  fillUnreferencedResultThumbs();
 }
 
 // 扫描缓存文件夹：captioner-cache → 单图结果，其它子目录 → 文件夹结果（以缓存为准覆盖）
@@ -844,30 +936,9 @@ async function scanCacheFolderContent() {
       }
     }
 
-    // 复用上次已持久化的缩略图：扫描出来的条目本身不带缩略图，若直接覆盖会把
-    // IndexedDB 里存好的缩略图抹掉，导致每次刷新结果区先变空、再整目录重解码。
-    // 只有文件指纹（大小/修改时间）一致时才复用，文件变了仍会重新生成。
-    const priorResults = await loadResultsFromCache().catch(() => ({ single: [], folders: [] }));
-    const priorThumbMap = new Map();
-    const rememberThumb = (item) => {
-      if (item && typeof item.name === 'string' && item.thumbUrl) priorThumbMap.set(item.name, item);
-    };
-    for (const item of priorResults.single) rememberThumb(item);
-    for (const folder of priorResults.folders) {
-      for (const item of folder.results || []) rememberThumb(item);
-    }
-    const reusePriorThumb = (item) => {
-      const prev = priorThumbMap.get(item.name);
-      // 规格版本不一致（缩略图尺寸/质量改过）时不复用，强制重新生成
-      if (!prev || prev.thumbVer !== THUMB_VERSION) return item;
-      if (typeof prev.size !== 'number' || prev.size !== item.size) return item;
-      if (typeof prev.mtime === 'number' && prev.mtime !== item.mtime) return item;
-      return { ...item, thumbUrl: prev.thumbUrl };
-    };
-
-    // 以缓存为准覆盖当前结果，并为恢复的条目分配递增 id
+    // 以缓存文件夹为准覆盖当前结果，并为恢复的条目分配递增 id
     let seq = 0;
-    const withIds = (results) => results.map((item) => ({ ...reusePriorThumb(item), id: ++seq }));
+    const withIds = (results) => results.map((item) => ({ ...item, id: ++seq }));
     state.singleResults = withIds(single);
     state.folderResults = folders.map((folder) => ({ ...folder, results: withIds(folder.results) }));
     state.resultSeq = seq;
@@ -920,11 +991,10 @@ async function scanCacheFolderContent() {
     }));
     renderFolderChips();
     settleApply();
-    saveResultsToCache();
     saveSessionToCache();
     log('cacheScanned', { single: state.singleResults.length, folders: state.folderResults.length });
-    // 缩略图后台填充：预览条没有引用到的结果（如只读文件夹视图）也在后台补上
-    fillUnreferencedResultThumbs();
+    // 缩略图异步补齐：先读缓存文件夹里已落盘的缩略图，缺失的再解码原图并落盘
+    hydrateEntryThumbs();
     return true;
   } catch (error) {
     log('cacheScanFailed', { error: error.message || error });
@@ -1051,16 +1121,6 @@ function applyImportedConfig(data, mode) {
 }
 
 async function applyImportedConfigAndRefresh(data, mode) {
-  // init 阶段合并时，state 尚未从 IndexedDB 恢复 → 先加载现有结果再合并，避免覆盖
-  if (!state.singleResults.length && !state.folderResults.length) {
-    try {
-      const existing = await loadResultsFromCache();
-      state.singleResults = Array.isArray(existing.single) ? existing.single : [];
-      state.folderResults = Array.isArray(existing.folders) ? existing.folders : [];
-    } catch {
-      // ignore
-    }
-  }
   // 同浏览器导入时，保留当前会话中已有的目录/文件信息（导入文件不含句柄）
   // 关键：避免下面 saveSessionToCache() 在 init 阶段把旧目录句柄覆盖为 null
   let prev = null;
@@ -1097,8 +1157,8 @@ async function applyImportedConfigAndRefresh(data, mode) {
   updateCacheLocationText();
   enterSingleView();
   renderFolderChips();
-  // 等待 IndexedDB 写入完成，避免 Hub 立即刷新导致数据丢失
-  await Promise.all([saveResultsToCache(), saveSessionToCache()]);
+  // 等待会话写入完成，避免 Hub 立即刷新导致数据丢失
+  await saveSessionToCache();
   syncRuntimeToSession();
   // 导入的文件夹结果没有目录句柄（跨部署无法转移）→ 明确提示
   const hasImportedFolders = Array.isArray(data.folderResults) && data.folderResults.some((entry) => entry?.results?.length > 0);
@@ -1307,7 +1367,6 @@ async function deleteFolderView(name) {
   } else {
     renderFolderChips();
   }
-  saveResultsToCache();
   saveSessionToCache();
   syncRuntimeToSession();
   log('folderViewDeleted', { name });
@@ -1514,7 +1573,6 @@ async function deleteSingleCache() {
   } else {
     renderFolderChips();
   }
-  saveResultsToCache();
   saveSessionToCache();
   syncRuntimeToSession();
   log('singleCacheDeleted');
@@ -1588,46 +1646,25 @@ async function tryRestoreFolderSession() {
 }
 
 async function restoreCachedSession() {
-  const [cachedResults, cachedSession] = await Promise.all([
-    loadResultsFromCache(),
-    loadSessionFromCache(),
-  ]);
+  const cachedSession = await loadSessionFromCache();
+  // 结果数据不再存浏览器：顺手清掉旧版本留在 IndexedDB 的结果缓存（可能非常大）
+  dbClear('results');
   // 记住上次的滚动位置，供本会话内其它保存沿用（避免初始化中间态覆盖成 0）
   if (cachedSession && typeof cachedSession.thumbScrollRatio === 'number') {
     sessionThumbRatio = cachedSession.thumbScrollRatio;
   }
 
-  state.singleResults = Array.isArray(cachedResults.single) ? cachedResults.single : [];
-  state.folderResults = Array.isArray(cachedResults.folders) ? cachedResults.folders : [];
-  state.resultSeq = state.singleResults.reduce((maxId, entry) => Math.max(maxId, Number(entry.id) || 0), 0);
-  for (const folder of state.folderResults) {
-    for (const entry of folder.results) {
-      state.resultSeq = Math.max(state.resultSeq, Number(entry.id) || 0);
-    }
-  }
+  state.singleResults = [];
+  state.folderResults = [];
+  state.resultSeq = 0;
   enterSingleView();
 
   if (!cachedSession) return;
 
   state.cacheFolderHandle = cachedSession.cacheFolderHandle || null;
   updateCacheLocationText();
-  if (cachedSession.resultSeq > state.resultSeq) state.resultSeq = cachedSession.resultSeq;
 
-  if (cachedSession.mode === 'single') {
-    const singleFiles = Array.isArray(cachedSession.singleFiles) && cachedSession.singleFiles.length
-      ? cachedSession.singleFiles
-      : (cachedSession.singleFile ? [cachedSession.singleFile] : []);
-    if (singleFiles.length) {
-      state.singleFileMode = true;
-      state.singleFileSource = singleFiles[singleFiles.length - 1];
-      state.files = singleFiles.map((file) => createVirtualFileItem(file));
-      state.currentIndex = Math.min(cachedSession.currentIndex || 0, state.files.length - 1);
-      renderModeToggle();
-      renderThumbStrip();
-      await renderPreview();
-      log('singlePreviewRestored');
-    }
-  } else if (cachedSession.mode === 'folder' && cachedSession.directoryHandle) {
+  if (cachedSession.mode === 'folder' && cachedSession.directoryHandle) {
     state.singleFileMode = false;
     state.pendingFolderHandle = cachedSession.directoryHandle;
     state.pendingFolderLabel = cachedSession.directoryLabel || '';
@@ -1681,7 +1718,6 @@ function buildResultItem(entry) {
       thumb.removeAttribute('src');
       thumb.classList.add('result-thumb-missing');
       entry.thumbUrl = '';
-      scheduleSaveResults();
       fillUnreferencedResultThumbs();
     }, { once: true });
   } else {
@@ -1816,9 +1852,9 @@ function addResultEntry(name, caption, thumbUrl) {
   state.results = target;
   appendResultItem(entry);
   renderFolderChips();
-  saveResultsToCache();
   saveSessionToCache();
   syncRuntimeToSession();
+  return entry;
 }
 
 function applyI18n() {
@@ -2644,7 +2680,7 @@ async function generateThumbnailsInBackground() {
         entry.thumbUrl = pair.big;
         entry.thumbVer = THUMB_VERSION;
         refreshResultThumb(entry);
-        scheduleSaveResults();
+        persistThumbFile(entry, pair.big);
       }
     }
     const cell = els.thumbStrip.querySelector(`.thumb-cell[data-index="${index}"]`);
@@ -2705,14 +2741,14 @@ async function fillUnreferencedResultThumbs() {
           entry.thumbUrl = await makeThumbnail(entry.file, RESULT_THUMB_DIMENSION);
           entry.thumbVer = THUMB_VERSION;
           refreshResultThumb(entry);
+          // 缩略图落盘到缓存文件夹，下次刷新直接读取（否则每次刷新都要重新解码整目录）
+          persistThumbFile(entry, entry.thumbUrl);
           filled += 1;
         } catch {
           entry.thumbUrl = '';
         }
         await sleep(0);
       }
-      // 回存补齐的缩略图，下次刷新直接命中（否则每次刷新都会把整目录重新解码一遍）
-      if (filled) scheduleSaveResults();
       if (!state._thumbFillPending) break;
     }
   } finally {
@@ -3245,8 +3281,15 @@ async function processItem(item, config, combineMode, progressSet, singleExistin
     thumbUrl = '';
   }
   if (isStopRequested()) return;
-  addResultEntry(resultName, finalCaption, thumbUrl);
-  writeResultToCacheFolder(item, file, finalCaption, resultName);
+  const entry = addResultEntry(resultName, finalCaption, thumbUrl);
+  const targetDir = await writeResultToCacheFolder(item, file, finalCaption, resultName);
+  // 新生成的缩略图随结果一起落盘，刷新后从缓存文件夹直接读取，无需重新解码
+  if (entry && targetDir) {
+    const base = String(resultName).split('/').pop().replace(/\.[^.]+$/, '');
+    entry.dir = targetDir;
+    entry.thumbName = `${base}${THUMB_FILE_SUFFIX}`;
+    persistThumbFile(entry, thumbUrl);
+  }
   if (state.directoryHandle && progressSet) {
     progressSet.add(baseName);
     saveProgressRecord(progressSet);
@@ -3290,7 +3333,6 @@ async function processFolderBatch(handle, label, combineMode, config) {
   state.selectedResultId = null;
   renderResults();
   renderFolderChips();
-  saveResultsToCache();
   saveSessionToCache();
 
   // 进度记录仅对普通「生成」用于中断续跑；前置/追加总是重新处理全部图片
@@ -3469,8 +3511,7 @@ async function processSingleImage(combineMode = 'none') {
     state.selectedResultId = null;
     renderResults();
     renderFolderChips();
-    saveResultsToCache();
-    saveSessionToCache();
+      saveSessionToCache();
   } else {
     enterSingleView();
   }
@@ -3593,7 +3634,6 @@ function deleteResultItem(resultId) {
 
   renderResults();
   renderFolderChips();
-  saveResultsToCache();
   saveSessionToCache();
   log('resultDeleted', { name: entry.name });
 }
@@ -3615,7 +3655,6 @@ function clearResults() {
     state.selectedResultId = null;
     renderResults();
   }
-  saveResultsToCache();
   log('resultsCleared');
 }
 
@@ -3624,9 +3663,14 @@ function clearPrompts() {
   els.userPromptInput.value = '';
 }
 
-function fillDefaultPrompts() {
+function fillDefaultCaptionPrompts() {
   els.systemPromptInput.value = DEFAULT_SYSTEM_PROMPT;
   els.userPromptInput.value = DEFAULT_USER_PROMPT;
+}
+
+function fillDefaultTagPrompts() {
+  els.systemPromptInput.value = DEFAULT_SYSTEM_PROMPT_TAGS;
+  els.userPromptInput.value = DEFAULT_USER_PROMPT_TAGS;
 }
 
 function bindEvents() {
@@ -3708,7 +3752,8 @@ function bindEvents() {
   els.previewStage.addEventListener('drop', handlePreviewDrop);
   els.clearProgressBtn.addEventListener('click', clearProgressRecord);
   els.clearPromptsBtn.addEventListener('click', clearPrompts);
-  els.fillDefaultPromptBtn.addEventListener('click', fillDefaultPrompts);
+  els.fillDefaultCaptionBtn.addEventListener('click', fillDefaultCaptionPrompts);
+  els.fillDefaultTagBtn.addEventListener('click', fillDefaultTagPrompts);
   els.copyCaptionBtn.addEventListener('click', copyCurrentCaption);
   els.clearResultsBtn.addEventListener('click', clearResults);
   els.clearLogBtn.addEventListener('click', () => {

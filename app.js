@@ -56,6 +56,13 @@ const I18N = {
     chooseDataFolder: '选择数据缓存位置（图片描述的缓存与标签工具的数据文件共用）',
     dataFolderUnsupported: '当前浏览器不支持选择文件夹',
     dataFolderFailed: '❌ 选择文件夹失败',
+    storageChoiceTitle: '选择数据保存位置',
+    storageChoiceDesc: '所有设置、标签与结果缓存都将保存到你选择的本地文件夹，不占用浏览器存储，清理浏览器数据也不会丢失。',
+    storageChoiceFolderBtn: '📁 选择本地保存位置',
+    storageChoiceCancel: '取消（本次暂不保存）',
+    storageReauthTitle: '需要重新授权数据文件夹',
+    storageReauthDesc: '浏览器重启后需要重新授权才能读写已选择的数据文件夹。点击下方按钮重新授权，设置与标签将从该文件夹恢复。',
+    storageReauthFolderBtn: '🔓 重新授权数据文件夹',
   },
   en: {
     toggle: '中文',
@@ -96,6 +103,13 @@ const I18N = {
     chooseDataFolder: 'Choose data cache location (shared by the captioner cache and tag tool data file)',
     dataFolderUnsupported: 'This browser does not support choosing a folder',
     dataFolderFailed: '❌ Failed to choose folder',
+    storageChoiceTitle: 'Choose where to store your data',
+    storageChoiceDesc: 'All settings, tags and result caches are saved to a local folder you choose — no browser storage, immune to clearing browser data.',
+    storageChoiceFolderBtn: '📁 Choose a local folder',
+    storageChoiceCancel: 'Cancel (do not save this time)',
+    storageReauthTitle: 'Re-authorize the data folder',
+    storageReauthDesc: 'After a browser restart, access to the data folder must be re-granted. Click the button below to re-authorize; settings and tags will be restored from that folder.',
+    storageReauthFolderBtn: '🔓 Re-authorize data folder',
   },
 };
 
@@ -733,9 +747,13 @@ async function hubDbGet(key) {
 
 function updateDataFolderText() {
   if (!dataFolderText) return;
-  const label = hubDataFolderHandle ? hubDataFolderHandle.name : t('dataFolderDefault');
-  dataFolderText.textContent = label;
-  dataFolderText.title = label;
+  if (hubDataFolderHandle) {
+    dataFolderText.textContent = hubDataFolderHandle.name;
+    dataFolderText.title = hubDataFolderHandle.name;
+  } else {
+    dataFolderText.textContent = t('dataFolderDefault');
+    dataFolderText.title = t('storageChoiceDesc');
+  }
 }
 
 // 向工具页投递消息；targetWindow 为空时广播给所有工具页
@@ -777,6 +795,8 @@ async function chooseDataFolder() {
     }
     broadcastDataFolder();
     scheduleDataFolderRebroadcast();
+    // 选定目录后立即落盘一份设置快照，保证 studio-settings.json 从此刻起存在
+    flushSettingsToFile();
   } catch (error) {
     if (error?.name === 'AbortError') return;
     alert(t('dataFolderFailed') + ': ' + (error?.message || error));
@@ -805,9 +825,262 @@ function scheduleDataFolderRebroadcast() {
   });
 }
 
-if (chooseDataFolderBtn) {
-  chooseDataFolderBtn.addEventListener('click', chooseDataFolder);
+// ═══════════════════════════════════════════════════════════
+//  Settings persistence (studio-settings.json in the data folder)
+//  所有工具页与 Hub 同源共享 localStorage，因此只需 Hub 一处：
+//  启动时从文件夹恢复（以文件为准），运行中把受管 key 的变更
+//  实时镜像写入 studio-settings.json。工具页代码无需感知。
+// ═══════════════════════════════════════════════════════════
+
+const SETTINGS_FILE_NAME = 'studio-settings.json';
+const SETTINGS_FILE_VERSION = '1.0';
+const SETTINGS_SYNC_INTERVAL_MS = 3000;
+const SETTINGS_SYNC_DEBOUNCE_MS = 1000;
+
+// 受管 key：Hub 自身 + 各工具的设置类 localStorage（进度按前缀收集）
+const SETTINGS_MANAGED_KEYS = [
+  STORAGE_KEYS.activeTab,
+  STORAGE_KEYS.language,
+  STORAGE_KEYS.theme,
+  ...TOOL_STORAGE_KEYS.cropper,
+  ...TOOL_STORAGE_KEYS.captioner,
+  ...TOOL_STORAGE_KEYS.tagtool,
+  'anatomy_collapsed_cats',
+  'tag_tool_insert_mode',
+  'tag_tool_search_mode_sidebar',
+  'tag_tool_search_mode_gallery',
+];
+const SETTINGS_MANAGED_PREFIXES = [PREFIX_STORAGE_KEYS.captionerProgress];
+
+function collectSettingsSnapshot() {
+  const snapshot = {};
+  for (const key of SETTINGS_MANAGED_KEYS) {
+    const value = localStorage.getItem(key);
+    if (value !== null) snapshot[key] = value;
+  }
+  for (const prefix of SETTINGS_MANAGED_PREFIXES) {
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(prefix)) snapshot[key] = localStorage.getItem(key);
+    }
+  }
+  return snapshot;
 }
+
+function snapshotToPayload(snapshot) {
+  return JSON.stringify({
+    version: SETTINGS_FILE_VERSION,
+    updatedDate: new Date().toISOString(),
+    settings: snapshot,
+  });
+}
+
+async function writeSettingsFile(snapshot) {
+  if (!hubDataFolderHandle) return;
+  try {
+    const fileHandle = await hubDataFolderHandle.getFileHandle(SETTINGS_FILE_NAME, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(snapshotToPayload(snapshot));
+    await writable.close();
+  } catch (error) {
+    console.warn('Failed to write studio-settings.json:', error);
+  }
+}
+
+async function readSettingsFile() {
+  if (!hubDataFolderHandle) return null;
+  try {
+    const fileHandle = await hubDataFolderHandle.getFileHandle(SETTINGS_FILE_NAME, { create: false });
+    const file = await fileHandle.getFile();
+    const parsed = JSON.parse(await file.text());
+    return parsed && typeof parsed.settings === 'object' && parsed.settings ? parsed : null;
+  } catch {
+    // 文件不存在或损坏时返回 null，回退到浏览器里的现有数据
+    return null;
+  }
+}
+
+// 以文件夹文件为准恢复受管 key；返回是否发生了恢复
+async function restoreSettingsFromFolder() {
+  const data = await readSettingsFile();
+  if (!data) return false;
+  for (const [key, value] of Object.entries(data.settings)) {
+    try {
+      localStorage.setItem(key, String(value));
+    } catch {
+      // 单条写入失败不阻断整体恢复
+    }
+  }
+  return true;
+}
+
+let lastSyncedSnapshotJson = null;
+let settingsSyncTimer = null;
+let settingsDebounceTimer = null;
+
+// 比较快照与上次已写盘内容，有变化才写（防抖合并密集变更）
+function scheduleSettingsFlush() {
+  if (!hubDataFolderHandle) return;
+  const snapshotJson = JSON.stringify(collectSettingsSnapshot());
+  if (snapshotJson === lastSyncedSnapshotJson) return;
+  if (settingsDebounceTimer) window.clearTimeout(settingsDebounceTimer);
+  settingsDebounceTimer = window.setTimeout(() => {
+    settingsDebounceTimer = null;
+    const latest = JSON.stringify(collectSettingsSnapshot());
+    if (latest === lastSyncedSnapshotJson) return;
+    lastSyncedSnapshotJson = latest;
+    writeSettingsFile(JSON.parse(latest));
+  }, SETTINGS_SYNC_DEBOUNCE_MS);
+}
+
+function flushSettingsToFile() {
+  if (!hubDataFolderHandle) return;
+  if (settingsDebounceTimer) {
+    window.clearTimeout(settingsDebounceTimer);
+    settingsDebounceTimer = null;
+  }
+  const snapshot = collectSettingsSnapshot();
+  lastSyncedSnapshotJson = JSON.stringify(snapshot);
+  writeSettingsFile(snapshot);
+}
+
+function startSettingsSync() {
+  if (settingsSyncTimer) return;
+  settingsSyncTimer = window.setInterval(scheduleSettingsFlush, SETTINGS_SYNC_INTERVAL_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushSettingsToFile();
+  });
+  window.addEventListener('pagehide', flushSettingsToFile);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Startup storage-choice dialog + boot sequence
+//  数据文件夹未配置 → 开屏弹「浏览器 / 本地文件夹」选择；
+//  已配置但权限丢失（浏览器重启） → 弹重新授权。
+//  恢复完成后才加载工具 iframe，保证工具页读到恢复后的设置。
+// ═══════════════════════════════════════════════════════════
+
+const storageChoiceModal = document.getElementById('storageChoiceModal');
+const storageChoiceTitle = document.getElementById('storageChoiceTitle');
+const storageChoiceDesc = document.getElementById('storageChoiceDesc');
+const storageFolderBtn = document.getElementById('storageFolderBtn');
+const storageCancelLink = document.getElementById('storageLaterLink');
+
+function showStorageChoiceDialog({ mode }) {
+  return new Promise((resolve) => {
+    if (!storageChoiceModal || !storageFolderBtn || !storageCancelLink) {
+      resolve(null);
+      return;
+    }
+    const reauth = mode === 'reauth';
+    if (storageChoiceTitle) storageChoiceTitle.textContent = t(reauth ? 'storageReauthTitle' : 'storageChoiceTitle');
+    if (storageChoiceDesc) storageChoiceDesc.textContent = t(reauth ? 'storageReauthDesc' : 'storageChoiceDesc');
+    storageFolderBtn.textContent = t(reauth ? 'storageReauthFolderBtn' : 'storageChoiceFolderBtn');
+    storageCancelLink.textContent = t('storageChoiceCancel');
+
+    const cleanup = () => {
+      storageChoiceModal.hidden = true;
+      storageFolderBtn.removeEventListener('click', onFolder);
+      storageCancelLink.removeEventListener('click', onCancel);
+    };
+    const onFolder = () => {
+      cleanup();
+      resolve('folder');
+    };
+    const onCancel = (event) => {
+      event.preventDefault();
+      cleanup();
+      resolve('cancel');
+    };
+
+    storageFolderBtn.addEventListener('click', onFolder);
+    storageCancelLink.addEventListener('click', onCancel);
+    storageChoiceModal.hidden = false;
+  });
+}
+
+async function ensureFolderPermission(handle) {
+  if (!handle) return false;
+  const opts = { mode: 'readwrite' };
+  try {
+    if (typeof handle.queryPermission === 'function' && (await handle.queryPermission(opts)) === 'granted') {
+      return true;
+    }
+    if (typeof handle.requestPermission === 'function') {
+      return (await handle.requestPermission(opts)) === 'granted';
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function loadToolFrames() {
+  for (const frame of getToolFrames()) {
+    const src = frame.dataset.src;
+    if (src && !frame.getAttribute('src')) frame.src = src;
+  }
+}
+
+// 启动后重新应用从文件恢复出来的语言/主题/页签
+function applyRestoredPreferences() {
+  state.language = localStorage.getItem(STORAGE_KEYS.language) === 'en' ? 'en' : 'zh';
+  state.theme = localStorage.getItem(STORAGE_KEYS.theme) || 'dark';
+  applyLanguage();
+  applyTheme();
+  setActiveTab(localStorage.getItem(STORAGE_KEYS.activeTab) || 'cropper');
+}
+
+async function startup() {
+  await restoreDataFolder();
+
+  if (hubDataFolderHandle) {
+    const granted = await ensureFolderPermission(hubDataFolderHandle);
+    if (!granted) {
+      // requestPermission 需要用户手势：由对话框按钮点击触发
+      const choice = await showStorageChoiceDialog({ mode: 'reauth' });
+      if (choice === 'folder') {
+        await ensureFolderPermission(hubDataFolderHandle);
+      }
+    }
+    if (hubDataFolderHandle && (await ensureFolderPermission(hubDataFolderHandle))) {
+      await restoreSettingsFromFolder();
+    }
+  } else if (typeof window.showDirectoryPicker === 'function') {
+    // 不再提供「存浏览器」选项：数据一律落盘本地文件夹；取消后下次打开仍会提示
+    const choice = await showStorageChoiceDialog({ mode: 'choose' });
+    if (choice === 'folder') {
+      try {
+        const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        hubDataFolderHandle = handle;
+        updateDataFolderText();
+        try {
+          await hubDbSet(HUB_DATA_FOLDER_KEY, handle);
+        } catch {
+          // 句柄无法持久化时仍可用，仅刷新后需重新选择
+        }
+        await restoreSettingsFromFolder();
+        flushSettingsToFile();
+      } catch (error) {
+        if (error?.name !== 'AbortError') {
+          alert(t('dataFolderFailed') + ': ' + (error?.message || error));
+        }
+      }
+    }
+  }
+
+  applyRestoredPreferences();
+  loadToolFrames();
+  broadcastDataFolder();
+  scheduleDataFolderRebroadcast();
+  startSettingsSync();
+  if (hubDataFolderHandle) {
+    await ensureFolderPermission(hubDataFolderHandle).catch(() => {});
+    flushSettingsToFile();
+  }
+}
+
+chooseDataFolderBtn?.addEventListener('click', chooseDataFolder);
 
 // 工具页每次加载完成后补发一次句柄（Hub 恢复句柄可能早于 iframe 注册监听）
 for (const frame of getToolFrames()) {
@@ -826,9 +1099,7 @@ window.addEventListener('message', (event) => {
   broadcastDataFolder(event.source);
 });
 
-restoreDataFolder().then(() => scheduleDataFolderRebroadcast());
-
 applyLanguage();
 applyTheme();
-const savedTab = localStorage.getItem(STORAGE_KEYS.activeTab);
-setActiveTab(savedTab || 'cropper');
+setActiveTab(localStorage.getItem(STORAGE_KEYS.activeTab) || 'cropper');
+startup();

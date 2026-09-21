@@ -13,7 +13,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>网页工具合集</title>
-  <link rel="stylesheet" href="styles.css?v=1.6.21" />
+  <link rel="stylesheet" href="styles.css?v=1.6.22" />
 </head>
 <body>
   <div class="hub-shell">
@@ -46,20 +46,21 @@
               <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
             </svg>
           </a>
-          <span class="hub-version">V1.6.0</span>
+          <span class="hub-version">V1.6.1</span>
         </span>
       </div>
     </header>
 
     <main class="panel-stack">
       <section class="tool-panel active" id="panel-cropper" role="tabpanel" aria-labelledby="tab-cropper">
-        <iframe class="tool-frame" src="image_cropper_web/index.html?v=1.6.21" title="图片裁切工具"></iframe>
+        <!-- src 由 app.js 在数据文件夹恢复/授权完成后再赋值，保证工具页读到的设置已从文件恢复 -->
+        <iframe class="tool-frame" data-src="image_cropper_web/index.html?v=1.6.21" title="图片裁切工具"></iframe>
       </section>
       <section class="tool-panel" id="panel-captioner" role="tabpanel" aria-labelledby="tab-captioner" hidden>
-        <iframe class="tool-frame" src="Image_Captioner/index.html?v=1.6.21" title="图片描述工具"></iframe>
+        <iframe class="tool-frame" data-src="Image_Captioner/index.html?v=1.6.23" title="图片描述工具"></iframe>
       </section>
       <section class="tool-panel" id="panel-tagtool" role="tabpanel" aria-labelledby="tab-tagtool" hidden>
-        <iframe class="tool-frame" src="tag tool.html?v=1.6.21" title="标签工具"></iframe>
+        <iframe class="tool-frame" data-src="tag tool.html?v=1.6.21" title="标签工具"></iframe>
       </section>
     </main>
   </div>
@@ -87,6 +88,18 @@
     </div>
   </div>
 
-  <script src="app.js?v=1.6.21"></script>
+  <!-- 开屏存储选择：数据文件夹未配置（或需重新授权）时弹出 -->
+  <div id="storageChoiceModal" class="modal-overlay" hidden>
+    <div class="modal-card">
+      <p class="modal-title" id="storageChoiceTitle">选择数据保存位置</p>
+      <p class="modal-desc" id="storageChoiceDesc">所有设置、标签与结果缓存都将保存到你选择的本地文件夹，不占用浏览器存储，清理浏览器数据也不会丢失。</p>
+      <div class="modal-actions">
+        <button id="storageFolderBtn" class="config-btn" type="button">📁 选择本地保存位置</button>
+      </div>
+      <p class="storage-later-row"><a href="#" id="storageLaterLink">取消（本次暂不保存）</a></p>
+    </div>
+  </div>
+
+  <script src="app.js?v=1.6.22"></script>
 </body>
 </html>

@@ -267,6 +267,23 @@ button {
   color: #e6edf3;
 }
 
+/* 开屏存储选择对话框：次要的"稍后再选"入口 */
+.storage-later-row {
+  margin: 10px 0 0;
+  text-align: center;
+  font-size: 11px;
+}
+
+.storage-later-row a {
+  color: rgba(139, 148, 158, 0.9);
+  text-decoration: none;
+}
+
+.storage-later-row a:hover {
+  color: #58a6ff;
+  text-decoration: underline;
+}
+
 .category-list {
   display: flex;
   flex-direction: column;
