@@ -13,7 +13,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>网页工具合集</title>
-  <link rel="stylesheet" href="styles.css?v=1.6.23" />
+  <link rel="stylesheet" href="styles.css?v=1.6.24" />
 </head>
 <body>
   <div class="hub-shell">
@@ -53,13 +53,16 @@
 
     <main class="panel-stack">
       <section class="tool-panel active" id="panel-cropper" role="tabpanel" aria-labelledby="tab-cropper">
+        <div class="panel-loading" data-i18n="loadingCropper">正在加载图片裁切工具…</div>
         <!-- src 由 app.js 在数据文件夹恢复/授权完成后再赋值，保证工具页读到的设置已从文件恢复 -->
         <iframe class="tool-frame" data-src="image_cropper_web/index.html?v=1.6.21" title="图片裁切工具"></iframe>
       </section>
       <section class="tool-panel" id="panel-captioner" role="tabpanel" aria-labelledby="tab-captioner" hidden>
+        <div class="panel-loading" data-i18n="loadingCaptioner">正在加载图片描述工具…</div>
         <iframe class="tool-frame" data-src="Image_Captioner/index.html?v=1.6.24" title="图片描述工具"></iframe>
       </section>
       <section class="tool-panel" id="panel-tagtool" role="tabpanel" aria-labelledby="tab-tagtool" hidden>
+        <div class="panel-loading" data-i18n="loadingTagtool">正在加载标签工具…</div>
         <iframe class="tool-frame" data-src="tag tool.html?v=1.6.21" title="标签工具"></iframe>
       </section>
     </main>

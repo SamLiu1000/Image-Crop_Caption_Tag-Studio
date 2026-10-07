@@ -222,7 +222,8 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.55);
+  /* 半透明遮罩：背后页面低亮度可见，避免用户以为页面出错了 */
+  background: rgba(0, 0, 0, 0.32);
 }
 
 .modal-overlay[hidden] {
@@ -403,11 +404,49 @@ button {
 }
 
 .tool-panel {
+  position: relative;
   min-height: calc(100vh - 28px);
 }
 
 .tool-panel[hidden] {
   display: none;
+}
+
+/* 工具页 iframe 加载前的占位提示：开屏弹窗期间低亮度可见，避免背后一片黑像出错了。
+   偏上放置，避免被居中的开屏弹窗完全挡住 */
+.panel-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding-top: 88px;
+  color: rgba(230, 237, 243, 0.42);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  pointer-events: none;
+}
+
+.panel-loading[hidden] {
+  display: none;
+}
+
+.panel-loading::before {
+  content: "";
+  width: 22px;
+  height: 22px;
+  border: 2px solid rgba(230, 237, 243, 0.18);
+  border-top-color: rgba(230, 237, 243, 0.45);
+  border-radius: 50%;
+  animation: panel-loading-spin 0.9s linear infinite;
+}
+
+@keyframes panel-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .tool-frame {

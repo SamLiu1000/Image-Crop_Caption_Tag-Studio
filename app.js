@@ -63,6 +63,9 @@ const I18N = {
     storageReauthTitle: '需要重新授权数据文件夹',
     storageReauthDesc: '浏览器重启后需要重新授权才能读写已选择的数据文件夹。点击下方按钮重新授权，设置与标签将从该文件夹恢复。',
     storageReauthFolderBtn: '🔓 重新授权数据文件夹',
+    loadingCropper: '正在加载图片裁切工具…',
+    loadingCaptioner: '正在加载图片描述工具…',
+    loadingTagtool: '正在加载标签工具…',
   },
   en: {
     toggle: '中文',
@@ -110,6 +113,9 @@ const I18N = {
     storageReauthTitle: 'Re-authorize the data folder',
     storageReauthDesc: 'After a browser restart, access to the data folder must be re-granted. Click the button below to re-authorize; settings and tags will be restored from that folder.',
     storageReauthFolderBtn: '🔓 Re-authorize data folder',
+    loadingCropper: 'Loading Image Cropper…',
+    loadingCaptioner: 'Loading Image Captioner…',
+    loadingTagtool: 'Loading Tag Tool…',
   },
 };
 
@@ -220,6 +226,9 @@ for (const button of tabButtons) {
 
 for (const frame of getToolFrames()) {
   frame.addEventListener('load', () => {
+    // 工具页加载完成，隐藏面板加载占位
+    const loading = frame.parentElement?.querySelector('.panel-loading');
+    if (loading) loading.hidden = true;
     broadcastLanguageToFrames(state.language);
     broadcastThemeToFrames(state.theme);
   });
@@ -678,11 +687,9 @@ function updateConfigButtons() {
     privacyNotice.textContent = t('privacyNotice');
   }
 
-  const categoryModal = document.getElementById('categoryModal');
-  if (categoryModal) {
-    for (const node of categoryModal.querySelectorAll('[data-i18n]')) {
-      node.textContent = t(node.dataset.i18n);
-    }
+  // 全局应用 data-i18n 文案（含开屏占位提示、弹窗内按钮等）
+  for (const node of document.querySelectorAll('[data-i18n]')) {
+    node.textContent = t(node.dataset.i18n);
   }
 }
 
