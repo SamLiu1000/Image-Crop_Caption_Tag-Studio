@@ -965,6 +965,7 @@ const storageChoiceTitle = document.getElementById('storageChoiceTitle');
 const storageChoiceDesc = document.getElementById('storageChoiceDesc');
 const storageFolderBtn = document.getElementById('storageFolderBtn');
 const storageCancelLink = document.getElementById('storageLaterLink');
+const storageChoiceLangBtn = document.getElementById('storageChoiceLangBtn');
 
 function showStorageChoiceDialog({ mode }) {
   return new Promise((resolve) => {
@@ -973,15 +974,26 @@ function showStorageChoiceDialog({ mode }) {
       return;
     }
     const reauth = mode === 'reauth';
-    if (storageChoiceTitle) storageChoiceTitle.textContent = t(reauth ? 'storageReauthTitle' : 'storageChoiceTitle');
-    if (storageChoiceDesc) storageChoiceDesc.textContent = t(reauth ? 'storageReauthDesc' : 'storageChoiceDesc');
-    storageFolderBtn.textContent = t(reauth ? 'storageReauthFolderBtn' : 'storageChoiceFolderBtn');
-    storageCancelLink.textContent = t('storageChoiceCancel');
+    // 弹窗打开期间用户可点语言按钮切换语言，文案需整体重填
+    const applyDialogText = () => {
+      if (storageChoiceTitle) storageChoiceTitle.textContent = t(reauth ? 'storageReauthTitle' : 'storageChoiceTitle');
+      if (storageChoiceDesc) storageChoiceDesc.textContent = t(reauth ? 'storageReauthDesc' : 'storageChoiceDesc');
+      storageFolderBtn.textContent = t(reauth ? 'storageReauthFolderBtn' : 'storageChoiceFolderBtn');
+      storageCancelLink.textContent = t('storageChoiceCancel');
+      if (storageChoiceLangBtn) {
+        // 与主界面语言按钮一致：中文界面显示 EN，英文界面显示 中文
+        storageChoiceLangBtn.textContent = t('toggle');
+        storageChoiceLangBtn.title = '切换到英文 / Switch to English';
+        storageChoiceLangBtn.setAttribute('aria-label', state.language === 'zh' ? '切换到英文' : 'Switch to Chinese');
+      }
+    };
+    applyDialogText();
 
     const cleanup = () => {
       storageChoiceModal.hidden = true;
       storageFolderBtn.removeEventListener('click', onFolder);
       storageCancelLink.removeEventListener('click', onCancel);
+      storageChoiceLangBtn?.removeEventListener('click', onLangToggle);
     };
     const onFolder = () => {
       cleanup();
@@ -992,9 +1004,16 @@ function showStorageChoiceDialog({ mode }) {
       cleanup();
       resolve('cancel');
     };
+    const onLangToggle = () => {
+      state.language = state.language === 'zh' ? 'en' : 'zh';
+      localStorage.setItem(STORAGE_KEYS.language, state.language);
+      applyLanguage();
+      applyDialogText();
+    };
 
     storageFolderBtn.addEventListener('click', onFolder);
     storageCancelLink.addEventListener('click', onCancel);
+    storageChoiceLangBtn?.addEventListener('click', onLangToggle);
     storageChoiceModal.hidden = false;
   });
 }

@@ -267,6 +267,31 @@ button {
   color: #e6edf3;
 }
 
+/* 开屏存储选择：卡片右上角的语言切换按钮（首次使用避免看不懂弹窗文案） */
+#storageChoiceModal .modal-card {
+  position: relative;
+}
+
+.storage-lang-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e6edf3;
+  padding: 3px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1.2;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.storage-lang-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
 /* 开屏存储选择对话框：次要的"稍后再选"入口 */
 .storage-later-row {
   margin: 10px 0 0;
